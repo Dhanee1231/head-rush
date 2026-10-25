@@ -254,6 +254,16 @@ h1 .rush { color: var(--you); }
 .tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--you); color: var(--bg); font-size: 11px; font-weight: 700; letter-spacing: .06em; vertical-align: middle; }
 .tag.play { background: var(--fast); }
 .tag.old { background: var(--heart); color: var(--ink); }
+.colors-row { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; }
+.colorn { aspect-ratio: 1; max-width: 100%; border-radius: 50%; border: 3px solid transparent; cursor: pointer; padding: 0; box-shadow: inset 0 -4px 0 rgba(0,0,0,0.18); font: 700 13px var(--font-ui); color: #191a33; }
+.colorn[aria-pressed="true"] { border-color: var(--ink); outline: 2px solid var(--you); outline-offset: 2px; }
+.colorn:disabled { opacity: .28; cursor: default; }
+.colorn:focus-visible { outline: 3px solid var(--you); outline-offset: 2px; }
+.shape-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.shapen { height: 46px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.shapen svg { width: 24px; height: 24px; fill: currentColor; }
+.shapen[aria-pressed="true"] { border-color: var(--you); color: var(--you); background: var(--panel); }
+.shapen:focus-visible { outline: 3px solid var(--you); outline-offset: 2px; }
 .dot { width: 18px; height: 18px; border-radius: 50%; justify-self: center; }
 .btn.friends { background: var(--panel); color: var(--you); border: 2px solid var(--you); }
 .btn:disabled { opacity: .5; cursor: default; }
@@ -429,6 +439,10 @@ h1 .rush { color: var(--you); }
         <div class="coins" aria-label="Coins"><svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg><b id="coinsLocker">0</b></div>
       </div>
       <p class="sub">Earn coins in rounds and challenges, then pick a new look for your runner.</p>
+      <div class="picker">
+        <div class="picker-label" id="lockerShapeLabel">Shape</div>
+        <div class="shape-row" data-shapes role="group" aria-labelledby="lockerShapeLabel"></div>
+      </div>
       <div class="skins" id="skinGrid"></div>
       <p class="note locker-msg" id="lockerMsg" role="status" aria-live="polite"></p>
       <button class="btn" id="lockerDone" type="button">Done</button>
@@ -467,6 +481,14 @@ h1 .rush { color: var(--you); }
         <div class="code-big" id="roomCodeBig">ABCD</div>
         <button class="btn ghost" id="roomCopy" type="button">Copy invite for friends</button>
         <ol class="board" id="roomPlayers"></ol>
+        <div class="picker">
+          <div class="picker-label" id="roomColorLabel">Your color</div>
+          <div class="colors-row" id="roomColors" role="group" aria-labelledby="roomColorLabel"></div>
+        </div>
+        <div class="picker">
+          <div class="picker-label" id="roomShapeLabel">Your shape</div>
+          <div class="shape-row" data-shapes role="group" aria-labelledby="roomShapeLabel"></div>
+        </div>
         <div class="picker" id="roomArenaPick">
           <div class="picker-label">Arena</div>
           <div class="arenas" id="roomArenas"></div>
@@ -641,6 +663,7 @@ h1 .rush { color: var(--you); }
     if (!p.skin) p.skin = 'sunny';
     p.rounds = p.rounds || 0; p.solo = p.solo || {}; p.surv = p.surv || {};
     p.partyRounds = p.partyRounds || 0; p.wins = p.wins || 0; p.bestPlace = p.bestPlace || 0;
+    if (['round', 'triangle', 'square', 'diamond', 'star'].indexOf(p.shape) < 0) p.shape = 'round';
     return p;
   }
   function blankProfile() { return fixProfile({ coins: 0, xp: 0, owned: ['sunny'], skin: 'sunny', daily: null, rounds: 0, solo: {}, surv: {} }); }
@@ -920,7 +943,7 @@ h1 .rush { color: var(--you); }
     for (var i = 0; i < count; i++) {
       players.push({
         you: i === 0, name: i ? BOT_NAMES[i - 1] : 'You', color: i ? BOT_COLORS[i - 1] : skinById(PROFILE.skin).color,
-        skin: i ? null : skinById(PROFILE.skin),
+        skin: i ? null : skinById(PROFILE.skin), shape: i ? 'round' : PROFILE.shape,
         angle: a0 + i * TAU / 8, hearts: 3, air: -9, duck: -9, actAt: -9, stun: -9,
         out: false, outAt: 0, prev: {}, dec: {}, queued: null, lastHit: null,
         lane: 1, laneX: 1, laneAt: -9, shield: 0,
@@ -934,9 +957,10 @@ h1 .rush { color: var(--you); }
       players.forEach(function (p, k) {
         var r = k === 0 ? room.roster[meIdx] : others[k - 1], slot = room.roster.indexOf(r);
         p.slot = slot; p.angle = a0 + slot * TAU / count; p.netId = r.id;
+        if (k === 0 && ROOM_COLORS[r.c]) p.color = ROOM_COLORS[r.c].hex;
         if (k > 0) {
-          if (r.bot) { p.bot = true; p.name = r.name; p.color = BOT_COLORS[r.bi % BOT_COLORS.length]; p.skin = null; }
-          else { var sk = skinById(r.skin); p.name = r.name; p.color = sk.color; p.skin = sk; }
+          if (r.bot) { p.bot = true; p.name = r.name; p.color = ROOM_COLORS[r.c] ? ROOM_COLORS[r.c].hex : BOT_COLORS[r.bi % BOT_COLORS.length]; p.skin = null; }
+          else { var sk = skinById(r.skin); p.name = r.name; p.color = ROOM_COLORS[r.c] ? ROOM_COLORS[r.c].hex : sk.color; p.skin = sk; p.shape = r.sh || 'round'; }
           if (!r.bot || !room.host) { p.remote = true; p.netA = p.angle; p.netT = 0; p.netL = 1; }
         }
       });
@@ -1432,6 +1456,18 @@ h1 .rush { color: var(--you); }
     drawAccessory(c, skin.acc, R, a);
   }
 
+  /* Body outline for each shape. Forward (direction of running) points along the ring's tangent. */
+  function bodyPath(shape, R, a, duck) {
+    ctx.save(); ctx.rotate(a);
+    if (duck) ctx.scale(0.62, 1.22);
+    ctx.beginPath();
+    if (shape === 'triangle') { var tr = R * 1.32; for (var i = 0; i < 3; i++) { var an = Math.PI / 2 + i * TAU / 3; var px = Math.cos(an) * tr, py = Math.sin(an) * tr; i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); } ctx.closePath(); }
+    else if (shape === 'square') { var q = R * 0.9, c = R * 0.28; ctx.moveTo(-q + c, -q); ctx.lineTo(q - c, -q); ctx.quadraticCurveTo(q, -q, q, -q + c); ctx.lineTo(q, q - c); ctx.quadraticCurveTo(q, q, q - c, q); ctx.lineTo(-q + c, q); ctx.quadraticCurveTo(-q, q, -q, q - c); ctx.lineTo(-q, -q + c); ctx.quadraticCurveTo(-q, -q, -q + c, -q); ctx.closePath(); }
+    else if (shape === 'diamond') { var d = R * 1.28; ctx.moveTo(0, d); ctx.lineTo(d * 0.86, 0); ctx.lineTo(0, -d); ctx.lineTo(-d * 0.86, 0); ctx.closePath(); }
+    else if (shape === 'star') { for (var k = 0; k < 10; k++) { var sa = Math.PI / 2 + k * Math.PI / 5, rad = k % 2 ? R * 0.72 : R * 1.38; var sx2 = Math.cos(sa) * rad, sy2 = Math.sin(sa) * rad; k ? ctx.lineTo(sx2, sy2) : ctx.moveTo(sx2, sy2); } ctx.closePath(); }
+    else ctx.arc(0, 0, R, 0, TAU);
+    ctx.restore();
+  }
   function drawRunner(p) {
     var t = G.t, a = p.angle, rr = runnerR(p), x = Math.cos(a) * rr, y = Math.sin(a) * rr, r = 0.055, JT = G.arena.jumpT;
     if (p.out) {
@@ -1454,9 +1490,8 @@ h1 .rush { color: var(--you); }
     ctx.fillStyle = p.color;
     ctx.strokeStyle = p.you ? COL.ink : COL.bg;
     ctx.lineWidth = p.you ? 0.016 : 0.01;
-    ctx.beginPath();
-    if (ducking) ctx.ellipse(0, 0, r * 0.62, r * 1.22, a, 0, TAU);
-    else ctx.arc(0, 0, r * (1 + 0.5 * h), 0, TAU);
+    ctx.lineJoin = 'round';
+    bodyPath(p.shape || 'round', ducking ? r : r * (1 + 0.5 * h), a, ducking);
     ctx.fill(); ctx.stroke();
 
     if (!ducking && !(p.skin && p.skin.acc === 'visor')) {
@@ -1925,6 +1960,7 @@ h1 .rush { color: var(--you); }
   }
   var pendingBuy = null;
   function renderLocker() {
+    renderShapes();
     var grid = $('skinGrid'), lvl = levelInfo(PROFILE.xp).lvl;
     $('coinsLocker').textContent = PROFILE.coins;
     grid.textContent = '';
@@ -2093,7 +2129,12 @@ h1 .rush { color: var(--you); }
   $('boardDone').addEventListener('click', function () { $('boardScreen').hidden = true; $('startScreen').hidden = false; });
 
   /* ---------- Party Rooms: live multiplayer over Supabase Realtime ---------- */
-  var ROOM = null, sbClient = null, sbLoading = null, GAME_VERSION = 4;
+  var ROOM = null, sbClient = null, sbLoading = null, GAME_VERSION = 5;
+  var ROOM_COLORS = [
+    { name: 'Sunny', hex: '#ffd23f' }, { name: 'Coral', hex: '#ff6b6b' }, { name: 'Mint', hex: '#5ee0a0' }, { name: 'Violet', hex: '#b48cff' },
+    { name: 'Bubblegum', hex: '#ff8fd8' }, { name: 'Snow', hex: '#f4f2ff' }, { name: 'Lime', hex: '#c6f06a' }, { name: 'Peach', hex: '#f6b8a0' }
+  ];
+  function savedRoomColor() { try { var v = parseInt(localStorage.getItem('headrush.roomColor'), 10); if (v >= 0 && v < ROOM_COLORS.length) return v; } catch (e) {} return 0; }
   var SITE_URL = 'https://head-rush.vercel.app';
   var CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   function loadSupabase() {
@@ -2120,7 +2161,7 @@ h1 .rush { color: var(--you); }
     var st = ROOM.ch.presenceState(), out = [];
     Object.keys(st).forEach(function (k) {
       var m = st[k] && st[k][st[k].length - 1];
-      if (m && m.name) out.push({ id: k, name: m.name, skin: m.skin, joinedAt: m.joinedAt || 0, arena: m.arena, bots: m.bots || 0, status: m.status, host: !!m.host, v: m.v || 0, me: k === ROOM.me });
+      if (m && m.name) out.push({ id: k, name: m.name, skin: m.skin, joinedAt: m.joinedAt || 0, arena: m.arena, bots: m.bots || 0, status: m.status, host: !!m.host, v: m.v || 0, c: typeof m.c === 'number' ? m.c : -1, sh: m.sh || 'round', me: k === ROOM.me });
     });
     out.sort(function (a, b) { return (b.host - a.host) || (a.joinedAt - b.joinedAt) || (a.id < b.id ? -1 : 1); });
     return out;
@@ -2129,7 +2170,7 @@ h1 .rush { color: var(--you); }
   function trackMe() {
     if (!ROOM || !ROOM.ch || !ROOM.subscribed) return;
     var pl = currentPlayer();
-    ROOM.ch.track({ name: pl ? pl.name : 'Player', skin: PROFILE.skin, joinedAt: ROOM.joinedAt, arena: ROOM.arena, bots: ROOM.bots, status: ROOM.status, host: ROOM.creating, v: GAME_VERSION });
+    ROOM.ch.track({ name: pl ? pl.name : 'Player', skin: PROFILE.skin, joinedAt: ROOM.joinedAt, arena: ROOM.arena, bots: ROOM.bots, status: ROOM.status, host: ROOM.creating, c: ROOM.c, sh: PROFILE.shape, v: GAME_VERSION });
   }
   function roomView(which) {
     $('roomJoin').hidden = which !== 'join'; $('roomLobby').hidden = which !== 'lobby';
@@ -2159,7 +2200,7 @@ h1 .rush { color: var(--you); }
       var pl = currentPlayer(); ensureCloud(pl); savePlayers();
       var me = pl.cloudId;
       var ch = client.channel('headrush-room-' + code, { config: { broadcast: { self: false }, presence: { key: me } } });
-      var room = { code: code, ch: ch, me: me, joinedAt: Date.now(), arena: arenaId, bots: 0, status: 'lobby', creating: creating, subscribed: false };
+      var room = { code: code, ch: ch, me: me, joinedAt: Date.now(), arena: arenaId, bots: 0, c: savedRoomColor(), status: 'lobby', creating: creating, subscribed: false };
       ROOM = room;
       ch.on('presence', { event: 'sync' }, function () { if (ROOM === room) onRoomSync(); });
       ch.on('presence', { event: 'leave' }, function (e) { if (ROOM === room) onRoomLeave(e); });
@@ -2214,7 +2255,7 @@ h1 .rush { color: var(--you); }
     var ol = $('roomPlayers'); ol.textContent = '';
     mem.forEach(function (m, i) {
       var li = document.createElement('li'); if (m.me) li.className = 'me';
-      var dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = skinById(m.skin).color;
+      var dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = ROOM_COLORS[m.c] ? ROOM_COLORS[m.c].hex : skinById(m.skin).color;
       var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = m.name + (m.me ? ' (you)' : '');
       if (i === 0) { var tg = document.createElement('span'); tg.className = 'tag'; tg.textContent = 'HOST'; nm.appendChild(tg); }
       if (m.status === 'playing') { var tp = document.createElement('span'); tp.className = 'tag play'; tp.textContent = 'IN A ROUND'; nm.appendChild(tp); }
@@ -2222,6 +2263,7 @@ h1 .rush { color: var(--you); }
       var vl = document.createElement('span'); vl.className = 'vl'; vl.textContent = i < 8 ? '' : 'Full';
       li.appendChild(dot); li.appendChild(nm); li.appendChild(vl); ol.appendChild(li);
     });
+    renderRoomColors(mem); renderShapes();
     $('roomArenaPick').hidden = !iHost; $('roomBotsPick').hidden = !iHost;
     roomArenaBtns.forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-arena') === arena ? 'true' : 'false'); });
     var outdated = mem.filter(function (m) { return m.v < GAME_VERSION; }), newer = mem.some(function (m) { return m.v > GAME_VERSION; });
@@ -2240,7 +2282,40 @@ h1 .rush { color: var(--you); }
       $('roomArenaNote').textContent = 'Arena: ' + (ARENAS[arena] ? ARENAS[arena].name : 'Neon Rooftop') + botTxt + '. Waiting for ' + (host ? host.name : 'the host') + ' to start.';
     }
   }
+  function resolveRoomColor() {
+    if (!ROOM || !ROOM.subscribed) return;
+    var mem = roomMembers(), before = {}, all = {};
+    for (var i = 0; i < mem.length; i++) { if (mem[i].me) break; before[mem[i].c] = true; }
+    mem.forEach(function (m) { if (!m.me) all[m.c] = true; });
+    if (!before[ROOM.c] && ROOM_COLORS[ROOM.c]) return;
+    for (var c = 0; c < ROOM_COLORS.length; c++) if (!all[c]) { ROOM.c = c; trackMe(); return; }
+  }
+  var roomColorBtns = ROOM_COLORS.map(function (rc, n) {
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'colorn'; b.style.background = rc.hex;
+    b.setAttribute('aria-label', rc.name); b.setAttribute('aria-pressed', 'false');
+    b.addEventListener('click', function () {
+      if (!ROOM) return;
+      var taken = roomMembers().some(function (m) { return !m.me && m.c === n; });
+      if (taken) return;
+      ROOM.c = n; try { localStorage.setItem('headrush.roomColor', String(n)); } catch (e) {}
+      trackMe(); renderLobby();
+    });
+    $('roomColors').appendChild(b); return b;
+  });
+  function renderRoomColors(mem) {
+    var owner = {};
+    mem.forEach(function (m) { if (!m.me && ROOM_COLORS[m.c]) owner[m.c] = m.name; });
+    roomColorBtns.forEach(function (b, n) {
+      var mine = ROOM.c === n, by = owner[n];
+      b.disabled = !!by; b.setAttribute('aria-pressed', mine ? 'true' : 'false');
+      b.textContent = by ? by.charAt(0).toUpperCase() : '';
+      b.title = by ? ROOM_COLORS[n].name + ' (taken by ' + by + ')' : ROOM_COLORS[n].name;
+      b.setAttribute('aria-label', b.title);
+    });
+    $('roomColorLabel').textContent = 'Your color · ' + (ROOM_COLORS[ROOM.c] ? ROOM_COLORS[ROOM.c].name : '');
+  }
   function onRoomSync() {
+    resolveRoomColor();
     if (!$('roomLobby').hidden && !$('roomScreen').hidden) renderLobby();
   }
   function onRoomLeave(e) {
@@ -2257,7 +2332,7 @@ h1 .rush { color: var(--you); }
     }, 1500);
   }
   function startRoomRound(payload) {
-    var roster = (payload.roster || []).slice(0, 8).map(function (r) { return { id: String(r.id), name: String(r.name || 'Player').slice(0, 14), skin: r.skin, bot: !!r.bot, bi: r.bi || 0, me: r.id === ROOM.me }; });
+    var roster = (payload.roster || []).slice(0, 8).map(function (r) { return { id: String(r.id), name: String(r.name || 'Player').slice(0, 14), skin: r.skin, bot: !!r.bot, bi: r.bi || 0, c: typeof r.c === 'number' ? r.c : -1, sh: ['round', 'triangle', 'square', 'diamond', 'star'].indexOf(r.sh) >= 0 ? r.sh : 'round', me: r.id === ROOM.me }; });
     if (!roster.some(function (r) { return r.me; })) {
       if (!$('roomScreen').hidden) $('roomStatus').textContent = 'A round started without you. You’ll join the next one.';
       return;
@@ -2281,8 +2356,10 @@ h1 .rush { color: var(--you); }
     if (!ROOM || !amHost()) return;
     var mem = roomMembers().slice(0, 8), nb = Math.max(0, Math.min(ROOM.bots || 0, 8 - mem.length));
     if (mem.length < 2 && nb < 1) return;
-    var roster = mem.map(function (m) { return { id: m.id, name: m.name, skin: m.skin }; });
-    for (var i = 0; i < nb; i++) roster.push({ id: 'bot-' + i, name: BOT_NAMES[i % BOT_NAMES.length], bot: true, bi: i });
+    var used = {}, roster = mem.map(function (m) { var c = m.me ? ROOM.c : m.c; if (used[c] || !ROOM_COLORS[c]) c = -1; else used[c] = true; return { id: m.id, name: m.name, skin: m.skin, sh: m.me ? PROFILE.shape : m.sh, c: c }; });
+    roster.forEach(function (r) { if (r.c < 0) for (var c = 0; c < ROOM_COLORS.length; c++) if (!used[c]) { r.c = c; used[c] = true; break; } });
+    var freeCols = []; for (var fc = 0; fc < ROOM_COLORS.length; fc++) if (!used[fc]) freeCols.push(fc);
+    for (var i = 0; i < nb; i++) roster.push({ id: 'bot-' + i, name: BOT_NAMES[i % BOT_NAMES.length], bot: true, bi: i, c: freeCols.length ? freeCols.shift() : -1 });
     var payload = { seed: Math.floor(Math.random() * 4294967295), arena: ROOM.arena, host: ROOM.me, roster: roster };
     ROOM.ch.send({ type: 'broadcast', event: 'start', payload: payload });
     startRoomRound(payload);
@@ -2350,6 +2427,34 @@ h1 .rush { color: var(--you); }
     try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { st.textContent = 'Invite copied. Paste it in your group chat.'; }, fb); else fb(); } catch (e) { fb(); }
   });
   window.addEventListener('pagehide', function () { leaveRoom(); });
+
+  /* ---------- body shape picker (Locker and room lobby) ---------- */
+  var SHAPES = [
+    { id: 'round', name: 'Round', svg: '<circle cx="12" cy="12" r="9"/>' },
+    { id: 'triangle', name: 'Triangle', svg: '<path d="M12 2.5 22 20H2z"/>' },
+    { id: 'square', name: 'Square', svg: '<rect x="3.5" y="3.5" width="17" height="17" rx="3.5"/>' },
+    { id: 'diamond', name: 'Diamond', svg: '<path d="M12 1.5 21.5 12 12 22.5 2.5 12z"/>' },
+    { id: 'star', name: 'Star', svg: '<path d="M12 1.8l2.9 6.6 7.2.6-5.5 4.7 1.7 7-6.3-3.8-6.3 3.8 1.7-7L1.9 9l7.2-.6z"/>' }
+  ];
+  var shapeBtns = [];
+  Array.prototype.forEach.call(document.querySelectorAll('[data-shapes]'), function (row) {
+    SHAPES.forEach(function (sh) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'shapen';
+      b.setAttribute('aria-label', sh.name); b.title = sh.name; b.setAttribute('data-shape', sh.id);
+      b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + sh.svg + '</svg>';
+      b.addEventListener('click', function () {
+        PROFILE.shape = sh.id; saveProfile(); renderShapes();
+        if (ROOM) trackMe();
+        if (!running) previewRound();
+      });
+      row.appendChild(b); shapeBtns.push(b);
+    });
+  });
+  function renderShapes() {
+    shapeBtns.forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-shape') === PROFILE.shape ? 'true' : 'false'); });
+    var nm = (SHAPES.filter(function (x) { return x.id === PROFILE.shape; })[0] || SHAPES[0]).name;
+    $('roomShapeLabel').textContent = 'Your shape · ' + nm; $('lockerShapeLabel').textContent = 'Shape · ' + nm;
+  }
 
   /* ---------- feedback ---------- */
   var fbRating = 0, fbFrom = 'startScreen', fbSending = false;
