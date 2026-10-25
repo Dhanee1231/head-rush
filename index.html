@@ -253,6 +253,7 @@ h1 .rush { color: var(--you); }
 .code-big { font-family: var(--font-display); font-size: 58px; line-height: 1; letter-spacing: .18em; text-align: center; color: var(--you); padding-left: .18em; -webkit-user-select: text; user-select: text; }
 .tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--you); color: var(--bg); font-size: 11px; font-weight: 700; letter-spacing: .06em; vertical-align: middle; }
 .tag.play { background: var(--fast); }
+.tag.old { background: var(--heart); color: var(--ink); }
 .dot { width: 18px; height: 18px; border-radius: 50%; justify-self: center; }
 .btn.friends { background: var(--panel); color: var(--you); border: 2px solid var(--you); }
 .btn:disabled { opacity: .5; cursor: default; }
@@ -1179,7 +1180,7 @@ h1 .rush { color: var(--you); }
       p = g.players[i];
       if (p.out) continue;
       if (p.remote) {
-        if (t > 1 && t - p.netT > 6) { p.out = true; p.outAt = t; toast(p.name + (p.bot ? ' stopped' : ' lost connection')); setAlive(); checkRoomWin(); continue; }
+        if (t > 1 && t - p.netT > 10) { p.out = true; p.lost = true; p.outAt = t; toast(p.name + (p.bot ? ' stopped' : ' lost connection')); setAlive(); checkRoomWin(); continue; }
         var target = p.netA + speedAt(p) * Math.min(0.6, Math.max(0, t - p.netT));
         p.angle += wrap(target - p.angle) * Math.min(1, dt * 10);
         p.lane = p.netL;
@@ -2092,7 +2093,7 @@ h1 .rush { color: var(--you); }
   $('boardDone').addEventListener('click', function () { $('boardScreen').hidden = true; $('startScreen').hidden = false; });
 
   /* ---------- Party Rooms: live multiplayer over Supabase Realtime ---------- */
-  var ROOM = null, sbClient = null, sbLoading = null;
+  var ROOM = null, sbClient = null, sbLoading = null, GAME_VERSION = 4;
   var SITE_URL = 'https://head-rush.vercel.app';
   var CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   function loadSupabase() {
@@ -2119,7 +2120,7 @@ h1 .rush { color: var(--you); }
     var st = ROOM.ch.presenceState(), out = [];
     Object.keys(st).forEach(function (k) {
       var m = st[k] && st[k][st[k].length - 1];
-      if (m && m.name) out.push({ id: k, name: m.name, skin: m.skin, joinedAt: m.joinedAt || 0, arena: m.arena, bots: m.bots || 0, status: m.status, host: !!m.host, me: k === ROOM.me });
+      if (m && m.name) out.push({ id: k, name: m.name, skin: m.skin, joinedAt: m.joinedAt || 0, arena: m.arena, bots: m.bots || 0, status: m.status, host: !!m.host, v: m.v || 0, me: k === ROOM.me });
     });
     out.sort(function (a, b) { return (b.host - a.host) || (a.joinedAt - b.joinedAt) || (a.id < b.id ? -1 : 1); });
     return out;
@@ -2128,7 +2129,7 @@ h1 .rush { color: var(--you); }
   function trackMe() {
     if (!ROOM || !ROOM.ch || !ROOM.subscribed) return;
     var pl = currentPlayer();
-    ROOM.ch.track({ name: pl ? pl.name : 'Player', skin: PROFILE.skin, joinedAt: ROOM.joinedAt, arena: ROOM.arena, bots: ROOM.bots, status: ROOM.status, host: ROOM.creating });
+    ROOM.ch.track({ name: pl ? pl.name : 'Player', skin: PROFILE.skin, joinedAt: ROOM.joinedAt, arena: ROOM.arena, bots: ROOM.bots, status: ROOM.status, host: ROOM.creating, v: GAME_VERSION });
   }
   function roomView(which) {
     $('roomJoin').hidden = which !== 'join'; $('roomLobby').hidden = which !== 'lobby';
@@ -2217,11 +2218,14 @@ h1 .rush { color: var(--you); }
       var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = m.name + (m.me ? ' (you)' : '');
       if (i === 0) { var tg = document.createElement('span'); tg.className = 'tag'; tg.textContent = 'HOST'; nm.appendChild(tg); }
       if (m.status === 'playing') { var tp = document.createElement('span'); tp.className = 'tag play'; tp.textContent = 'IN A ROUND'; nm.appendChild(tp); }
+      if (m.v < GAME_VERSION) { var tu = document.createElement('span'); tu.className = 'tag old'; tu.textContent = 'NEEDS RELOAD'; nm.appendChild(tu); }
       var vl = document.createElement('span'); vl.className = 'vl'; vl.textContent = i < 8 ? '' : 'Full';
       li.appendChild(dot); li.appendChild(nm); li.appendChild(vl); ol.appendChild(li);
     });
     $('roomArenaPick').hidden = !iHost; $('roomBotsPick').hidden = !iHost;
     roomArenaBtns.forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-arena') === arena ? 'true' : 'false'); });
+    var outdated = mem.filter(function (m) { return m.v < GAME_VERSION; }), newer = mem.some(function (m) { return m.v > GAME_VERSION; });
+    $('roomErr').textContent = newer ? 'A newer version of the game is out. Reload this page to update, then rejoin with the same code.' : outdated.length ? outdated.map(function (m) { return m.name; }).join(', ') + (outdated.length === 1 ? ' has' : ' have') + ' an old version open. Ask them to reload the page and rejoin, or they may drop out of rounds.' : '';
     var humans = Math.min(mem.length, 8), others = mem.length - 1, maxBots = 8 - humans;
     if (iHost && ROOM.bots > maxBots) { ROOM.bots = maxBots; trackMe(); }
     var bots = iHost ? ROOM.bots : Math.min((host && host.bots) || 0, maxBots);
@@ -2308,7 +2312,9 @@ h1 .rush { color: var(--you); }
   function applyNet(m) {
     var p = null;
     for (var i = 1; i < G.players.length; i++) if (G.players[i].remote && G.players[i].netId === m.id) p = G.players[i];
-    if (!p || p.out) return;
+    if (!p) return;
+    if (p.out && p.lost && !m.o && !G.over) { p.out = false; p.lost = false; p.angle = m.a; toast(p.name + ' is back'); setAlive(); }
+    if (p.out) return;
     if (typeof m.a === 'number') { p.netA = m.a; p.netT = G.t; }
     if (m.l === 0 || m.l === 1) p.netL = m.l;
     if (m.k === 'jump' || m.k === 'duck') act(p, m.k);
