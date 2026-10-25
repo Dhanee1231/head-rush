@@ -256,6 +256,11 @@ h1 .rush { color: var(--you); }
 .dot { width: 18px; height: 18px; border-radius: 50%; justify-self: center; }
 .btn.friends { background: var(--panel); color: var(--you); border: 2px solid var(--you); }
 .btn:disabled { opacity: .5; cursor: default; }
+.bots-row { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; }
+.botn { height: 40px; border-radius: 10px; border: 2px solid var(--line); background: var(--bg); color: var(--ink); font-family: var(--font-display); font-size: 18px; cursor: pointer; }
+.botn[aria-pressed="true"] { border-color: var(--you); background: var(--panel); color: var(--you); }
+.botn:disabled { opacity: .3; cursor: default; }
+.botn:focus-visible { outline: 3px solid var(--you); outline-offset: 2px; }
 .board { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .board li {
   display: grid; grid-template-columns: 32px 1fr auto; gap: 10px; align-items: center;
@@ -464,6 +469,10 @@ h1 .rush { color: var(--you); }
         <div class="picker" id="roomArenaPick">
           <div class="picker-label">Arena</div>
           <div class="arenas" id="roomArenas"></div>
+        </div>
+        <div class="picker" id="roomBotsPick">
+          <div class="picker-label" id="roomBotsLabel">Bots</div>
+          <div class="bots-row" id="roomBots" role="group" aria-labelledby="roomBotsLabel"></div>
         </div>
         <p class="note" id="roomArenaNote"></p>
         <button class="btn" id="roomStart" type="button">Start round</button>
@@ -924,7 +933,11 @@ h1 .rush { color: var(--you); }
       players.forEach(function (p, k) {
         var r = k === 0 ? room.roster[meIdx] : others[k - 1], slot = room.roster.indexOf(r);
         p.slot = slot; p.angle = a0 + slot * TAU / count; p.netId = r.id;
-        if (k > 0) { var sk = skinById(r.skin); p.remote = true; p.name = r.name; p.color = sk.color; p.skin = sk; p.netA = p.angle; p.netT = -3; p.netL = 1; }
+        if (k > 0) {
+          if (r.bot) { p.bot = true; p.name = r.name; p.color = BOT_COLORS[r.bi % BOT_COLORS.length]; p.skin = null; }
+          else { var sk = skinById(r.skin); p.name = r.name; p.color = sk.color; p.skin = sk; }
+          if (!r.bot || !room.host) { p.remote = true; p.netA = p.angle; p.netT = 0; p.netL = 1; }
+        }
       });
     }
     G = {
@@ -1166,6 +1179,7 @@ h1 .rush { color: var(--you); }
       p = g.players[i];
       if (p.out) continue;
       if (p.remote) {
+        if (t > 1 && t - p.netT > 6) { p.out = true; p.outAt = t; toast(p.name + (p.bot ? ' stopped' : ' lost connection')); setAlive(); checkRoomWin(); continue; }
         var target = p.netA + speedAt(p) * Math.min(0.6, Math.max(0, t - p.netT));
         p.angle += wrap(target - p.angle) * Math.min(1, dt * 10);
         p.lane = p.netL;
@@ -1214,6 +1228,7 @@ h1 .rush { color: var(--you); }
     for (i = 0; i < g.players.length; i++) {
       p = g.players[i];
       if (p.remote || p.out || (g.over && p.you)) continue;
+      if (g.mode === 'room' && t < 2) { g.bars.forEach(function (b) { p.prev['b' + b.id] = wrap(b.angle - p.angle); }); continue; }
       for (j = 0; j < g.bars.length && !p.out; j++) {
         var b = g.bars[j], key = 'b' + b.id, rel = wrap(b.angle - p.angle), pr = p.prev[key];
         p.prev[key] = rel;
@@ -1597,7 +1612,7 @@ h1 .rush { color: var(--you); }
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = Math.round(S * 0.05) + 'px ' + DISPLAY;
       var cr = Math.cos(g.rot), sr = Math.sin(g.rot);
       g.players.forEach(function (q) {
-        if (!q.remote || q.out) return;
+        if (!q.remote || q.out || q.bot) return;
         var rq = runnerR(q), wx = Math.cos(q.angle) * rq, wy = Math.sin(q.angle) * rq;
         var lx = cx + sx + (wx * cr - wy * sr) * S, ly = cy + sy + (wx * sr + wy * cr) * S - S * 0.115;
         var tw = ctx.measureText(q.name).width + S * 0.04;
@@ -1763,7 +1778,7 @@ h1 .rush { color: var(--you); }
     $('shareMsg').textContent = ''; $('shareText').hidden = true;
     var sl = $('syncLine'); sl.textContent = 'Saving to the online leaderboard…';
     syncPlayer().then(function (ok) { sl.textContent = ok ? 'Saved to the online leaderboard.' : 'Couldn’t reach the online leaderboard. Your score saves on this phone and uploads next time.'; });
-    running = false;
+    if (md !== 'room') running = false;
     $('endScreen').hidden = false;
     setTimeout(function () { try { $('againBtn').focus({ preventScroll: true }); } catch (e) {} }, 50);
   }
@@ -1863,7 +1878,7 @@ h1 .rush { color: var(--you); }
     startRound();
   });
   $('retryBtn').addEventListener('click', startRound);
-  $('switchBtn').addEventListener('click', function () { if (ROOM) leaveRoom(); $('endScreen').hidden = true; $('startScreen').hidden = false; renderProfile(); pickMode(mode); });
+  $('switchBtn').addEventListener('click', function () { if (ROOM) leaveRoom(); running = false; $('endScreen').hidden = true; $('startScreen').hidden = false; renderProfile(); pickMode(mode); });
 
   /* ---------- progress UI and Locker ---------- */
   function renderProfile() {
@@ -2094,7 +2109,7 @@ h1 .rush { color: var(--you); }
   }
   function getClient() {
     return loadSupabase().then(function (lib) {
-      if (!sbClient) sbClient = lib.createClient(SB_URL, SB_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+      if (!sbClient) sbClient = lib.createClient(SB_URL, SB_KEY, { auth: { persistSession: false, autoRefreshToken: false }, realtime: { params: { eventsPerSecond: 20 } } });
       return sbClient;
     });
   }
@@ -2104,7 +2119,7 @@ h1 .rush { color: var(--you); }
     var st = ROOM.ch.presenceState(), out = [];
     Object.keys(st).forEach(function (k) {
       var m = st[k] && st[k][st[k].length - 1];
-      if (m && m.name) out.push({ id: k, name: m.name, skin: m.skin, joinedAt: m.joinedAt || 0, arena: m.arena, status: m.status, host: !!m.host, me: k === ROOM.me });
+      if (m && m.name) out.push({ id: k, name: m.name, skin: m.skin, joinedAt: m.joinedAt || 0, arena: m.arena, bots: m.bots || 0, status: m.status, host: !!m.host, me: k === ROOM.me });
     });
     out.sort(function (a, b) { return (b.host - a.host) || (a.joinedAt - b.joinedAt) || (a.id < b.id ? -1 : 1); });
     return out;
@@ -2113,7 +2128,7 @@ h1 .rush { color: var(--you); }
   function trackMe() {
     if (!ROOM || !ROOM.ch || !ROOM.subscribed) return;
     var pl = currentPlayer();
-    ROOM.ch.track({ name: pl ? pl.name : 'Player', skin: PROFILE.skin, joinedAt: ROOM.joinedAt, arena: ROOM.arena, status: ROOM.status, host: ROOM.creating });
+    ROOM.ch.track({ name: pl ? pl.name : 'Player', skin: PROFILE.skin, joinedAt: ROOM.joinedAt, arena: ROOM.arena, bots: ROOM.bots, status: ROOM.status, host: ROOM.creating });
   }
   function roomView(which) {
     $('roomJoin').hidden = which !== 'join'; $('roomLobby').hidden = which !== 'lobby';
@@ -2143,7 +2158,7 @@ h1 .rush { color: var(--you); }
       var pl = currentPlayer(); ensureCloud(pl); savePlayers();
       var me = pl.cloudId;
       var ch = client.channel('headrush-room-' + code, { config: { broadcast: { self: false }, presence: { key: me } } });
-      var room = { code: code, ch: ch, me: me, joinedAt: Date.now(), arena: arenaId, status: 'lobby', creating: creating, subscribed: false };
+      var room = { code: code, ch: ch, me: me, joinedAt: Date.now(), arena: arenaId, bots: 0, status: 'lobby', creating: creating, subscribed: false };
       ROOM = room;
       ch.on('presence', { event: 'sync' }, function () { if (ROOM === room) onRoomSync(); });
       ch.on('presence', { event: 'leave' }, function (e) { if (ROOM === room) onRoomLeave(e); });
@@ -2184,6 +2199,13 @@ h1 .rush { color: var(--you); }
     b.addEventListener('click', function () { if (!ROOM || !amHost()) return; ROOM.arena = id; trackMe(); renderLobby(); });
     $('roomArenas').appendChild(b); roomArenaBtns.push(b);
   });
+  var roomBotBtns = [];
+  for (var bn = 0; bn <= 7; bn++) (function (n) {
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'botn'; b.textContent = n; b.setAttribute('aria-pressed', 'false');
+    b.setAttribute('aria-label', n + (n === 1 ? ' bot' : ' bots'));
+    b.addEventListener('click', function () { if (!ROOM || !amHost()) return; ROOM.bots = n; trackMe(); renderLobby(); });
+    $('roomBots').appendChild(b); roomBotBtns.push(b);
+  })(bn);
   function renderLobby() {
     if (!ROOM || $('roomLobby').hidden) return;
     var mem = roomMembers(), host = mem[0], iHost = amHost();
@@ -2198,32 +2220,40 @@ h1 .rush { color: var(--you); }
       var vl = document.createElement('span'); vl.className = 'vl'; vl.textContent = i < 8 ? '' : 'Full';
       li.appendChild(dot); li.appendChild(nm); li.appendChild(vl); ol.appendChild(li);
     });
-    $('roomArenaPick').hidden = !iHost;
+    $('roomArenaPick').hidden = !iHost; $('roomBotsPick').hidden = !iHost;
     roomArenaBtns.forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-arena') === arena ? 'true' : 'false'); });
-    var others = mem.length - 1;
+    var humans = Math.min(mem.length, 8), others = mem.length - 1, maxBots = 8 - humans;
+    if (iHost && ROOM.bots > maxBots) { ROOM.bots = maxBots; trackMe(); }
+    var bots = iHost ? ROOM.bots : Math.min((host && host.bots) || 0, maxBots);
+    roomBotBtns.forEach(function (b, n) { b.disabled = n > maxBots; b.setAttribute('aria-pressed', n === bots ? 'true' : 'false'); });
+    $('roomBotsLabel').textContent = 'Bots · fill up to 8 runners';
+    var botTxt = bots ? ' + ' + bots + (bots === 1 ? ' bot' : ' bots') : '';
     if (iHost) {
-      $('roomStart').hidden = false; $('roomStart').disabled = others < 1;
-      $('roomArenaNote').textContent = others < 1 ? 'Waiting for friends to join. Send them the code.' : (mem.length > 8 ? 'Only the first 8 players join each round.' : mem.length + ' players ready. Pick an arena and start.');
+      $('roomStart').hidden = false; $('roomStart').disabled = others < 1 && bots < 1;
+      $('roomArenaNote').textContent = (others < 1 && bots < 1) ? 'Waiting for friends to join. Send them the code, or add bots to play now.' : humans + (humans === 1 ? ' player' : ' players') + botTxt + '. Pick an arena and start.' + (mem.length > 8 ? ' Only the first 8 players join each round.' : '');
     } else {
       $('roomStart').hidden = true;
-      $('roomArenaNote').textContent = 'Arena: ' + (ARENAS[arena] ? ARENAS[arena].name : 'Neon Rooftop') + '. Waiting for ' + (host ? host.name : 'the host') + ' to start.';
+      $('roomArenaNote').textContent = 'Arena: ' + (ARENAS[arena] ? ARENAS[arena].name : 'Neon Rooftop') + botTxt + '. Waiting for ' + (host ? host.name : 'the host') + ' to start.';
     }
   }
   function onRoomSync() {
     if (!$('roomLobby').hidden && !$('roomScreen').hidden) renderLobby();
   }
   function onRoomLeave(e) {
-    var left = (e && e.leftPresences) || [];
-    if (!G || G.mode !== 'room' || !running) return;
-    left.forEach(function (lp) {
-      var key = e.key;
+    if (!e || !G || G.mode !== 'room' || !running || !ROOM) return;
+    var key = e.key;
+    /* Supabase reports a status update as leave + join for the same player, so only a player with no presence left has really gone. */
+    setTimeout(function () {
+      if (!ROOM || !G || G.mode !== 'room') return;
+      var st = ROOM.ch.presenceState();
+      if (st[key] && st[key].length) return;
       G.players.forEach(function (p) {
-        if (p.remote && p.netId === key && !p.out) { p.out = true; p.outAt = G.t; toast(p.name + ' left'); setAlive(); checkRoomWin(); }
+        if (p.remote && !p.bot && p.netId === key && !p.out) { p.out = true; p.outAt = G.t; toast(p.name + ' left'); setAlive(); checkRoomWin(); }
       });
-    });
+    }, 1500);
   }
   function startRoomRound(payload) {
-    var roster = (payload.roster || []).map(function (r) { return { id: r.id, name: String(r.name || 'Player').slice(0, 14), skin: r.skin, me: r.id === ROOM.me }; });
+    var roster = (payload.roster || []).slice(0, 8).map(function (r) { return { id: String(r.id), name: String(r.name || 'Player').slice(0, 14), skin: r.skin, bot: !!r.bot, bi: r.bi || 0, me: r.id === ROOM.me }; });
     if (!roster.some(function (r) { return r.me; })) {
       if (!$('roomScreen').hidden) $('roomStatus').textContent = 'A round started without you. You’ll join the next one.';
       return;
@@ -2233,7 +2263,9 @@ h1 .rush { color: var(--you); }
     audioOn(); keepAwake();
     ROOM.status = 'playing'; trackMe();
     arenaUi(aid);
-    newRound(aid, 'room', 0, { seed: payload.seed >>> 0, roster: roster });
+    var iAmHost = payload.host === ROOM.me;
+    newRound(aid, 'room', 0, { seed: payload.seed >>> 0, roster: roster, host: iAmHost });
+    G.hostBots = iAmHost && roster.some(function (r) { return r.bot; });
     running = true;
   }
   function onRoomStart(payload) {
@@ -2243,17 +2275,24 @@ h1 .rush { color: var(--you); }
   }
   function hostStart() {
     if (!ROOM || !amHost()) return;
-    var mem = roomMembers().slice(0, 8);
-    if (mem.length < 2) return;
-    var payload = { seed: Math.floor(Math.random() * 4294967295), arena: ROOM.arena, roster: mem.map(function (m) { return { id: m.id, name: m.name, skin: m.skin }; }) };
+    var mem = roomMembers().slice(0, 8), nb = Math.max(0, Math.min(ROOM.bots || 0, 8 - mem.length));
+    if (mem.length < 2 && nb < 1) return;
+    var roster = mem.map(function (m) { return { id: m.id, name: m.name, skin: m.skin }; });
+    for (var i = 0; i < nb; i++) roster.push({ id: 'bot-' + i, name: BOT_NAMES[i % BOT_NAMES.length], bot: true, bi: i });
+    var payload = { seed: Math.floor(Math.random() * 4294967295), arena: ROOM.arena, host: ROOM.me, roster: roster };
     ROOM.ch.send({ type: 'broadcast', event: 'start', payload: payload });
     startRoomRound(payload);
   }
   function netSend(kind) {
     if (!ROOM || !ROOM.ch || !ROOM.subscribed || !G || G.mode !== 'room') return;
-    var you = G.players[0];
-    var msg = { id: ROOM.me, a: Math.round(you.angle * 1000) / 1000, l: you.lane, h: you.hearts, o: you.out ? 1 : 0 };
+    var you = G.players[0], t = G.t;
+    function pack(p) { return { a: Math.round(p.angle * 1000) / 1000, l: p.lane, h: p.hearts, o: p.out ? 1 : 0, s: t < p.air ? 'j' : t < p.duck ? 'd' : '' }; }
+    var msg = pack(you); msg.id = ROOM.me;
     if (kind) msg.k = kind;
+    if (G.hostBots) {
+      msg.bots = [];
+      G.players.forEach(function (p) { if (p.bot && !p.remote) { var b = pack(p); b.id = p.netId; msg.bots.push(b); } });
+    }
     try { ROOM.ch.send({ type: 'broadcast', event: 'g', payload: msg }); } catch (e) {}
   }
   function checkRoomWin() {
@@ -2263,12 +2302,18 @@ h1 .rush { color: var(--you); }
   }
   function onNet(m) {
     if (!m || !G || G.mode !== 'room' || !running) return;
+    applyNet(m);
+    if (Array.isArray(m.bots)) m.bots.forEach(applyNet);
+  }
+  function applyNet(m) {
     var p = null;
-    for (var i = 1; i < G.players.length; i++) if (G.players[i].netId === m.id) p = G.players[i];
+    for (var i = 1; i < G.players.length; i++) if (G.players[i].remote && G.players[i].netId === m.id) p = G.players[i];
     if (!p || p.out) return;
     if (typeof m.a === 'number') { p.netA = m.a; p.netT = G.t; }
     if (m.l === 0 || m.l === 1) p.netL = m.l;
     if (m.k === 'jump' || m.k === 'duck') act(p, m.k);
+    else if (m.s === 'j' && G.t >= p.air && G.t >= p.duck) act(p, 'jump');
+    else if (m.s === 'd' && G.t >= p.duck && G.t >= p.air) act(p, 'duck');
     if (typeof m.h === 'number' && m.h < p.hearts) {
       p.hearts = Math.max(0, m.h); p.stun = G.t + STUN_T; p.air = p.duck = -9;
       burstAt(p, p.color, 12, 1); sfx.bonk(0.25);
@@ -2379,7 +2424,7 @@ h1 .rush { color: var(--you); }
     var k = e.code;
     if (!$('lockerScreen').hidden || !$('nameScreen').hidden || !$('boardScreen').hidden || !$('fbScreen').hidden || !$('roomScreen').hidden) return;
     if (!$('startScreen').hidden || !$('endScreen').hidden) {
-      if ((k === 'Enter' || k === 'Space') && document.activeElement && document.activeElement.tagName !== 'BUTTON' && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); startRound(); }
+      if ((k === 'Enter' || k === 'Space') && document.activeElement && document.activeElement.tagName !== 'BUTTON' && document.activeElement.tagName !== 'INPUT' && !(G && G.mode === 'room')) { e.preventDefault(); startRound(); }
       return;
     }
     if (k === 'ArrowUp' || k === 'KeyW' || k === 'Space') { e.preventDefault(); press('jump'); }
@@ -2405,7 +2450,7 @@ h1 .rush { color: var(--you); }
     }
     if (G) {
       if (running) update(dt);
-      if (running && G.mode === 'room' && G.t >= 0 && !G.players[0].out && ts - lastNet > 200) { lastNet = ts; netSend(); }
+      if (running && G.mode === 'room' && G.t >= 0 && ts - lastNet > 200 && (!G.players[0].out || G.hostBots)) { lastNet = ts; netSend(); }
       stepParts(dt);
       if (G.shake > 0) { G.shake *= Math.pow(0.002, dt); if (G.shake < 0.3) G.shake = 0; }
       draw(); hud();
