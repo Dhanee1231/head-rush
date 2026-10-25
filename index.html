@@ -369,6 +369,12 @@ h1 .rush { color: var(--you); }
         <button class="mode" type="button" data-mode="solo" aria-pressed="false">Solo</button>
         <button class="mode" type="button" data-mode="survival" aria-pressed="false">Survival</button>
       </div>
+      <div class="modes" role="group" aria-label="Difficulty">
+        <button class="mode" type="button" data-diff="easy" aria-pressed="false">Easy</button>
+        <button class="mode" type="button" data-diff="medium" aria-pressed="true">Medium</button>
+        <button class="mode" type="button" data-diff="hard" aria-pressed="false">Hard</button>
+      </div>
+      <p class="note" id="diffNote"></p>
       <p class="lede" id="modeLede">Run the spinning arena with 7 bots. Last runner standing wins.</p>
       <div class="picker" id="arenaPicker">
         <div class="picker-label">Arena</div>
@@ -492,6 +498,14 @@ h1 .rush { color: var(--you); }
         <div class="picker" id="roomArenaPick">
           <div class="picker-label">Arena</div>
           <div class="arenas" id="roomArenas"></div>
+        </div>
+        <div class="picker" id="roomDiffPick">
+          <div class="picker-label">Difficulty</div>
+          <div class="modes" role="group" aria-label="Room difficulty">
+            <button class="mode" type="button" data-rdiff="easy" aria-pressed="false">Easy</button>
+            <button class="mode" type="button" data-rdiff="medium" aria-pressed="true">Medium</button>
+            <button class="mode" type="button" data-rdiff="hard" aria-pressed="false">Hard</button>
+          </div>
         </div>
         <div class="picker" id="roomBotsPick">
           <div class="picker-label" id="roomBotsLabel">Bots</div>
@@ -715,7 +729,7 @@ h1 .rush { color: var(--you); }
   }
   function statsFor(p) {
     var best = 0, arena = null, stars = 0;
-    Object.keys(p.surv).forEach(function (k) { if (p.surv[k] > best) { best = p.surv[k]; arena = k; } });
+    Object.keys(p.surv).forEach(function (k) { if (/@easy$/.test(k)) return; if (p.surv[k] > best) { best = p.surv[k]; arena = survArena(k); } });
     for (var i = 0; i < LEVELS.length; i++) stars += p.solo[i] || 0;
     return { best: best, arena: arena, stars: stars };
   }
@@ -898,7 +912,7 @@ h1 .rush { color: var(--you); }
   function setAlive() {
     if (G.mode === 'party' || G.mode === 'room') { $('hudPre').textContent = ''; aliveEl.textContent = G.players.filter(function (p) { return !p.out; }).length; $('hudPost').textContent = ' left'; }
     else if (G.mode === 'solo') { $('hudPre').textContent = 'Level '; aliveEl.textContent = G.levelIdx + 1; $('hudPost').textContent = ''; }
-    else { $('hudPre').textContent = 'Best '; aliveEl.textContent = clockUp(PROFILE.surv[G.arena.id] || 0); $('hudPost').textContent = ''; }
+    else { $('hudPre').textContent = 'Best '; aliveEl.textContent = clockUp(PROFILE.surv[survKey(G.arena.id, G.diff)] || 0); $('hudPost').textContent = ''; }
   }
   function setCue(kind) {
     if (kind === lastCue) return;
@@ -918,6 +932,15 @@ h1 .rush { color: var(--you); }
   function wrap(a) { a = (a + Math.PI) % TAU; if (a < 0) a += TAU; return a - Math.PI; }
   var G = null, running = false;
   var GR = Math.random;
+  var DIFFS = {
+    easy: { name: 'Easy', speed: 0.8, ramp: 0.55, bars: [3, 6], survAdds: [30, 60, 100, 140], cap: 2.1, botMiss: 0.05, reward: 0.75, note: 'Slower bars that speed up gently, and fewer extra bars. 0.75× coins and XP.' },
+    medium: { name: 'Medium', speed: 1, ramp: 1, bars: [2, 4, 6], survAdds: [20, 40, 70, 100, 140], cap: 2.6, botMiss: 0, reward: 1, note: 'The standard game.' },
+    hard: { name: 'Hard', speed: 1.18, ramp: 1.35, bars: [1, 3, 5, 7], survAdds: [10, 25, 45, 70, 100], cap: 3.0, botMiss: -0.015, reward: 1.5, note: 'Faster bars, quicker speed-ups, extra bars sooner and sharper bots. 1.5× coins and XP.' }
+  };
+  var difficulty = 'medium';
+  try { var savedDiff = localStorage.getItem('headrush.diff'); if (DIFFS[savedDiff]) difficulty = savedDiff; } catch (e) {}
+  function survKey(arena, d) { return d === 'medium' ? arena : arena + '@' + d; }
+  function survArena(k) { return String(k).split('@')[0]; }
   function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 
   function beltAt(angle) {
@@ -938,6 +961,7 @@ h1 .rush { color: var(--you); }
   function newRound(id, md, li, room) {
     md = md || 'party';
     GR = room ? mulberry32(room.seed) : Math.random;
+    var dk = room && DIFFS[room.diff] ? room.diff : difficulty, D = DIFFS[dk];
     var a0 = A0, players = [], A = ARENAS[id] || ARENAS.neon, L = md === 'solo' ? LEVELS[li] : null;
     var count = md === 'party' ? 8 : md === 'room' ? room.roster.length : 1;
     for (var i = 0; i < count; i++) {
@@ -967,10 +991,10 @@ h1 .rush { color: var(--you); }
     }
     G = {
       t: -3, players: players, bars: [], nextId: 1,
-      level: 0, omega: BAR0 * (A.speed || 1) * (L ? L.speed : 1), dir: 1,
+      level: 0, omega: BAR0 * (A.speed || 1) * (L ? L.speed : 1) * D.speed, dir: 1, diff: dk, D: D,
       mode: md, levelIdx: L ? li : -1, dur: md === 'survival' ? null : (L ? L.dur : ROUND), extra: L ? L.extra.slice() : [], hits: 0,
       bf: 1, slowUntil: -9, calmUntil: -9, pickup: null, nextPuId: 1, puNext: (md === 'solo' || md === 'room') ? Infinity : 8 + GR() * 5,
-      pickups: 0, bonus: 0, nextMile: 30, mileFlash: -9, mileText: '', survAdds: md === 'survival' ? [20, 40, 70, 100, 140] : [], revNext: 12, revWarned: false,
+      pickups: 0, bonus: 0, nextMile: 30, mileFlash: -9, mileText: '', survAdds: md === 'survival' ? D.survAdds.slice() : [], revNext: 12, revWarned: false,
       parts: [], shake: 0, close: 0, over: false, shown: false, endAt: 0,
       rot: Math.PI / 2 - a0, lastCount: 4, place: 0, result: null, youOutAt: 0,
       arena: A, gearRot: 0, belt: null, firstHit: null,
@@ -1152,12 +1176,13 @@ h1 .rush { color: var(--you); }
       if (lv > g.level) {
         g.level = lv;
         if (g.mode === 'party' || g.mode === 'room') {
-          g.omega *= 1.09;
-          if (lv === 2) addBar('high'); else if (lv === 4) addBar('low'); else if (lv === 6) addBar('high'); else toast('Faster!');
+          g.omega *= 1 + 0.09 * g.D.ramp;
+          var bi = g.D.bars.indexOf(lv);
+          if (bi >= 0) addBar(bi % 2 ? 'low' : 'high'); else toast('Faster!');
         } else if (g.mode === 'solo') {
-          g.omega *= 1.06; toast('Faster!');
+          g.omega *= 1 + 0.06 * g.D.ramp; toast('Faster!');
         } else {
-          g.omega = Math.min(g.omega * (t < 60 ? 1.08 : 1.03), 2.6);
+          g.omega = Math.min(g.omega * (1 + (t < 60 ? 0.08 : 0.03) * g.D.ramp), g.D.cap * g.D.speed);
           if (lv % 3 !== 0) toast('Faster!');
         }
       }
@@ -1243,7 +1268,7 @@ h1 .rush { color: var(--you); }
         p.dec[th.key] = t;
         if (th.need === 'lane') { if (Math.random() < 0.95 - 0.015 * g.level - p.skill) switchLane(p); continue; }
         if (t < p.air || t < p.duck) continue;
-        var miss = 0.032 + 0.02 * g.level + p.skill + (th.vis ? 0 : 0.04);
+        var miss = Math.max(0.01, 0.032 + 0.02 * g.level + p.skill + (th.vis ? 0 : 0.04) + g.D.botMiss);
         if (Math.random() > miss) act(p, th.need);
         else if (Math.random() < 0.5) act(p, th.need === 'jump' ? 'duck' : 'jump');
       }
@@ -1786,8 +1811,8 @@ h1 .rush { color: var(--you); }
       $('retryBtn').hidden = !hasNext;
       $('bestLine').textContent = 'Solo stars: ' + totalStars() + ' of ' + LEVELS.length * 3 + '.';
     } else {
-      var best = PROFILE.surv[g.arena.id] || 0, isBest = survived > best;
-      if (isBest) PROFILE.surv[g.arena.id] = Math.floor(survived * 10) / 10;
+      var sk2 = survKey(g.arena.id, g.diff), best = PROFILE.surv[sk2] || 0, isBest = survived > best;
+      if (isBest) PROFILE.surv[sk2] = Math.floor(survived * 10) / 10;
       coins = Math.floor(survived / 3) + g.close * 5 + g.bonus;
       xp = Math.floor(survived * 1.5) + g.close * 3;
       $('endEyebrow').textContent = 'Survival · ' + name;
@@ -1804,6 +1829,9 @@ h1 .rush { color: var(--you); }
     $('stClose').textContent = g.close;
     $('stCoins').textContent = '+' + coins;
 
+    coins = Math.round(coins * g.D.reward); xp = Math.round(xp * g.D.reward);
+    $('stCoins').textContent = '+' + coins;
+    if (g.diff !== 'medium') $('endEyebrow').textContent += ' · ' + g.D.name;
     var res = applyRound({ mode: md, arena: g.arena.id, survived: survived, place: place, win: win, stars: st, close: g.close, coins: coins, xp: xp, pickups: g.pickups, clean: g.firstHit != null ? g.firstHit : survived });
     renderEndProgress(res);
     var pn = (currentPlayer() || { name: 'I' }).name;
@@ -1854,7 +1882,15 @@ h1 .rush { color: var(--you); }
     solo: 'Short levels on your own. Clear one to unlock the next, and finish without a hit for 3 stars.',
     survival: 'No bots and no timer. The bars never stop speeding up. How long can you last?'
   };
-  var modeBtns = Array.prototype.slice.call(document.querySelectorAll('.mode'));
+  var modeBtns = Array.prototype.slice.call(document.querySelectorAll('[data-mode]'));
+  var diffBtns = Array.prototype.slice.call(document.querySelectorAll('[data-diff]'));
+  function pickDiff(d) {
+    difficulty = d; try { localStorage.setItem('headrush.diff', d); } catch (e) {}
+    diffBtns.forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-diff') === d ? 'true' : 'false'); });
+    $('diffNote').textContent = DIFFS[d].note + (d === 'easy' ? ' Easy Survival runs don’t count on the online leaderboard.' : '');
+    menuRefresh();
+  }
+  diffBtns.forEach(function (b) { b.addEventListener('click', function () { pickDiff(b.getAttribute('data-diff')); }); });
   modeBtns.forEach(function (b) { b.addEventListener('click', function () { pickMode(b.getAttribute('data-mode')); }); });
   function pickMode(m) {
     mode = m;
@@ -1890,7 +1926,7 @@ h1 .rush { color: var(--you); }
     $('startBtn').textContent = mode === 'solo' ? 'Play level ' + (soloIdx + 1) : 'Run';
     if (mode === 'party') note = bestText(arenaId);
     else if (mode === 'solo') note = 'Level ' + (soloIdx + 1) + ' in ' + ARENAS[id].name + ': last ' + LEVELS[soloIdx].dur + ' seconds.';
-    else { var bs = PROFILE.surv[arenaId]; note = bs ? 'Survival best in ' + ARENAS[arenaId].name + ': ' + clockUp(bs) + '.' : 'No Survival record in ' + ARENAS[arenaId].name + ' yet.'; }
+    else { var bs = PROFILE.surv[survKey(arenaId, difficulty)]; note = bs ? DIFFS[difficulty].name + ' Survival best in ' + ARENAS[arenaId].name + ': ' + clockUp(bs) + '.' : 'No ' + DIFFS[difficulty].name + ' Survival record in ' + ARENAS[arenaId].name + ' yet.'; }
     $('startBest').textContent = note || 'Hold your phone upright and turn the sound on for the full bonk.';
     if (!running) previewRound();
   }
@@ -2108,8 +2144,8 @@ h1 .rush { color: var(--you); }
       var p = pl.id === PLAYERS.current ? PROFILE : readProfile(pl.id), v = 0, label = '', note = '';
       if (boardTab === 'survival') {
         var bestA = null;
-        Object.keys(p.surv).forEach(function (k) { if (p.surv[k] > v) { v = p.surv[k]; bestA = k; } });
-        label = v ? clockUp(v) : '–'; note = bestA && ARENAS[bestA] ? ARENAS[bestA].name : 'No run yet';
+        Object.keys(p.surv).forEach(function (k) { if (/@easy$/.test(k)) return; if (p.surv[k] > v) { v = p.surv[k]; bestA = k; } });
+        label = v ? clockUp(v) : '–'; note = bestA && ARENAS[survArena(bestA)] ? ARENAS[survArena(bestA)].name + (/@hard$/.test(bestA) ? ' · Hard' : '') : 'No run yet';
       } else if (boardTab === 'party') {
         v = p.wins * 1000 + (p.bestPlace ? 9 - p.bestPlace : 0);
         label = p.wins + (p.wins === 1 ? ' win' : ' wins');
@@ -2129,7 +2165,7 @@ h1 .rush { color: var(--you); }
   $('boardDone').addEventListener('click', function () { $('boardScreen').hidden = true; $('startScreen').hidden = false; });
 
   /* ---------- Party Rooms: live multiplayer over Supabase Realtime ---------- */
-  var ROOM = null, sbClient = null, sbLoading = null, GAME_VERSION = 5;
+  var ROOM = null, sbClient = null, sbLoading = null, GAME_VERSION = 6;
   var ROOM_COLORS = [
     { name: 'Sunny', hex: '#ffd23f' }, { name: 'Coral', hex: '#ff6b6b' }, { name: 'Mint', hex: '#5ee0a0' }, { name: 'Violet', hex: '#b48cff' },
     { name: 'Bubblegum', hex: '#ff8fd8' }, { name: 'Snow', hex: '#f4f2ff' }, { name: 'Lime', hex: '#c6f06a' }, { name: 'Peach', hex: '#f6b8a0' }
@@ -2161,7 +2197,7 @@ h1 .rush { color: var(--you); }
     var st = ROOM.ch.presenceState(), out = [];
     Object.keys(st).forEach(function (k) {
       var m = st[k] && st[k][st[k].length - 1];
-      if (m && m.name) out.push({ id: k, name: m.name, skin: m.skin, joinedAt: m.joinedAt || 0, arena: m.arena, bots: m.bots || 0, status: m.status, host: !!m.host, v: m.v || 0, c: typeof m.c === 'number' ? m.c : -1, sh: m.sh || 'round', me: k === ROOM.me });
+      if (m && m.name) out.push({ id: k, name: m.name, skin: m.skin, joinedAt: m.joinedAt || 0, arena: m.arena, bots: m.bots || 0, d: DIFFS[m.d] ? m.d : 'medium', status: m.status, host: !!m.host, v: m.v || 0, c: typeof m.c === 'number' ? m.c : -1, sh: m.sh || 'round', me: k === ROOM.me });
     });
     out.sort(function (a, b) { return (b.host - a.host) || (a.joinedAt - b.joinedAt) || (a.id < b.id ? -1 : 1); });
     return out;
@@ -2170,7 +2206,7 @@ h1 .rush { color: var(--you); }
   function trackMe() {
     if (!ROOM || !ROOM.ch || !ROOM.subscribed) return;
     var pl = currentPlayer();
-    ROOM.ch.track({ name: pl ? pl.name : 'Player', skin: PROFILE.skin, joinedAt: ROOM.joinedAt, arena: ROOM.arena, bots: ROOM.bots, status: ROOM.status, host: ROOM.creating, c: ROOM.c, sh: PROFILE.shape, v: GAME_VERSION });
+    ROOM.ch.track({ name: pl ? pl.name : 'Player', skin: PROFILE.skin, joinedAt: ROOM.joinedAt, arena: ROOM.arena, bots: ROOM.bots, d: ROOM.diff, status: ROOM.status, host: ROOM.creating, c: ROOM.c, sh: PROFILE.shape, v: GAME_VERSION });
   }
   function roomView(which) {
     $('roomJoin').hidden = which !== 'join'; $('roomLobby').hidden = which !== 'lobby';
@@ -2200,7 +2236,7 @@ h1 .rush { color: var(--you); }
       var pl = currentPlayer(); ensureCloud(pl); savePlayers();
       var me = pl.cloudId;
       var ch = client.channel('headrush-room-' + code, { config: { broadcast: { self: false }, presence: { key: me } } });
-      var room = { code: code, ch: ch, me: me, joinedAt: Date.now(), arena: arenaId, bots: 0, c: savedRoomColor(), status: 'lobby', creating: creating, subscribed: false };
+      var room = { code: code, ch: ch, me: me, joinedAt: Date.now(), arena: arenaId, bots: 0, diff: difficulty, c: savedRoomColor(), status: 'lobby', creating: creating, subscribed: false };
       ROOM = room;
       ch.on('presence', { event: 'sync' }, function () { if (ROOM === room) onRoomSync(); });
       ch.on('presence', { event: 'leave' }, function (e) { if (ROOM === room) onRoomLeave(e); });
@@ -2241,6 +2277,8 @@ h1 .rush { color: var(--you); }
     b.addEventListener('click', function () { if (!ROOM || !amHost()) return; ROOM.arena = id; trackMe(); renderLobby(); });
     $('roomArenas').appendChild(b); roomArenaBtns.push(b);
   });
+  var roomDiffBtns = Array.prototype.slice.call(document.querySelectorAll('[data-rdiff]'));
+  roomDiffBtns.forEach(function (b) { b.addEventListener('click', function () { if (!ROOM || !amHost()) return; ROOM.diff = b.getAttribute('data-rdiff'); trackMe(); renderLobby(); }); });
   var roomBotBtns = [];
   for (var bn = 0; bn <= 7; bn++) (function (n) {
     var b = document.createElement('button'); b.type = 'button'; b.className = 'botn'; b.textContent = n; b.setAttribute('aria-pressed', 'false');
@@ -2264,7 +2302,9 @@ h1 .rush { color: var(--you); }
       li.appendChild(dot); li.appendChild(nm); li.appendChild(vl); ol.appendChild(li);
     });
     renderRoomColors(mem); renderShapes();
-    $('roomArenaPick').hidden = !iHost; $('roomBotsPick').hidden = !iHost;
+    $('roomArenaPick').hidden = !iHost; $('roomBotsPick').hidden = !iHost; $('roomDiffPick').hidden = !iHost;
+    var rdiff = iHost ? ROOM.diff : (host && host.d) || 'medium';
+    roomDiffBtns.forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-rdiff') === rdiff ? 'true' : 'false'); });
     roomArenaBtns.forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-arena') === arena ? 'true' : 'false'); });
     var outdated = mem.filter(function (m) { return m.v < GAME_VERSION; }), newer = mem.some(function (m) { return m.v > GAME_VERSION; });
     $('roomErr').textContent = newer ? 'A newer version of the game is out. Reload this page to update, then rejoin with the same code.' : outdated.length ? outdated.map(function (m) { return m.name; }).join(', ') + (outdated.length === 1 ? ' has' : ' have') + ' an old version open. Ask them to reload the page and rejoin, or they may drop out of rounds.' : '';
@@ -2279,7 +2319,7 @@ h1 .rush { color: var(--you); }
       $('roomArenaNote').textContent = (others < 1 && bots < 1) ? 'Waiting for friends to join. Send them the code, or add bots to play now.' : humans + (humans === 1 ? ' player' : ' players') + botTxt + '. Pick an arena and start.' + (mem.length > 8 ? ' Only the first 8 players join each round.' : '');
     } else {
       $('roomStart').hidden = true;
-      $('roomArenaNote').textContent = 'Arena: ' + (ARENAS[arena] ? ARENAS[arena].name : 'Neon Rooftop') + botTxt + '. Waiting for ' + (host ? host.name : 'the host') + ' to start.';
+      $('roomArenaNote').textContent = 'Arena: ' + (ARENAS[arena] ? ARENAS[arena].name : 'Neon Rooftop') + ' · ' + DIFFS[rdiff].name + botTxt + '. Waiting for ' + (host ? host.name : 'the host') + ' to start.';
     }
   }
   function resolveRoomColor() {
@@ -2343,7 +2383,7 @@ h1 .rush { color: var(--you); }
     ROOM.status = 'playing'; trackMe();
     arenaUi(aid);
     var iAmHost = payload.host === ROOM.me;
-    newRound(aid, 'room', 0, { seed: payload.seed >>> 0, roster: roster, host: iAmHost });
+    newRound(aid, 'room', 0, { seed: payload.seed >>> 0, roster: roster, host: iAmHost, diff: DIFFS[payload.diff] ? payload.diff : 'medium' });
     G.hostBots = iAmHost && roster.some(function (r) { return r.bot; });
     running = true;
   }
@@ -2360,7 +2400,7 @@ h1 .rush { color: var(--you); }
     roster.forEach(function (r) { if (r.c < 0) for (var c = 0; c < ROOM_COLORS.length; c++) if (!used[c]) { r.c = c; used[c] = true; break; } });
     var freeCols = []; for (var fc = 0; fc < ROOM_COLORS.length; fc++) if (!used[fc]) freeCols.push(fc);
     for (var i = 0; i < nb; i++) roster.push({ id: 'bot-' + i, name: BOT_NAMES[i % BOT_NAMES.length], bot: true, bi: i, c: freeCols.length ? freeCols.shift() : -1 });
-    var payload = { seed: Math.floor(Math.random() * 4294967295), arena: ROOM.arena, host: ROOM.me, roster: roster };
+    var payload = { seed: Math.floor(Math.random() * 4294967295), arena: ROOM.arena, diff: ROOM.diff, host: ROOM.me, roster: roster };
     ROOM.ch.send({ type: 'broadcast', event: 'start', payload: payload });
     startRoomRound(payload);
   }
@@ -2573,6 +2613,7 @@ h1 .rush { color: var(--you); }
   renderProfile();
   $('howto').open = !(PROFILE.rounds > 0 || loadBest('neon').rounds > 0);
   pickMode(mode);
+  pickDiff(difficulty);
   if (!currentPlayer()) showNameScreen(false);
   if (document.fonts && document.fonts.load) document.fonts.load('40px "Lilita One"').catch(function () {});
   requestAnimationFrame(frame);
