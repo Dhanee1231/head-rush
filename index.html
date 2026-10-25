@@ -229,6 +229,23 @@ h1 .rush { color: var(--you); }
 .player-btn:focus-visible { outline: 3px solid var(--you); outline-offset: 2px; }
 .tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; background: var(--bg); padding: 4px; border-radius: 14px; }
 .tabs.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.concept { margin: 0; padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--line); font-size: 14px; line-height: 1.45; color: var(--muted); }
+.concept b { color: var(--ink); }
+.concept .link-btn { padding: 0; }
+.stars { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.star {
+  height: 48px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); color: var(--gone);
+  font-size: 26px; line-height: 1; cursor: pointer;
+}
+.star.on { color: var(--you); border-color: var(--you); }
+.star:focus-visible { outline: 3px solid var(--you); outline-offset: 2px; }
+.field textarea {
+  box-sizing: border-box; width: 100%; min-width: 0; min-height: 84px; resize: vertical; border-radius: 14px;
+  border: 2px solid var(--line); background: var(--bg); color: var(--ink); font: 16px/1.4 var(--font-ui); padding: 10px 12px;
+  -webkit-user-select: text; user-select: text;
+}
+.field textarea:focus { outline: none; border-color: var(--you); }
+.ok { margin: 0; font-size: 14px; color: var(--fast); min-height: 1.3em; }
 .board { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .board li {
   display: grid; grid-template-columns: 32px 1fr auto; gap: 10px; align-items: center;
@@ -318,8 +335,9 @@ h1 .rush { color: var(--you); }
         <div class="coins" aria-label="Coins"><svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg><b id="coinsNum">0</b></div>
       </div>
       <div class="who"><span>Playing as <b id="whoName">Player</b></span><button class="link-btn" id="switchPlayer" type="button">Switch player</button></div>
-      <div class="eyebrow">Early test build</div>
+      <div class="eyebrow">Concept test · early build</div>
       <h1>Head<br><span class="rush">Rush</span></h1>
+      <p class="concept"><b>This is an early test of the idea.</b> Graphics, sounds and levels are placeholders and will change in the real game. <button class="link-btn" id="fbOpenMenu" type="button">Tell us what to improve</button></p>
       <div class="modes" role="group" aria-label="Game mode">
         <button class="mode" type="button" data-mode="party" aria-pressed="true">Party</button>
         <button class="mode" type="button" data-mode="solo" aria-pressed="false">Solo</button>
@@ -377,6 +395,7 @@ h1 .rush { color: var(--you); }
         <button class="btn" id="againBtn" type="button">Run again</button>
         <button class="btn ghost" id="retryBtn" type="button" hidden>Replay level</button>
         <button class="btn ghost" id="shareBtn" type="button">Copy my score</button>
+        <button class="btn ghost" id="fbOpenEnd" type="button">Give feedback</button>
         <button class="btn ghost" id="switchBtn" type="button">Main menu</button>
       </div>
       <p class="note" id="shareMsg" role="status" aria-live="polite"></p>
@@ -411,6 +430,39 @@ h1 .rush { color: var(--you); }
       <p class="err" id="nameErr" role="alert"></p>
       <button class="btn" id="nameGo" type="submit">Let's go</button>
       <p class="note">Your name shows on the leaderboard. Each player on this phone keeps their own coins, levels and looks.</p>
+    </form>
+  </div>
+
+  <div class="overlay" id="fbScreen" hidden>
+    <form class="card" id="fbForm" novalidate>
+      <div class="eyebrow">Concept test feedback</div>
+      <h2 class="result">How's Head Rush?</h2>
+      <p class="sub">This is an early version of the idea. Your honest thoughts shape the real game.</p>
+      <div class="field">
+        <label id="starLabel">Your rating</label>
+        <div class="stars" role="group" aria-labelledby="starLabel" id="stars">
+          <button class="star" type="button" data-star="1" aria-label="1 star" aria-pressed="false">&#9733;</button>
+          <button class="star" type="button" data-star="2" aria-label="2 stars" aria-pressed="false">&#9733;</button>
+          <button class="star" type="button" data-star="3" aria-label="3 stars" aria-pressed="false">&#9733;</button>
+          <button class="star" type="button" data-star="4" aria-label="4 stars" aria-pressed="false">&#9733;</button>
+          <button class="star" type="button" data-star="5" aria-label="5 stars" aria-pressed="false">&#9733;</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="fbLiked">What did you like?</label>
+        <textarea id="fbLiked" maxlength="600" placeholder="The close shaves, the hammers, playing with family..."></textarea>
+      </div>
+      <div class="field">
+        <label for="fbImprove">What should we improve or add?</label>
+        <textarea id="fbImprove" maxlength="600" placeholder="Too hard, confusing, a new arena idea..."></textarea>
+      </div>
+      <p class="err" id="fbErr" role="alert"></p>
+      <p class="ok" id="fbOk" role="status" aria-live="polite"></p>
+      <div class="btn-row">
+        <button class="btn" id="fbSend" type="submit">Send feedback</button>
+        <button class="btn ghost" id="fbClose" type="button">Back</button>
+      </div>
+      <p class="note">Only the game's creator reads this. Your player name is included.</p>
     </form>
   </div>
 
@@ -581,6 +633,7 @@ h1 .rush { color: var(--you); }
   function sbFetch(path, opts) {
     opts = opts || {};
     var headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' };
+    if (opts.prefer) headers.Prefer = opts.prefer;
     var ctl = null, timer = null;
     try { ctl = new AbortController(); timer = setTimeout(function () { ctl.abort(); }, 8000); } catch (e) {}
     return fetch(SB_URL + path, { method: opts.method || 'GET', headers: headers, body: opts.body ? JSON.stringify(opts.body) : undefined, signal: ctl ? ctl.signal : undefined })
@@ -1933,6 +1986,39 @@ h1 .rush { color: var(--you); }
   $('boardBtn').addEventListener('click', function () { $('startScreen').hidden = true; $('boardScreen').hidden = false; renderBoard(); });
   $('boardDone').addEventListener('click', function () { $('boardScreen').hidden = true; $('startScreen').hidden = false; });
 
+  /* ---------- feedback ---------- */
+  var fbRating = 0, fbFrom = 'startScreen', fbSending = false;
+  var starBtns = Array.prototype.slice.call(document.querySelectorAll('[data-star]'));
+  function paintStars() { starBtns.forEach(function (b) { var n = +b.getAttribute('data-star'); b.classList.toggle('on', n <= fbRating); b.setAttribute('aria-pressed', n === fbRating ? 'true' : 'false'); }); }
+  starBtns.forEach(function (b) { b.addEventListener('click', function () { fbRating = +b.getAttribute('data-star'); paintStars(); $('fbErr').textContent = ''; }); });
+  function openFeedback(from) {
+    fbFrom = from; $(from).hidden = true; $('fbScreen').hidden = false;
+    $('fbErr').textContent = ''; $('fbOk').textContent = ''; $('fbSend').disabled = false; $('fbSend').textContent = 'Send feedback';
+    paintStars();
+  }
+  function closeFeedback() { $('fbScreen').hidden = true; $(fbFrom).hidden = false; }
+  $('fbOpenMenu').addEventListener('click', function () { openFeedback('startScreen'); });
+  $('fbOpenEnd').addEventListener('click', function () { openFeedback('endScreen'); });
+  $('fbClose').addEventListener('click', closeFeedback);
+  $('fbForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (fbSending) return;
+    var liked = $('fbLiked').value.trim().slice(0, 600), improve = $('fbImprove').value.trim().slice(0, 600);
+    if (!fbRating && !liked && !improve) { $('fbErr').textContent = 'Pick a rating or write a note before sending.'; return; }
+    var pl = currentPlayer(), ctxText = (G ? G.mode + ' · ' + G.arena.name : mode) + ' · Lv ' + levelInfo(PROFILE.xp).lvl + ' · ' + PROFILE.rounds + ' rounds';
+    fbSending = true; $('fbErr').textContent = ''; $('fbSend').disabled = true; $('fbSend').textContent = 'Sending…';
+    sbFetch('/rest/v1/feedback', { method: 'POST', prefer: 'return=minimal', body: {
+      player_name: pl ? pl.name : null, rating: fbRating || null, liked: liked || null, improve: improve || null, context: ctxText.slice(0, 120)
+    } }).then(function () {
+      fbSending = false; fbRating = 0; paintStars();
+      $('fbLiked').value = ''; $('fbImprove').value = '';
+      $('fbSend').textContent = 'Sent'; $('fbOk').textContent = 'Thanks! Your feedback was sent.';
+    }, function () {
+      fbSending = false; $('fbSend').disabled = false; $('fbSend').textContent = 'Send feedback';
+      $('fbErr').textContent = 'Couldn’t send right now. Check your connection and tap Send again.';
+    });
+  });
+
   $('shareBtn').addEventListener('click', function () {
     var msg = $('shareMsg'), box = $('shareText');
     function fallback() { box.textContent = shareText; box.hidden = false; msg.textContent = 'Copy this and paste it in your group chat:'; }
@@ -1977,7 +2063,7 @@ h1 .rush { color: var(--you); }
 
   document.addEventListener('keydown', function (e) {
     var k = e.code;
-    if (!$('lockerScreen').hidden || !$('nameScreen').hidden || !$('boardScreen').hidden) return;
+    if (!$('lockerScreen').hidden || !$('nameScreen').hidden || !$('boardScreen').hidden || !$('fbScreen').hidden) return;
     if (!$('startScreen').hidden || !$('endScreen').hidden) {
       if ((k === 'Enter' || k === 'Space') && document.activeElement && document.activeElement.tagName !== 'BUTTON' && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); startRound(); }
       return;
