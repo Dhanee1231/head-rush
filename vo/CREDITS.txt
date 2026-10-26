@@ -1,0 +1,2 @@
+Announcer voice lines were generated with Piper TTS (MIT, https://github.com/rhasspy/piper)
+using the "en-us-libritts-high" voice model, trained on LibriTTS (CC BY 4.0, http://www.openslr.org/60/).

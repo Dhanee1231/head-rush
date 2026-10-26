@@ -1641,7 +1641,7 @@ h1 .rush { color: var(--you); }
     }
     var state = 'run', jump = 0;
     if (t < p.stun) state = 'stun';
-    else if (t < p.air) { state = 'jump'; jump = Math.sin(Math.PI * Math.min(1, Math.max(0, 1 - (p.air - t) / JT))) * (JT > 0.6 ? 1.15 : 0.95); }
+    else if (t < p.air) { state = 'jump'; jump = (1 - Math.pow(Math.abs(2 * Math.min(1, Math.max(0, 1 - (p.air - t) / JT)) - 1), 2.4)) * (JT > 0.6 ? 1.15 : 0.95); }
     else if (t < p.duck) state = 'duck';
     else if (t >= p.air && t - p.air < 0.12) state = 'land';
     var hd = Math.atan2(-Math.sin(it.f), Math.cos(it.f));
@@ -1907,76 +1907,136 @@ h1 .rush { color: var(--you); }
   resize();
 
   /* ---------- sound, haptics, wake lock ---------- */
-  var AC = null;
+  var AC = null, SFXBUS = null, VOBUS = null, NOISE = null;
   function audioOn() {
-    if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
-    try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { AC = null; }
+    if (AC) { if (AC.state === 'suspended') AC.resume(); loadVO(); return; }
+    try {
+      AC = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+      var comp = AC.createDynamicsCompressor();
+      comp.threshold.value = -16; comp.knee.value = 12; comp.ratio.value = 4; comp.attack.value = 0.003; comp.release.value = 0.18;
+      var master = AC.createGain(); master.gain.value = 0.95; master.connect(comp); comp.connect(AC.destination);
+      SFXBUS = AC.createGain(); SFXBUS.gain.value = 0.85; SFXBUS.connect(master);
+      VOBUS = AC.createGain(); VOBUS.gain.value = 1.05; VOBUS.connect(master);
+      var len = Math.floor(AC.sampleRate * 1.5); NOISE = AC.createBuffer(1, len, AC.sampleRate);
+      var nd = NOISE.getChannelData(0); for (var i = 0; i < len; i++) nd[i] = Math.random() * 2 - 1;
+    } catch (e) { AC = null; }
+    loadVO();
   }
-  function tone(f1, f2, dur, type, vol) {
+  /* one oscillator voice with a click-free envelope */
+  function osc(type, f1, f2, dur, vol, at, vib) {
     if (!AC) return;
     try {
-      var t = AC.currentTime, o = AC.createOscillator(), g = AC.createGain();
+      var t = AC.currentTime + (at || 0), o = AC.createOscillator(), g = AC.createGain();
       o.type = type || 'sine';
       o.frequency.setValueAtTime(f1, t);
-      o.frequency.exponentialRampToValueAtTime(Math.max(30, f2), t + dur);
-      g.gain.setValueAtTime(vol || 0.2, t);
+      if (f2 !== f1) o.frequency.exponentialRampToValueAtTime(Math.max(30, f2), t + dur);
+      if (vib) { var lfo = AC.createOscillator(), lg = AC.createGain(); lfo.frequency.value = vib[0]; lg.gain.value = vib[1]; lfo.connect(lg); lg.connect(o.frequency); lfo.start(t); lfo.stop(t + dur + 0.05); }
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + 0.006);
       g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      o.connect(g); g.connect(AC.destination);
-      o.start(t); o.stop(t + dur + 0.02);
+      o.connect(g); g.connect(SFXBUS);
+      o.start(t); o.stop(t + dur + 0.05);
     } catch (e) {}
   }
+  /* filtered noise burst: swooshes, clicks, crashes */
+  function noise(dur, vol, ftype, f1, f2, q, at) {
+    if (!AC || !NOISE) return;
+    try {
+      var t = AC.currentTime + (at || 0), s = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain();
+      s.buffer = NOISE; s.loop = true;
+      f.type = ftype || 'bandpass'; f.Q.value = q || 1;
+      f.frequency.setValueAtTime(f1, t); if (f2 !== f1) f.frequency.exponentialRampToValueAtTime(Math.max(40, f2), t + dur);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      s.connect(f); f.connect(g); g.connect(SFXBUS);
+      s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.05);
+    } catch (e) {}
+  }
+  function tone(f1, f2, dur, type, vol) { osc(type === 'square' || type === 'sawtooth' ? 'triangle' : type, f1, f2, dur, (vol || 0.2) * 0.9); }
   var sfx = {
-    jump: function () { tone(380, 720, 0.14, 'sine', 0.14); },
-    duck: function () { tone(320, 170, 0.12, 'triangle', 0.14); },
-    lane: function () { tone(620, 420, 0.1, 'triangle', 0.1); },
-    bonk: function (v) { v = v == null ? 1 : v; tone(260, 70, 0.28, 'square', 0.16 * v); tone(900, 300, 0.08, 'triangle', 0.08 * v); },
-    close: function () { tone(1046, 1046, 0.09, 'sine', 0.12); setTimeout(function () { tone(1568, 1568, 0.12, 'sine', 0.1); }, 70); },
-    tick: function () { tone(660, 660, 0.08, 'square', 0.06); },
-    go: function () { tone(990, 990, 0.2, 'square', 0.08); },
-    reverse: function () { tone(300, 900, 0.25, 'sawtooth', 0.06); setTimeout(function () { tone(900, 300, 0.25, 'sawtooth', 0.06); }, 260); },
-    crack: function () { tone(180, 90, 0.18, 'square', 0.05); },
-    win: function () { [523, 659, 784, 1046].forEach(function (f, i) { setTimeout(function () { tone(f, f, 0.2, 'triangle', 0.13); }, i * 110); }); },
-    out: function () { tone(300, 60, 0.6, 'sawtooth', 0.1); }
+    jump: function () { osc('sine', 260, 700, 0.16, 0.2, 0, [28, 18]); osc('triangle', 520, 1400, 0.1, 0.05); noise(0.09, 0.05, 'bandpass', 1400, 4200, 0.8); },
+    duck: function () { noise(0.17, 0.11, 'bandpass', 2600, 500, 0.9); osc('sine', 230, 120, 0.14, 0.12); },
+    lane: function () { noise(0.1, 0.08, 'highpass', 1800, 5200, 0.7); osc('triangle', 700, 520, 0.07, 0.06); },
+    bonk: function (v) {
+      v = v == null ? 1 : v;
+      osc('sine', 820, 760, 0.07, 0.22 * v); osc('sine', 1340, 1250, 0.05, 0.12 * v);
+      osc('sine', 170, 52, 0.26, 0.32 * v); noise(0.05, 0.12 * v, 'highpass', 2500, 2500, 0.5);
+      osc('sine', 520, 240, 0.32, 0.07 * v, 0.06, [14, 40]);
+    },
+    close: function () { osc('sine', 1318, 1318, 0.22, 0.09); osc('sine', 1976, 1976, 0.26, 0.07, 0.045); osc('sine', 2637, 2637, 0.3, 0.035, 0.09); noise(0.12, 0.03, 'highpass', 6000, 9000, 0.5); },
+    tick: function () { osc('sine', 190, 105, 0.2, 0.3); noise(0.03, 0.09, 'bandpass', 1800, 1800, 1); },
+    go: function () { osc('sine', 1760, 1760, 0.38, 0.1, 0, [9, 30]); osc('sine', 150, 50, 0.3, 0.32); noise(0.7, 0.07, 'highpass', 5000, 3000, 0.4); },
+    reverse: function () { osc('triangle', 330, 880, 0.24, 0.07); osc('triangle', 880, 330, 0.24, 0.07, 0.26); },
+    crack: function () { noise(0.2, 0.12, 'lowpass', 1400, 300, 0.8); osc('sine', 120, 60, 0.16, 0.12); },
+    win: function () {
+      [523, 659, 784].forEach(function (f, i) { osc('sawtooth', f, f, 0.16, 0.05, i * 0.11); osc('sine', f, f, 0.18, 0.09, i * 0.11); });
+      osc('sawtooth', 1046, 1046, 0.7, 0.05, 0.33, [5, 6]); osc('sine', 1046, 1046, 0.75, 0.1, 0.33, [5, 6]); osc('sine', 523, 523, 0.75, 0.08, 0.33);
+      noise(1.1, 0.06, 'highpass', 6000, 4000, 0.4, 0.33);
+    },
+    out: function () { osc('sine', 1500, 280, 0.65, 0.12, 0, [7, 25]); osc('sine', 140, 45, 0.35, 0.3, 0.55); noise(0.15, 0.08, 'lowpass', 900, 200, 0.7, 0.55); },
+    pickup: function () { osc('sine', 880, 880, 0.12, 0.08); osc('sine', 1320, 1320, 0.14, 0.08, 0.06); osc('sine', 1760, 1760, 0.2, 0.07, 0.12); }
   };
-  /* ---------- announcer: the phone's built-in speech voice calls out knockouts ---------- */
-  var voiceOn = true, VOICE = null;
+
+  /* ---------- announcer: recorded voice lines ---------- */
+  var voiceOn = true;
   try { voiceOn = localStorage.getItem('headrush.voice') !== '0'; } catch (e) {}
-  function pickVoice() {
-    try {
-      var vs = window.speechSynthesis ? speechSynthesis.getVoices() : [];
-      var en = vs.filter(function (v) { return /^en/i.test(v.lang); });
-      if (!en.length) return;
-      var pref = [/google uk english male/i, /daniel/i, /\bmale\b/i, /arthur|oliver|guy|davis|fred|alex|aaron|rishi/i, /en-gb/i, /google us english/i];
-      for (var i = 0; i < pref.length; i++) { var hit = en.filter(function (v) { return pref[i].test(v.name) || pref[i].test(v.lang); })[0]; if (hit) { VOICE = hit; return; } }
-      VOICE = en[0];
-    } catch (e) {}
+  var VO_IDS = ['go', 'ready', 'a_neon', 'a_gear', 'a_frost', 'a_lava', 'a_orbit', 'a_carnival', 'ko1', 'ko2', 'ko3', 'ko4', 'ko5', 'ko_pip', 'ko_juno', 'ko_mako', 'ko_rex', 'ko_tali', 'ko_bo', 'ko_zuzu', 'you_out1', 'you_out2', 'final2', 'win1', 'win2', 'win_you', 'lose', 'time_up', 'clear', 'close1', 'close2', 'close3', 'faster', 'newbar', 'reverse', 'pu_shield', 'pu_slow', 'pu_heart', 'm30', 'm60', 'm90', 'm120', 'm150', 'm180'];
+  var VOBUF = {}, voLoading = false, voEnd = 0, voSrc = null, voPending = null, voLowAt = -99;
+  function loadVO() {
+    if (voLoading || !AC || !voiceOn || !window.fetch) return;
+    voLoading = true;
+    VO_IDS.forEach(function (id, i) {
+      setTimeout(function () {
+        fetch('vo/' + id + '.mp3').then(function (r) { if (!r.ok) throw new Error('vo'); return r.arrayBuffer(); })
+          .then(function (b) { return new Promise(function (res, rej) { AC.decodeAudioData(b, res, rej); }); })
+          .then(function (buf) { VOBUF[id] = buf; }).catch(function () {});
+      }, i * 30);
+    });
   }
-  if (window.speechSynthesis) { pickVoice(); try { speechSynthesis.addEventListener('voiceschanged', pickVoice); } catch (e) {} }
-  function say(text, urgent) {
-    if (!voiceOn || !window.speechSynthesis || !text) return;
+  function playVO(id) {
+    var buf = VOBUF[id]; if (!buf || !AC) return false;
     try {
-      if (urgent) speechSynthesis.cancel();
-      else if (speechSynthesis.pending) return;
-      var u = new SpeechSynthesisUtterance(text);
-      if (VOICE) { u.voice = VOICE; u.lang = VOICE.lang; } else u.lang = 'en-US';
-      u.rate = 1.1; u.pitch = 0.7; u.volume = 1;
-      speechSynthesis.speak(u);
-    } catch (e) {}
+      if (voSrc) { try { voSrc.stop(); } catch (e) {} }
+      var s = AC.createBufferSource(); s.buffer = buf; s.connect(VOBUS); s.start();
+      voSrc = s; voEnd = AC.currentTime + buf.duration - 0.08;
+      SFXBUS.gain.cancelScheduledValues(AC.currentTime);
+      SFXBUS.gain.setTargetAtTime(0.55, AC.currentTime, 0.03);
+      SFXBUS.gain.setTargetAtTime(0.85, voEnd, 0.15);
+      return true;
+    } catch (e) { return false; }
   }
-  var KO_LINES = ['{n} was just knocked out!', '{n} is out!', 'And {n} has been knocked out!', '{n} is down and out!'], koNext = 0;
+  /* prio 0 = flavour (dropped when busy), 1 = normal (waits its turn), 2 = important (cuts in) */
+  function say(ids, prio) {
+    if (!voiceOn || !AC) return;
+    prio = prio || 0;
+    var id = Array.isArray(ids) ? ids[Math.floor(Math.random() * ids.length)] : ids;
+    if (!VOBUF[id]) return;
+    var now = AC.currentTime;
+    if (prio === 0 && now - voLowAt < 5) return;
+    if (now < voEnd) {
+      if (prio >= 2) { playVO(id); return; }
+      if (prio >= 1 && (!voPending || prio >= voPending.prio)) voPending = { id: id, prio: prio, at: now };
+      return;
+    }
+    if (playVO(id) && prio === 0) voLowAt = now;
+  }
+  function voTick() {
+    if (voPending && AC && AC.currentTime >= voEnd) {
+      if (AC.currentTime - voPending.at < 2.2) playVO(voPending.id);
+      voPending = null;
+    }
+  }
   function announceOut(p) {
     if (!G) return;
-    var cp = currentPlayer(), alive = G.players.filter(function (q) { return !q.out; }).length, line;
-    if (p.you) line = (G.players.length > 1 && cp ? cp.name + ', ' : '') + 'you were just knocked out!';
-    else { line = KO_LINES[koNext % KO_LINES.length].replace('{n}', p.name); koNext++; }
-    if (alive === 2 && G.players.length > 2 && !G.players[0].out) line += ' Down to the final two!';
-    say(line, p.you);
+    var alive = G.players.filter(function (q) { return !q.out; }).length;
+    if (p.you) say(['you_out1', 'you_out2'], 2);
+    else {
+      var key = 'ko_' + String(p.name).toLowerCase();
+      say(p.bot !== false && VOBUF[key] && (G.mode !== 'room' || p.bot) ? [key, key, 'ko1', 'ko3', 'ko5'] : ['ko1', 'ko2', 'ko3', 'ko4', 'ko5'], 1);
+    }
+    if (alive === 2 && G.players.length > 2 && !G.players[0].out) setTimeout(function () { say('final2', 1); }, 50);
   }
-  function announceWin() {
-    var cp = currentPlayer();
-    say((cp ? cp.name : 'You') + ' wins!', false);
-    setTimeout(function () { if (G && G.over) say((cp ? cp.name : 'You') + ' wins!', false); }, 1600);
-  }
+  function announceWin() { say(G && G.players.length > 1 ? 'win_you' : 'win1', 2); }
+  function roundStartVO(id) { say('a_' + id, 2); }
   function buzz(p) { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} }
   var wake = null;
   function keepAwake() {
@@ -2132,7 +2192,7 @@ h1 .rush { color: var(--you); }
       if (n - a > best) { best = n - a; at = a + best / 2; }
     }
     G.bars.push({ id: G.nextId++, angle: at, type: type, born: G.t, ph: GR() * 3.7 });
-    toast(type === 'low' ? 'Another orange bar!' : 'Another blue bar!');
+    toast(type === 'low' ? 'Another orange bar!' : 'Another blue bar!'); say('newbar', 0);
   }
 
   function act(p, kind) {
@@ -2172,7 +2232,7 @@ h1 .rush { color: var(--you); }
     if (G.over) return;
     G.over = true; G.result = kind; G.endAt = G.t + delay; setCue(null);
     if (kind === 'win' || kind === 'clear') { sfx.win(); confetti(); buzz([40, 60, 40, 60, 120]); }
-    if (kind === 'win') announceWin(); else if (kind === 'clear') say('Level cleared!', false);
+    if (kind === 'win') announceWin(); else if (kind === 'clear') say('clear', 2); else if (kind === 'time') say('time_up', 2);
   }
 
   function spawnPickup() {
@@ -2194,10 +2254,10 @@ h1 .rush { color: var(--you); }
     else if (p.you) g.bonus += 10;
     if (p.you) {
       g.pickups++;
-      tone(660, 1320, 0.15, 'sine', 0.12); buzz(20);
-      if (pu.type === 'shield') toast('Shield! It blocks one hit');
-      else if (pu.type === 'slow') toast('Slow-mo!');
-      else { toast(pu.healed ? 'Extra heart!' : 'Full health: +10 coins'); updateHearts(); }
+      sfx.pickup(); buzz(20);
+      if (pu.type === 'shield') { toast('Shield! It blocks one hit'); say('pu_shield', 0); }
+      else if (pu.type === 'slow') { toast('Slow-mo!'); say('pu_slow', 0); }
+      else { toast(pu.healed ? 'Extra heart!' : 'Full health: +10 coins'); updateHearts(); if (pu.healed) say('pu_heart', 0); }
     } else {
       toast(pu.type === 'slow' ? p.name + ' slowed the bars!' : p.name + ' grabbed a ' + (pu.type === 'shield' ? 'shield' : 'heart'));
     }
@@ -2228,7 +2288,7 @@ h1 .rush { color: var(--you); }
     if (p.you && G.mode === 'room') netSend();
   }
 
-  function closeShave(p, color) { G.close++; toast('Close shave! +5'); sfx.close(); buzz(15); burstAt(p, color, 6, 0.6); }
+  function closeShave(p, color) { G.close++; toast('Close shave! +5'); sfx.close(); buzz(15); burstAt(p, color, 6, 0.6); if (Math.random() < 0.35) say(['close1', 'close2', 'close3'], 0); }
 
   function resolve(p, need, cause) {
     var t = G.t;
@@ -2282,7 +2342,7 @@ h1 .rush { color: var(--you); }
     g.t += dt;
     var t = g.t;
     if (t < 0) { var c = Math.ceil(-t); if (c !== g.lastCount) { g.lastCount = c; sfx.tick(); } return; }
-    if (was < 0) { sfx.go(); toast('Run!'); }
+    if (was < 0) { sfx.go(); toast('Run!'); say('go', 1); }
 
     if (!g.over) {
       var lv = Math.floor(t / 10);
@@ -2291,7 +2351,7 @@ h1 .rush { color: var(--you); }
         if (g.mode === 'party' || g.mode === 'room') {
           g.omega *= 1 + 0.09 * g.D.ramp;
           var bi = g.D.bars.indexOf(lv);
-          if (bi >= 0) addBar(bi % 2 ? 'low' : 'high'); else toast('Faster!');
+          if (bi >= 0) addBar(bi % 2 ? 'low' : 'high'); else { toast('Faster!'); say('faster', 0); }
         } else if (g.mode === 'solo') {
           g.omega *= 1 + 0.06 * g.D.ramp; toast('Faster!');
         } else {
@@ -2307,7 +2367,7 @@ h1 .rush { color: var(--you); }
       if (g.mode === 'survival' && t >= g.nextMile) {
         var bonus = 10 * Math.round(g.nextMile / 30);
         g.bonus += bonus; g.mileFlash = t; g.mileText = clockUp(g.nextMile);
-        toast(g.mileText + ' reached! +' + bonus + ' coins');
+        toast(g.mileText + ' reached! +' + bonus + ' coins'); if (g.nextMile <= 180) say('m' + g.nextMile, 1);
         sfx.close(); buzz([20, 40, 20]);
         burst(0, 0, COL.you, 24, 1.2);
         g.calmUntil = t + 3.5; g.nextMile += 30;
@@ -2317,7 +2377,7 @@ h1 .rush { color: var(--you); }
         if (!g.pickup && t >= g.puNext) spawnPickup();
       }
       if (A.reverse) {
-        if (!g.revWarned && t >= g.revNext - 1.5) { g.revWarned = true; toast('Reverse incoming!'); sfx.reverse(); buzz([30, 60, 30]); }
+        if (!g.revWarned && t >= g.revNext - 1.5) { g.revWarned = true; toast('Reverse incoming!'); sfx.reverse(); buzz([30, 60, 30]); say('reverse', 1); }
         if (t >= g.revNext) { g.dir = -g.dir; g.revNext = t + 11 + GR() * 5; g.revWarned = false; }
       }
     }
@@ -2960,11 +3020,11 @@ h1 .rush { color: var(--you); }
   /* ---------- menus ---------- */
   function startRound() {
     audioOn(); keepAwake();
-    if (window.speechSynthesis) say('Get ready!', true);
     $('startScreen').hidden = true; $('endScreen').hidden = true;
     var id = mode === 'solo' ? LEVELS[soloIdx].arena : arenaId;
     arenaUi(id);
     newRound(id, mode, soloIdx); running = true;
+    roundStartVO(id);
   }
   function previewRound() {
     if (mode === 'solo') newRound(LEVELS[soloIdx].arena, 'solo', soloIdx);
@@ -3496,7 +3556,7 @@ h1 .rush { color: var(--you); }
     var iAmHost = payload.host === ROOM.me;
     newRound(aid, 'room', 0, { seed: payload.seed >>> 0, roster: roster, host: iAmHost, diff: DIFFS[payload.diff] ? payload.diff : 'medium' });
     G.hostBots = iAmHost && roster.some(function (r) { return r.bot; });
-    running = true;
+    running = true; audioOn(); roundStartVO(aid);
   }
   function onRoomStart(payload) {
     if (!payload || !ROOM) return;
@@ -3671,7 +3731,7 @@ h1 .rush { color: var(--you); }
   stage.addEventListener('pointermove', function (e) {
     if (!swipe || swipe.id !== e.pointerId || swipe.done) return;
     var dx = e.clientX - swipe.x, dy = e.clientY - swipe.y;
-    if (Math.abs(dy) > 22 && Math.abs(dy) >= Math.abs(dx)) { swipe.done = true; press(dy < 0 ? 'jump' : 'duck'); }
+    if (Math.abs(dy) > 14 && Math.abs(dy) >= Math.abs(dx) * 0.9) { swipe.done = true; press(dy < 0 ? 'jump' : 'duck'); }
     else if (lanesOn() && Math.abs(dx) > 28) { swipe.done = true; press('lane'); }
   });
   stage.addEventListener('pointerup', function (e) {
@@ -3713,17 +3773,22 @@ h1 .rush { color: var(--you); }
   pickGfx(gfx);
   window.addEventListener('hr3d-ready', function () { pickGfx(gfx); });
   $('voiceToggle').checked = voiceOn;
-  if (!window.speechSynthesis) $('voiceToggle').parentNode.hidden = true;
   $('voiceToggle').addEventListener('change', function () {
     voiceOn = this.checked;
     try { localStorage.setItem('headrush.voice', voiceOn ? '1' : '0'); } catch (e) {}
-    if (voiceOn) say('Announcer on!', true); else try { speechSynthesis.cancel(); } catch (e) {}
+    if (voiceOn) { audioOn(); setTimeout(function () { say('ready', 2); }, 300); } else if (voSrc) { try { voSrc.stop(); } catch (e) {} }
   });
   $('fpsToggle').addEventListener('change', function () {
     fpsOn = this.checked; fpsEl.hidden = !fpsOn; fpsFrames = 0; fpsSince = 0;
     try { localStorage.setItem('headrush.fps', fpsOn ? '1' : '0'); } catch (e) {}
   });
+  var rafEma = 16.7, lastRaf = 0, lastRun = 0;
   function frame(ts) {
+    if (lastRaf) rafEma = rafEma * 0.95 + Math.min(50, ts - lastRaf) * 0.05;
+    lastRaf = ts;
+    /* On 120 Hz screens HD runs at a steady 60 instead of an uneven 70 to 120, which looks smoother. */
+    if (G && gfx === 'hd' && window.HR3D && HR3D.ok && rafEma < 12 && lastRun && ts - lastRun < 14.5) { requestAnimationFrame(frame); return; }
+    lastRun = ts;
     var dt = last ? Math.min(0.05, (ts - last) / 1000) : 0;
     last = ts;
     if (fpsOn) {
@@ -3740,7 +3805,7 @@ h1 .rush { color: var(--you); }
       if (running && G.mode === 'room' && G.t >= 0 && ts - lastNet > 200 && (!G.players[0].out || G.hostBots)) { lastNet = ts; netSend(); }
       stepParts(dt);
       if (G.shake > 0) { G.shake *= Math.pow(0.002, dt); if (G.shake < 0.3) G.shake = 0; }
-      draw(); hud();
+      voTick(); draw(); hud();
       if (G.over && !G.shown && G.t >= G.endAt) { G.shown = true; showEnd(); }
     }
     requestAnimationFrame(frame);
