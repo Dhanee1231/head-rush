@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="description" content="Head Rush: jump and duck the spinning bars. Last runner standing wins.">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","three/addons/":"./vendor/addons/"}}</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}</style>
 </head>
 <body>
@@ -415,7 +416,15 @@ h1 .rush { color: var(--you); }
       </ul>
       </details>
       <p class="note" id="startBest">Hold your phone upright and turn the sound on for the full bonk.</p>
-      <label class="setting" for="v3Toggle"><input type="checkbox" id="v3Toggle"> 3D graphics (turn off if your phone feels slow)</label>
+      <div class="picker">
+        <div class="picker-label">Graphics</div>
+        <div class="modes" role="group" aria-label="Graphics">
+          <button class="mode" type="button" data-gfx="hd" aria-pressed="true">HD 3D</button>
+          <button class="mode" type="button" data-gfx="lite" aria-pressed="false">Lite 3D</button>
+          <button class="mode" type="button" data-gfx="flat" aria-pressed="false">Flat</button>
+        </div>
+        <p class="note" id="gfxNote"></p>
+      </div>
       <label class="setting" for="voiceToggle"><input type="checkbox" id="voiceToggle"> Announcer voice</label>
       <label class="setting" for="fpsToggle"><input type="checkbox" id="fpsToggle"> Show frame rate</label>
     </div>
@@ -833,8 +842,9 @@ h1 .rush { color: var(--you); }
   var arenaId = 'neon';
   try { var savedArena = localStorage.getItem('headrush.arena'); if (savedArena && ARENAS[savedArena]) arenaId = savedArena; } catch (e) {}
 
-  var view3d = true;
-  try { view3d = localStorage.getItem('headrush.view') !== '2d'; } catch (e) {}
+  var gfx = 'hd';
+  try { var gsv = localStorage.getItem('headrush.gfx'); if (gsv === 'hd' || gsv === 'lite' || gsv === 'flat') gfx = gsv; else if (localStorage.getItem('headrush.view') === '2d') gfx = 'flat'; } catch (e) {}
+  var view3d = gfx !== 'flat';
   document.body.classList.toggle('v3d', view3d);
   /* ==================== 3D view: a 2.5D renderer drawn on the same canvas ==================== */
   /* The camera is fixed and the world turns so your runner stays at the front, just like the flat view. */
@@ -1347,11 +1357,11 @@ h1 .rush { color: var(--you); }
   }
   var SCENERY = { neon: sceneryNeon, gear: sceneryGear, frost: sceneryFrost, lava: sceneryLava, orbit: sceneryOrbit, carnival: sceneryCarnival };
 
-  function v3Setup() {
+  function v3Camera() {
     var sr = stage.getBoundingClientRect(), A = G.arena;
-    var key = [W, H, DPR, Math.round(sr.left), Math.round(sr.top), Math.round(sr.width), Math.round(sr.height), A.id].join('|');
-    if (key === V3.key && V3.bg) return;
-    V3.key = key; V3.sr = sr;
+    var key = [W, H, Math.round(sr.left), Math.round(sr.top), Math.round(sr.width), Math.round(sr.height), A.id].join('|');
+    if (key === V3.camKey) return;
+    V3.camKey = key; V3.sr = sr; V3.TR = TR3; V3.SC = SC3;
     var mid = A.lanes.length < 2 ? A.lanes[0] : (A.lanes[0] + A.lanes[1]) / 2;
     V3.mid = mid; V3.e0 = TR3 - A.band / 2 * SC3; V3.e1 = TR3 + A.band / 2 * SC3;
     V3.barOut = Math.max(4.15, V3.e1 + 0.3); V3.edge = Math.max(4.7, V3.e1 + 0.5);
@@ -1359,7 +1369,7 @@ h1 .rush { color: var(--you); }
     var asp = Math.max(0.6, Math.min(1.8, sr.height / Math.max(1, sr.width)));
     var lift = 0.6 * Math.max(0, Math.min(1, (asp - 0.9) / 0.8));
     V3.CAM = [0, 6.4 + 2.2 * lift, 11.6 - 1.4 * lift];
-    var tgt = [0, 0.5 - 0.3 * lift, -1.6 + 0.6 * lift];
+    var tgt = [0, 0.5 - 0.3 * lift, -1.6 + 0.6 * lift]; V3.tgt = tgt;
     V3.Fv = vNorm(vSub(tgt, V3.CAM)); V3.Rv = vNorm(vCross(V3.Fv, [0, 1, 0])); V3.Uv = vCross(V3.Rv, V3.Fv);
     V3.F = 1; V3.cx = 0; V3.cy = 0;
     var mnx = 1e9, mxx = -1e9, mny = 1e9, mxy = -1e9;
@@ -1373,6 +1383,13 @@ h1 .rush { color: var(--you); }
     V3.F = Math.min(sw * 1.15 / (mxx - mnx), sh * 0.94 / (mxy - mny));
     V3.cx = sr.left + sw / 2 - V3.F * (mnx + mxx) / 2;
     V3.cy = sr.top + sh * 0.95 - V3.F * mxy;
+  }
+  function v3Setup() {
+    v3Camera();
+    var key = V3.camKey + '|' + DPR;
+    if (key === V3.key && V3.bg) return;
+    V3.key = key;
+    var A = G.arena, i;
     var b = mkLayer(W, H); X = b.x; vSeed = 11;
     (SCENERY[A.id] || sceneryNeon)();
     floorStatic(V3.T);
@@ -1778,6 +1795,30 @@ h1 .rush { color: var(--you); }
     X.restore();
   }
 
+  var hdAttached = false, lastHD = 0;
+  function hdOn() {
+    if (gfx !== 'hd' || !window.HR3D || !HR3D.ok) return false;
+    if (!hdAttached) { HR3D.attach({ COL: COL, V3: V3, barVisible: barVisible, hammerType: hammerType, runnerR: runnerR, HAMMER_P: HAMMER_P }); hdAttached = true; }
+    return true;
+  }
+  function drawHD() {
+    var g = G, you = g.players[0], now = performance.now() / 1000;
+    if (!you.out) g.rot = Math.PI / 2 - you.angle;
+    v3Camera();
+    var sx = 0, sy = 0;
+    if (g.shake > 0) { sx = (Math.random() * 2 - 1) * g.shake; sy = (Math.random() * 2 - 1) * g.shake; }
+    var dt = lastHD ? Math.min(0.1, now - lastHD) : 0.016; lastHD = now;
+    var runs;
+    try { runs = HR3D.render(g, { W: W, H: H, sx: sx, sy: sy, now: now, dt: dt }); }
+    catch (e) { HR3D.ok = false; HR3D.error = String(e && e.message || e); HR3D.show(false); draw3d(); return; }
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.clearRect(0, 0, W, H);
+    runs.forEach(function (r, i) { r.p = g.players[i]; });
+    if (g.mode !== 'solo') runs.forEach(function (r) {
+      var q = r.p; if (q.you || q.out) return;
+      for (var hi = 0; hi < 3; hi++) { ctx.fillStyle = hi < q.hearts ? COL.heart : 'rgba(90,92,134,0.85)'; ctx.beginPath(); ctx.arc(r.cx + (hi - 1) * 7, r.top - 6, 2.4, 0, TAU); ctx.fill(); }
+    });
+    overlay3(g, runs, sx, sy);
+  }
   var V3LIST = [];
   function draw3d() {
     var g = G, A = g.arena, t = g.t, now = reduceMotion ? 0 : performance.now() / 1000, you = g.players[0], i;
@@ -1814,6 +1855,10 @@ h1 .rush { color: var(--you); }
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     if (A.deco === 'snow') drawSnow(now);
     if (A.deco === 'embers') drawEmbers(now);
+    overlay3(g, runs, sx, sy);
+  }
+  function overlay3(g, runs, sx, sy) {
+    var A = g.arena, you = g.players[0];
     var sr = V3.sr, S = Math.min(sr.width, sr.height) / 2, cx = sr.left + sr.width / 2 + sx, cy = sr.top + sr.height / 2 + sy;
     if (g.mode === 'room') {
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = Math.round(S * 0.055) + 'px ' + DISPLAY;
@@ -1853,7 +1898,7 @@ h1 .rush { color: var(--you); }
     DPR = Math.min(window.devicePixelRatio || 1, 2);
     if (view3d) { W = Math.max(1, window.innerWidth); H = Math.max(1, window.innerHeight); }
     else { W = Math.max(1, r.width); H = Math.max(1, r.height); }
-    V3.key = '';
+    V3.key = ''; V3.camKey = '';
     cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
     cv.style.width = W + 'px'; cv.style.height = H + 'px';
   }
@@ -2680,6 +2725,8 @@ h1 .rush { color: var(--you); }
   }
 
   function draw() {
+    if (hdOn()) { drawHD(); return; }
+    if (window.HR3D && HR3D.show) HR3D.show(false);
     if (view3d) { draw3d(); return; }
     var g = G, A = g.arena, now = reduceMotion ? 0 : performance.now() / 1000;
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
@@ -3651,12 +3698,20 @@ h1 .rush { color: var(--you); }
   var slowFrames = 0, slowHinted = false, lastNet = 0, last = 0, fpsEl = $('fps'), fpsOn = false, fpsFrames = 0, fpsSince = 0;
   try { fpsOn = localStorage.getItem('headrush.fps') === '1'; } catch (e) {}
   $('fpsToggle').checked = fpsOn; fpsEl.hidden = !fpsOn;
-  $('v3Toggle').checked = view3d;
-  $('v3Toggle').addEventListener('change', function () {
-    view3d = this.checked; document.body.classList.toggle('v3d', view3d);
-    try { localStorage.setItem('headrush.view', view3d ? '3d' : '2d'); } catch (e) {}
+  var gfxBtns = Array.prototype.slice.call(document.querySelectorAll('[data-gfx]'));
+  var GFX_NOTE = { hd: 'Real 3D with lighting, shadows and glow. Lowers its own detail if your phone struggles.', lite: 'Drawn 3D look. Easier on older phones.', flat: 'Simple top-down view. Fastest.' };
+  function pickGfx(v) {
+    gfx = v; view3d = v !== 'flat'; document.body.classList.toggle('v3d', view3d);
+    try { localStorage.setItem('headrush.gfx', v); } catch (e) {}
+    gfxBtns.forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-gfx') === v ? 'true' : 'false'); });
+    var note = GFX_NOTE[v];
+    if (v === 'hd' && window.HR3D && HR3D.ok === false && HR3D.error) note = 'HD needs WebGL 2, which this browser doesn’t have, so Lite 3D is used instead.';
+    $('gfxNote').textContent = note;
     resize();
-  });
+  }
+  gfxBtns.forEach(function (b) { b.addEventListener('click', function () { pickGfx(b.getAttribute('data-gfx')); }); });
+  pickGfx(gfx);
+  window.addEventListener('hr3d-ready', function () { pickGfx(gfx); });
   $('voiceToggle').checked = voiceOn;
   if (!window.speechSynthesis) $('voiceToggle').parentNode.hidden = true;
   $('voiceToggle').addEventListener('change', function () {
@@ -3680,7 +3735,7 @@ h1 .rush { color: var(--you); }
       if (running) update(dt);
       if (view3d && running && G.t > 2 && !G.over && !slowHinted && dt > 0) {
         slowFrames = slowFrames * 0.97 + (dt > 1 / 32 ? 1 : 0) * 0.03;
-        if (G.t > 8 && slowFrames > 0.6) { slowHinted = true; toast('Running slow? Turn off 3D graphics in the menu'); }
+        if (G.t > 8 && slowFrames > 0.6 && gfx !== 'hd') { slowHinted = true; toast('Running slow? Try Flat graphics in the menu'); }
       }
       if (running && G.mode === 'room' && G.t >= 0 && ts - lastNet > 200 && (!G.players[0].out || G.hostBots)) { lastNet = ts; netSend(); }
       stepParts(dt);
@@ -3701,5 +3756,6 @@ h1 .rush { color: var(--you); }
 })();
 </script>
 
+<script type="module" src="hd3d.js"></script>
 </body>
 </html>
