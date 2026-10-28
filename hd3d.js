@@ -738,6 +738,9 @@ function updateRunner(rn, p, i, g, V, now, dt) {
   const running = state === 'run' && t >= 0 && !g.over;
   const winning = g.over && g.result === 'win' && p.you;
   if (winning) jump = Math.abs(Math.sin(now * 6)) * 0.6;
+  /* a duck pressed in mid-air drops the runner quickly instead of snapping to the floor */
+  if (jump >= (rn.jy || 0)) rn.jy = jump; else rn.jy = Math.max(jump, rn.jy - dt * 9);
+  jump = rn.jy;
   // springs (squash/stretch, tilt, hop)
   const ph = t * 11 + i * 1.7;
   let sqT = state === 'duck' ? 0.56 : state === 'jump' ? 1.06 : 1;

@@ -2104,9 +2104,9 @@ h1 .rush { color: var(--you); }
   var G = null, running = false;
   var GR = Math.random;
   var DIFFS = {
-    easy: { name: 'Easy', speed: 0.8, ramp: 0.55, bars: [3, 6], survAdds: [30, 60, 100, 140], cap: 2.1, botMiss: 0.05, reward: 0.75, note: 'Slower bars that speed up gently, and fewer extra bars. 0.75× coins and XP.' },
-    medium: { name: 'Medium', speed: 1, ramp: 1, bars: [2, 4, 6], survAdds: [20, 40, 70, 100, 140], cap: 2.6, botMiss: 0, reward: 1, note: 'The standard game.' },
-    hard: { name: 'Hard', speed: 1.18, ramp: 1.35, bars: [1, 3, 5, 7], survAdds: [10, 25, 45, 70, 100], cap: 3.0, botMiss: -0.015, reward: 1.5, note: 'Faster bars, quicker speed-ups, extra bars sooner and sharper bots. 1.5× coins and XP.' }
+    easy: { name: 'Easy', speed: 0.8, ramp: 0.55, bars: [3, 6], survAdds: [30, 60, 100, 140], cap: 2.1, gapT: 0.8, botMiss: 0.05, reward: 0.75, note: 'Slower bars that speed up gently, and fewer extra bars. 0.75× coins and XP.' },
+    medium: { name: 'Medium', speed: 1, ramp: 1, bars: [2, 4, 6], survAdds: [20, 40, 70, 100, 140], cap: 2.6, gapT: 0.62, botMiss: 0, reward: 1, note: 'The standard game.' },
+    hard: { name: 'Hard', speed: 1.18, ramp: 1.35, bars: [1, 3, 5, 7], survAdds: [10, 25, 45, 70, 100], cap: 3.0, gapT: 0.5, botMiss: -0.015, reward: 1.5, note: 'Faster bars, quicker speed-ups, extra bars sooner and sharper bots. 1.5× coins and XP.' }
   };
   var difficulty = 'medium';
   try { var savedDiff = localStorage.getItem('headrush.diff'); if (DIFFS[savedDiff]) difficulty = savedDiff; } catch (e) {}
@@ -2191,13 +2191,27 @@ h1 .rush { color: var(--you); }
       var a = angs[i], n = i + 1 < angs.length ? angs[i + 1] : angs[0] + TAU;
       if (n - a > best) { best = n - a; at = a + best / 2; }
     }
+    /* Never add a bar that would leave less time between bars than a player needs to react and switch moves. */
+    if (G.bars.length && Math.min(minBarGap(), best / 2) / barRelSpeed() < G.D.gapT) return false;
     G.bars.push({ id: G.nextId++, angle: at, type: type, born: G.t, ph: GR() * 3.7 });
     toast(type === 'low' ? 'Another orange bar!' : 'Another blue bar!'); say('newbar', 0);
+    return true;
   }
+  function minBarGap() {
+    var angs = G.bars.map(function (b) { return ((b.angle % TAU) + TAU) % TAU; }).sort(function (a, b) { return a - b; });
+    if (angs.length < 2) return TAU;
+    var m = TAU;
+    for (var i = 0; i < angs.length; i++) { var n = i + 1 < angs.length ? angs[i + 1] : angs[0] + TAU; m = Math.min(m, n - angs[i]); }
+    return m;
+  }
+  function barRelSpeed() { return G.omega + RUN * (G.arena.belts.length ? 1.65 : 1); }
 
+  var DUCK_T = 0.5;
+  /* Jumping cancels a duck straight away, and ducking in mid-air drops you down fast, so back-to-back bars are always possible. */
   function act(p, kind) {
     var t = G.t;
-    if (kind === 'jump') p.air = t + G.arena.jumpT; else p.duck = t + 0.5;
+    if (kind === 'jump') { if (t < p.duck) p.duck = t; p.air = t + G.arena.jumpT; }
+    else { if (t < p.air) { p.air = t; p.dropAt = t; } p.duck = t + DUCK_T; }
     p.actAt = t;
     if (p.you) { if (kind === 'jump') sfx.jump(); else sfx.duck(); if (G.mode === 'room') netSend(kind); }
   }
@@ -2209,7 +2223,7 @@ h1 .rush { color: var(--you); }
     var you = G.players[0], t = G.t;
     if (you.out) return;
     if (kind === 'lane') { if (G.arena.lanes.length > 1 && t >= you.stun) switchLane(you); return; }
-    if (t < you.stun || t < you.air || t < you.duck) { you.queued = { kind: kind, at: t }; return; }
+    if (t < you.stun || (kind === 'jump' && t < you.air)) { you.queued = { kind: kind, at: t }; return; }
     act(you, kind);
   }
 
@@ -2383,6 +2397,9 @@ h1 .rush { color: var(--you); }
     }
 
     var i, j, p, you = g.players[0];
+    /* Speed limit: bars never get closer together in time than this difficulty's reaction gap. */
+    var gapCap = minBarGap() / g.D.gapT - RUN * (A.belts.length ? 1.65 : 1);
+    if (g.omega > gapCap) g.omega = Math.max(0.5, gapCap);
     var bfTarget = t < g.slowUntil ? 0.45 : t < g.calmUntil ? 0.6 : 1;
     g.bf += (bfTarget - g.bf) * Math.min(1, dt * 5);
     for (i = 0; i < g.bars.length; i++) g.bars[i].angle -= g.omega * g.bf * g.dir * dt;
@@ -2424,8 +2441,8 @@ h1 .rush { color: var(--you); }
     }
 
     if (you.queued) {
-      if (t - you.queued.at > 0.16) you.queued = null;
-      else if (t >= you.air && t >= you.duck && t >= you.stun) { var k = you.queued.kind; you.queued = null; act(you, k); }
+      if (t - you.queued.at > 0.25) you.queued = null;
+      else if (t >= you.stun && (you.queued.kind !== 'jump' || t >= you.air)) { var k = you.queued.kind; you.queued = null; act(you, k); }
     }
 
     // bots
@@ -2440,7 +2457,7 @@ h1 .rush { color: var(--you); }
         if (dk !== undefined && t - dk < 1.2) continue;
         p.dec[th.key] = t;
         if (th.need === 'lane') { if (Math.random() < 0.95 - 0.015 * g.level - p.skill) switchLane(p); continue; }
-        if (t < p.air || t < p.duck) continue;
+        if ((th.need === 'jump' && t < p.air) || (th.need === 'duck' && t < p.duck)) continue;
         var miss = Math.max(0.01, 0.032 + 0.02 * g.level + p.skill + (th.vis ? 0 : 0.04) + g.D.botMiss);
         if (Math.random() > miss) act(p, th.need);
         else if (Math.random() < 0.5) act(p, th.need === 'jump' ? 'duck' : 'jump');
@@ -3336,7 +3353,7 @@ h1 .rush { color: var(--you); }
   $('boardDone').addEventListener('click', function () { $('boardScreen').hidden = true; $('startScreen').hidden = false; });
 
   /* ---------- Party Rooms: live multiplayer over Supabase Realtime ---------- */
-  var ROOM = null, sbClient = null, sbLoading = null, GAME_VERSION = 7;
+  var ROOM = null, sbClient = null, sbLoading = null, GAME_VERSION = 8;
   var ROOM_COLORS = [
     { name: 'Sunny', hex: '#ffd23f' }, { name: 'Coral', hex: '#ff6b6b' }, { name: 'Mint', hex: '#5ee0a0' }, { name: 'Violet', hex: '#b48cff' },
     { name: 'Bubblegum', hex: '#ff8fd8' }, { name: 'Snow', hex: '#f4f2ff' }, { name: 'Lime', hex: '#c6f06a' }, { name: 'Peach', hex: '#f6b8a0' }
