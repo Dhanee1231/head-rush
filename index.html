@@ -768,6 +768,27 @@ h1 .rush { color: var(--you); }
     } }).then(function () { syncState = 'ok'; PROFILE.unsynced = false; saveProfile(); return true; },
       function () { syncState = 'fail'; PROFILE.unsynced = true; saveProfile(); return false; });
   }
+  /* Round log: one row per finished round so we can see who plays, when and how often. Queued on the phone if offline. */
+  var RLOG_KEY = 'headrush.roundlog.v1', rlogBusy = false;
+  function logRound(r) {
+    var pl = currentPlayer(), q = [];
+    try { q = JSON.parse(localStorage.getItem(RLOG_KEY)) || []; } catch (e) {}
+    if (r && pl) { ensureCloud(pl); r.pid = pl.cloudId; r.sec = pl.secret; q.push(r); }
+    q = q.slice(-50);
+    try { localStorage.setItem(RLOG_KEY, JSON.stringify(q)); } catch (e) {}
+    if (rlogBusy || !q.length) return;
+    rlogBusy = true;
+    (function next() {
+      var item = q[0];
+      if (!item) { rlogBusy = false; return; }
+      sbFetch('/rest/v1/rpc/log_round', { method: 'POST', body: {
+        p_id: item.pid, p_secret: item.sec, p_mode: item.mode, p_arena: item.arena, p_difficulty: item.diff, p_seconds: item.secs,
+        p_place: item.place || null, p_win: item.win, p_hits: item.hits, p_close: item.close, p_stars: item.stars, p_version: GAME_VERSION
+      } }).then(function () {
+        q.shift(); try { localStorage.setItem(RLOG_KEY, JSON.stringify(q)); } catch (e) {} next();
+      }, function () { rlogBusy = false; });
+    })();
+  }
   function levelInfo(xp) {
     var lvl = 1, need = 100, rest = xp;
     while (rest >= need) { rest -= need; lvl++; need = 100 + (lvl - 1) * 40; }
@@ -3021,6 +3042,7 @@ h1 .rush { color: var(--you); }
     if (g.diff !== 'medium') $('endEyebrow').textContent += ' · ' + g.D.name;
     var res = applyRound({ mode: md, arena: g.arena.id, survived: survived, place: place, win: win, stars: st, close: g.close, coins: coins, xp: xp, pickups: g.pickups, clean: g.firstHit != null ? g.firstHit : survived });
     renderEndProgress(res);
+    var roundRec = { mode: md, arena: g.arena.id, diff: g.diff, secs: Math.round(survived * 10) / 10, place: place, win: !!win, hits: g.hits || 0, close: g.close || 0, stars: st || 0 };
     var pn = (currentPlayer() || { name: 'I' }).name;
     if (md === 'room') shareText = pn + (win ? ' won' : ' finished ' + ordinal(place) + ' of ' + g.players.length) + ' in our Head Rush room in ' + name + '. Rematch?';
     else if (md === 'party') shareText = pn + (win ? ' won' : ' finished ' + ordinal(place) + ' of 8') + ' in ' + name + ' on Head Rush, with ' + g.close + ' close shave' + (g.close === 1 ? '' : 's') + '. Beat that!';
@@ -3028,7 +3050,7 @@ h1 .rush { color: var(--you); }
     else shareText = pn + ' lasted ' + clockUp(survived) + ' in ' + name + ' Survival on Head Rush. Beat that!';
     $('shareMsg').textContent = ''; $('shareText').hidden = true;
     var sl = $('syncLine'); sl.textContent = 'Saving to the online leaderboard…';
-    syncPlayer().then(function (ok) { sl.textContent = ok ? 'Saved to the online leaderboard.' : 'Couldn’t reach the online leaderboard. Your score saves on this phone and uploads next time.'; });
+    syncPlayer().then(function (ok) { logRound(roundRec); sl.textContent = ok ? 'Saved to the online leaderboard.' : 'Couldn’t reach the online leaderboard. Your score saves on this phone and uploads next time.'; });
     if (md !== 'room') running = false;
     $('endScreen').hidden = false;
     setTimeout(function () { try { $('againBtn').focus({ preventScroll: true }); } catch (e) {} }, 50);
