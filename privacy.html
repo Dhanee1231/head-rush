@@ -23,7 +23,7 @@ a { color: var(--you); }
 <body>
 <main>
 <h1>Head Rush privacy</h1>
-<p class="muted">Alpha test version · Last updated October 30, 2026</p>
+<p class="muted">Alpha test version · Last updated October 30, 2026 (daily challenge, reminders)</p>
 
 <p>Head Rush is an early alpha test of a phone party game, shared with family and friends. This page explains, in plain words, what the game stores and how to get it removed.</p>
 
@@ -31,9 +31,11 @@ a { color: var(--you); }
 <p>The game keeps a small database on Supabase (servers in the United States). For each player it stores:</p>
 <ul>
 <li><b>The name you type.</b> Please use a first name or nickname, not your full name.</li>
-<li><b>Scores and level:</b> your best Survival time, Party wins and rounds, Solo stars, level and runner look.</li>
+<li><b>Scores and level:</b> your best Survival time, Party wins and rounds, Solo stars, best combo, perfect rounds, level and runner look.</li>
+<li><b>Daily Challenge:</b> your best time for each day's challenge and how many tries you used.</li>
 <li><b>A round log:</b> when you played, the mode, arena and difficulty, how long you lasted, your place, hits and close shaves.</li>
 <li><b>Feedback you choose to send,</b> together with your player name.</li>
+<li><b>Streak reminders (only if you turn them on):</b> your browser's push address and your current streak, so a reminder can be sent at 7 pm Eastern. Turn the setting off and no more reminders are sent.</li>
 <li><b>Party Rooms:</b> while you're in a room, your name, look and position are shared live with the other players in that room. They are not kept after the round.</li>
 </ul>
 
@@ -50,7 +52,7 @@ a { color: var(--you); }
 <p>No email addresses, phone numbers, locations, photos, contacts or payment details. There are no ads and no tracking cookies, and nothing is sold or shared for marketing.</p>
 
 <h2>Other services the game uses</h2>
-<p>The game's font loads from Google Fonts and one code library loads from a public code host (jsDelivr). Like any website, those services can see your internet address when they send those files. The game itself is hosted on Vercel.</p>
+<p>The game's font loads from Google Fonts and one code library loads from a public code host (jsDelivr). Like any website, those services can see your internet address when they send those files. The game itself is hosted on Vercel. If you turn on streak reminders, they are delivered through your browser's own push service (for example Google or Apple).</p>
 
 <h2>Children</h2>
 <p>Head Rush is played by families, so it collects as little as possible: a nickname and game results only. Parents, please help younger players pick a nickname rather than their real full name.</p>

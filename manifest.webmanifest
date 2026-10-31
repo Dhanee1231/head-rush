@@ -1,0 +1,16 @@
+{
+  "name": "Head Rush",
+  "short_name": "Head Rush",
+  "description": "Jump and duck the spinning bars. Last runner standing wins.",
+  "start_url": "./?source=app",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#191a33",
+  "theme_color": "#191a33",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

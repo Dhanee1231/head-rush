@@ -8,6 +8,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="description" content="Head Rush: jump and duck the spinning bars. Last runner standing wins.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-180.png">
+<meta name="apple-mobile-web-app-title" content="Head Rush">
 <script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","three/addons/":"./vendor/addons/"}}</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}</style>
 </head>
@@ -536,6 +540,8 @@ h1 .rush { color: var(--you); }
         <label class="vol-row" for="sfxVol"><span>Effects</span><input type="range" id="sfxVol" min="0" max="100" step="5" value="100"><output id="sfxVolOut">100%</output></label>
       </div>
       <label class="setting" for="voiceToggle"><input type="checkbox" id="voiceToggle"> Announcer voice</label>
+      <label class="setting" for="remindToggle"><input type="checkbox" id="remindToggle"> Streak reminder at 7 pm</label>
+      <p class="note" id="remindMsg" role="status" aria-live="polite"></p>
       <label class="setting" for="fpsToggle"><input type="checkbox" id="fpsToggle"> Show frame rate</label>
       <div class="legal-row"><a class="link-btn" href="privacy.html" target="_blank" rel="noopener">Privacy</a><button class="link-btn" id="replayTut" type="button">Replay tutorial</button><button class="link-btn danger" id="deleteData" type="button">Delete my data</button></div>
       <p class="note" id="deleteMsg" role="status" aria-live="polite"></p>
@@ -572,7 +578,9 @@ h1 .rush { color: var(--you); }
         <button class="btn" id="againBtn" type="button">Run again</button>
         <button class="btn ghost" id="retryBtn" type="button" hidden>Replay level</button>
         <button class="btn ghost" id="replayBtn" type="button" hidden>Watch knockout replay</button>
-        <button class="btn ghost" id="shareBtn" type="button">Copy my score</button>
+        <button class="btn ghost" id="shareBtn" type="button">Share my result</button>
+        <button class="btn ghost" id="clipBtn" type="button" hidden>Share a 5-second clip</button>
+        <button class="btn friends" id="installBtn" type="button" hidden>Add Head Rush to your home screen</button>
         <button class="btn ghost" id="fbOpenEnd" type="button">Give feedback</button>
         <button class="btn ghost" id="switchBtn" type="button">Main menu</button>
       </div>
@@ -629,7 +637,7 @@ h1 .rush { color: var(--you); }
       <div class="stack" id="roomLobby" hidden>
         <p class="sub" style="text-align:center">Room code</p>
         <div class="code-big" id="roomCodeBig">ABCD</div>
-        <button class="btn ghost" id="roomCopy" type="button">Copy invite for friends</button>
+        <button class="btn ghost" id="roomCopy" type="button">Invite friends</button>
         <ol class="board" id="roomPlayers"></ol>
         <div class="emotes" data-emotes role="group" aria-label="Send an emote"></div>
         <div class="match-box" id="lobbyMatch" hidden>
@@ -669,7 +677,7 @@ h1 .rush { color: var(--you); }
     </div>
   </div>
 
-  <div class="replay-tag" id="replayTag" hidden><span class="rec"></span>Replay · slow motion<small>Tap anywhere to skip</small></div>
+  <div class="replay-tag" id="replayTag" hidden><span class="rec"></span><span id="replayTitle">Replay · slow motion</span><small id="replaySub">Tap anywhere to skip</small></div>
 
   <div class="overlay" id="champScreen" hidden>
     <div class="card champ-card">
@@ -2725,20 +2733,24 @@ h1 .rush { color: var(--you); }
     RBUF.push(snapNow());
     while (RBUF.length && RBUF[0].t < G.t - 3.2) RBUF.shift();
   }
-  function startReplay() {
+  function startReplay(rec) {
     var g = G, you = g.players[0];
-    if (!g || !you.out || !RBUF.length || running) return;
-    var from = g.youOutAt - 2.0, to = Math.min(RBUF[RBUF.length - 1].t, g.youOutAt + 0.9);
+    if (!g || !RBUF.length || running || REPLAY) return;
+    var last = RBUF[RBUF.length - 1].t, anchor = you.out ? g.youOutAt : Math.min(last, g.dur != null ? g.dur : last);
+    var from = anchor - (you.out ? 2.0 : 2.4), to = Math.min(last, anchor + (you.out ? 0.9 : 0.3));
     var frames = RBUF.filter(function (sn) { return sn.t >= from && sn.t <= to; });
     if (frames.length < 10) return;
     var byId = {}; g.bars.forEach(function (b) { byId[b.id] = b; });
-    REPLAY = { frames: frames, i: 0, clock: frames[0].t, end: frames[frames.length - 1].t, fin: snapNow(), byId: byId, hitAt: g.youOutAt };
+    REPLAY = { frames: frames, i: 0, clock: frames[0].t, end: frames[frames.length - 1].t, fin: snapNow(), byId: byId, hitAt: you.out ? g.youOutAt : 1e9, speed: rec ? 0.5 : 0.35 };
     $('endScreen').hidden = true; $('replayTag').hidden = false;
+    $('replayTitle').textContent = rec ? 'Recording your clip…' : 'Replay · slow motion';
+    $('replaySub').textContent = rec ? 'Hold on, about 5 seconds' : 'Tap anywhere to skip';
     audioOn(); musicStop(0.05);
+    if (rec) clipStart();
   }
   function replayStep(dt) {
     var R = REPLAY;
-    R.clock += dt * 0.35;
+    R.clock += dt * R.speed;
     while (R.i < R.frames.length - 1 && R.frames[R.i + 1].t <= R.clock) R.i++;
     applySnap(R.frames[R.i], R.byId);
     if (!R.bonked && R.clock >= R.hitAt) { R.bonked = true; sfx.bonk(0.9); sfx.out(); G.shake = reduceMotion ? 0 : 10; }
@@ -2746,11 +2758,118 @@ h1 .rush { color: var(--you); }
   }
   function endReplay() {
     if (!REPLAY) return;
+    if (CLIP && CLIP.rec && CLIP.rec.state === 'recording') { CLIP.done = true; try { CLIP.rec.stop(); } catch (e) {} }
     var R = REPLAY; REPLAY = null;
     applySnap(R.fin, R.byId);
     $('replayTag').hidden = true; $('endScreen').hidden = false;
   }
-  document.addEventListener('pointerdown', function () { if (REPLAY) endReplay(); }, true);
+  document.addEventListener('pointerdown', function () { if (REPLAY && !CLIP) endReplay(); }, true);
+  /* 5-second clip: the replay is drawn into a small canvas (3D view plus overlay) and recorded with MediaRecorder. */
+  var CLIP = null;
+  function clipSupported() {
+    try { return !!(window.MediaRecorder && HTMLCanvasElement.prototype.captureStream && clipMime()); } catch (e) { return false; }
+  }
+  function clipMime() {
+    var types = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+    for (var i = 0; i < types.length; i++) { try { if (MediaRecorder.isTypeSupported(types[i])) return types[i]; } catch (e) {} }
+    return '';
+  }
+  function clipStart() {
+    var h = 1280, w = Math.round(h * Math.min(0.75, W / H)); w -= w % 2;
+    var c = document.createElement('canvas'); c.width = w; c.height = h;
+    var mime = clipMime(), chunks = [], rec;
+    try { rec = new MediaRecorder(c.captureStream(30), { mimeType: mime, videoBitsPerSecond: 4000000 }); } catch (e) { CLIP = null; clipFailed(); return; }
+    CLIP = { c: c, x: c.getContext('2d'), rec: rec, mime: mime, chunks: chunks };
+    rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = function () { var cl = CLIP; CLIP = null; clipDone(new Blob(chunks, { type: mime.split(';')[0] })); };
+    rec.start(250);
+  }
+  function clipFrame() {
+    if (!CLIP) return;
+    var X = CLIP.x, cw = CLIP.c.width, ch = CLIP.c.height, k = Math.max(cw / W, ch / H), dw = W * k, dh = H * k, ox = (cw - dw) / 2, oy = (ch - dh) / 2;
+    X.fillStyle = '#191a33'; X.fillRect(0, 0, cw, ch);
+    var gl = document.getElementById('gl');
+    try { if (gl && gl.style.display !== 'none' && hdOn()) X.drawImage(gl, ox, oy, dw, dh); } catch (e) {}
+    try { X.drawImage(cv, ox, oy, dw, dh); } catch (e) {}
+    X.fillStyle = 'rgba(14,15,34,0.78)'; X.fillRect(0, ch - 120, cw, 120);
+    X.textAlign = 'center'; X.textBaseline = 'middle';
+    X.font = '52px ' + DISPLAY; X.fillStyle = '#ffd23f'; X.fillText('HEAD RUSH', cw / 2, ch - 78);
+    X.font = '28px ' + DISPLAY; X.fillStyle = '#f4f2ff'; X.fillText('head-rush.vercel.app', cw / 2, ch - 34);
+  }
+  function clipFailed() { $('shareMsg').textContent = 'This phone can’t record clips. Sharing an image card instead.'; shareResultImage(); }
+  var CLIP_READY = null, CARD_READY = null;
+  function clipDone(blob) {
+    if (!blob || !blob.size) { clipFailed(); return; }
+    CLIP_READY = blob;
+    $('clipBtn').textContent = 'Send my clip';
+    $('shareMsg').textContent = 'Your clip is ready. Tap Send my clip.';
+  }
+  function sendClip() {
+    var blob = CLIP_READY, ext = /mp4/.test(blob.type) ? 'mp4' : 'webm', file = null, msg = $('shareMsg');
+    try { file = new File([blob], 'head-rush-clip.' + ext, { type: blob.type }); } catch (e) {}
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], text: shareText + ' ' + SITE_URL }).then(function () { msg.textContent = 'Clip shared!'; }, function (e) { if (!e || e.name !== 'AbortError') downloadBlob(blob, 'head-rush-clip.' + ext, 'Clip saved to your downloads. Post it from there.'); });
+    } else downloadBlob(blob, 'head-rush-clip.' + ext, 'Clip saved to your downloads. Post it from there.');
+  }
+  function downloadBlob(blob, name, note) {
+    var a = document.createElement('a'), u = URL.createObjectURL(blob);
+    a.href = u; a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(u); a.remove(); }, 4000);
+    $('shareMsg').textContent = note;
+  }
+  /* Result image card for the share sheet. */
+  function resultCardBlob() {
+    var c = document.createElement('canvas'), w = 1080, h = 1350; c.width = w; c.height = h;
+    var X = c.getContext('2d'), g = G, pl = currentPlayer();
+    var bg = X.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, '#2b2e69'); bg.addColorStop(1, '#14152b');
+    X.fillStyle = bg; X.fillRect(0, 0, w, h);
+    X.strokeStyle = '#30336a'; X.lineWidth = 46; X.beginPath(); X.ellipse(w / 2, 900, 430, 170, 0, 0, Math.PI * 2); X.stroke();
+    X.strokeStyle = '#ff8a2a'; X.lineWidth = 40; X.lineCap = 'round'; X.beginPath(); X.ellipse(w / 2, 900, 430, 170, 0, Math.PI * 0.95, Math.PI * 1.45); X.stroke();
+    X.strokeStyle = '#3fa9ff'; X.beginPath(); X.ellipse(w / 2, 900, 430, 170, 0, Math.PI * 1.6, Math.PI * 2.05); X.stroke();
+    var col = g && g.players[0] ? g.players[0].color : '#ffd23f';
+    X.fillStyle = 'rgba(0,0,0,.35)'; X.beginPath(); X.ellipse(w / 2, 1035, 120, 28, 0, 0, Math.PI * 2); X.fill();
+    X.fillStyle = col; X.strokeStyle = '#191a33'; X.lineWidth = 16;
+    X.beginPath(); if (X.roundRect) X.roundRect(w / 2 - 115, 700, 230, 340, 115); else X.rect(w / 2 - 115, 700, 230, 340); X.fill(); X.stroke();
+    X.fillStyle = '#191a33'; X.beginPath(); X.ellipse(w / 2 - 44, 820, 20, 32, 0, 0, Math.PI * 2); X.ellipse(w / 2 + 44, 820, 20, 32, 0, 0, Math.PI * 2); X.fill();
+    X.textAlign = 'center'; X.textBaseline = 'middle';
+    X.font = '60px ' + DISPLAY; X.fillStyle = '#ffd23f'; X.fillText('HEAD RUSH', w / 2, 110);
+    X.font = '700 32px ' + "'Atkinson Hyperlegible', system-ui, sans-serif"; X.fillStyle = '#a9a8d0'; X.fillText(($('endEyebrow').textContent || '').toUpperCase(), w / 2, 180);
+    var title = $('endTitle').textContent, ts = 130; X.font = ts + 'px ' + DISPLAY;
+    while (X.measureText(title).width > w - 120 && ts > 60) { ts -= 6; X.font = ts + 'px ' + DISPLAY; }
+    X.fillStyle = $('endTitle').classList.contains('win') ? '#ffd23f' : '#f4f2ff'; X.fillText(title, w / 2, 320);
+    var stats = [[$('stLabel1').textContent, $('stPlace').textContent], ['Survived', $('stTime').textContent], ['Close shaves', $('stClose').textContent]];
+    stats.forEach(function (st, i) {
+      var x = 90 + i * 310;
+      X.fillStyle = 'rgba(14,15,34,.55)'; X.beginPath(); if (X.roundRect) X.roundRect(x, 420, 280, 170, 28); else X.rect(x, 420, 280, 170); X.fill();
+      X.font = '700 28px ' + "'Atkinson Hyperlegible', system-ui, sans-serif"; X.fillStyle = '#a9a8d0'; X.fillText(String(st[0]).toUpperCase(), x + 140, 470);
+      X.font = '72px ' + DISPLAY; X.fillStyle = '#f4f2ff'; X.fillText(st[1], x + 140, 540);
+    });
+    if (!$('perfectBadge').hidden) { X.font = '44px ' + DISPLAY; X.fillStyle = '#f2b632'; X.fillText('★ PERFECT ROUND ★', w / 2, 650); }
+    X.font = '64px ' + DISPLAY; X.fillStyle = '#f4f2ff'; X.fillText((pl ? pl.name : 'I') + ' says: Beat that!', w / 2, 1150);
+    X.font = '700 40px ' + "'Atkinson Hyperlegible', system-ui, sans-serif"; X.fillStyle = '#ffd23f'; X.fillText('head-rush.vercel.app', w / 2, 1240);
+    return new Promise(function (res) { c.toBlob(function (b) { res(b); }, 'image/png'); });
+  }
+  function copyShareText() {
+    var msg = $('shareMsg'), box = $('shareText');
+    function fallback() { box.textContent = shareText + ' ' + SITE_URL; box.hidden = false; msg.textContent = 'Copy this and paste it in your group chat:'; }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(shareText + ' ' + SITE_URL).then(function () { box.hidden = true; msg.textContent = 'Copied! Paste it in your group chat.'; }, fallback);
+      else fallback();
+    } catch (e) { fallback(); }
+  }
+  function prepCard() { CARD_READY = null; resultCardBlob().then(function (b) { CARD_READY = b; }, function () {}); }
+  function shareResultImage() {
+    var msg = $('shareMsg');
+    (CARD_READY ? Promise.resolve(CARD_READY) : resultCardBlob()).then(function (blob) {
+      var file = null;
+      try { file = new File([blob], 'head-rush-result.png', { type: 'image/png' }); } catch (e) {}
+      if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+        return navigator.share({ files: [file], text: shareText + ' ' + SITE_URL }).then(function () { msg.textContent = 'Shared!'; }, function (e) { if (!e || e.name !== 'AbortError') copyShareText(); });
+      }
+      if (navigator.share) return navigator.share({ text: shareText, url: SITE_URL }).then(function () { msg.textContent = 'Shared!'; }, function (e) { if (!e || e.name !== 'AbortError') copyShareText(); });
+      downloadBlob(blob, 'head-rush-result.png', 'Result card saved. The text is copied too.'); copyShareText();
+    }).catch(copyShareText);
+  }
   function finish(kind, delay) {
     if (G.over) return;
     musicStop(kind === 'win' || kind === 'clear' ? 0.15 : 0.6);
@@ -3731,6 +3850,7 @@ h1 .rush { color: var(--you); }
     if ((g.bestRun || 0) > (PROFILE.bestCombo || 0)) PROFILE.bestCombo = g.bestRun;
     var res = applyRound({ perfect: perfect, mode: g.daily ? 'daily' : md, arena: g.arena.id, survived: survived, place: place, win: win, stars: st, close: g.close, coins: coins, xp: xp, pickups: g.pickups, clean: g.firstHit != null ? g.firstHit : survived });
     var stk = bumpStreak();
+    if (stk && PROFILE.remind) pushSave(null, true).catch(function () {});
     res.streak = stk;
     res.combo = g.bestRun || 0; res.perfect = perfect ? PROFILE.perfect : 0;
     renderEndProgress(res);
@@ -3743,6 +3863,9 @@ h1 .rush { color: var(--you); }
     ];
     celebrate(title.classList.contains('win'), Math.round(coins), res.after > res.before);
     $('replayBtn').hidden = !(you.out && md !== 'room' && RBUF.length > 20);
+    $('clipBtn').hidden = !(md !== 'room' && RBUF.length > 90 && clipSupported()); CLIP_READY = null; $('clipBtn').textContent = 'Share a 5-second clip';
+    setTimeout(prepCard, 80);
+    showInstallOffer();
     var tipN = PROFILE.rounds;
     if (tipN >= 1 && tipN <= TIPS.length) {
       var tl = $('tipLine'); tl.textContent = ''; tl.hidden = false;
@@ -4040,6 +4163,7 @@ h1 .rush { color: var(--you); }
     var taken = PLAYERS.list.some(function (pl) { return pl.name.toLowerCase() === name.toLowerCase(); });
     if (taken) { $('nameErr').textContent = name + ' is already on this phone. Tap their name above or pick another.'; return; }
     addPlayer(name); closeNameScreen(); syncPlayer();
+    if (useInvite()) { pickDiff('easy'); return; }
     if (!PROFILE.rounds && !PROFILE.tutDone) { pickDiff('easy'); startTutorial(); }
   });
   $('switchPlayer').addEventListener('click', function () { showNameScreen(false); });
@@ -4755,10 +4879,12 @@ h1 .rush { color: var(--you); }
   });
   $('roomCopy').addEventListener('click', function () {
     if (!ROOM) return;
-    var text = 'Join my Head Rush room! Code: ' + ROOM.code + '. Play at ' + SITE_URL + ' and tap Play with friends online.';
+    var link = SITE_URL + '/?room=' + ROOM.code, text = 'Join my Head Rush room! Tap the link to jump straight in (code ' + ROOM.code + ').';
     var st = $('roomStatus');
-    function fb() { st.textContent = text; }
-    try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { st.textContent = 'Invite copied. Paste it in your group chat.'; }, fb); else fb(); } catch (e) { fb(); }
+    function fb() { st.textContent = text + ' ' + link; }
+    function copy() { try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text + ' ' + link).then(function () { st.textContent = 'Invite link copied. Paste it in your group chat.'; }, fb); else fb(); } catch (e) { fb(); } }
+    if (navigator.share) navigator.share({ title: 'Head Rush', text: text, url: link }).then(function () { st.textContent = 'Invite sent.'; }, function (e) { if (!e || e.name !== 'AbortError') copy(); });
+    else copy();
   });
   window.addEventListener('pagehide', function () { leaveRoom(); });
 
@@ -4823,15 +4949,8 @@ h1 .rush { color: var(--you); }
     });
   });
 
-  $('shareBtn').addEventListener('click', function () {
-    var msg = $('shareMsg'), box = $('shareText');
-    function fallback() { box.textContent = shareText; box.hidden = false; msg.textContent = 'Copy this and paste it in your group chat:'; }
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(shareText).then(function () { box.hidden = true; msg.textContent = 'Copied! Paste it in your group chat.'; }, fallback);
-      } else fallback();
-    } catch (e) { fallback(); }
-  });
+  $('shareBtn').addEventListener('click', shareResultImage);
+  $('clipBtn').addEventListener('click', function () { if (CLIP_READY) sendClip(); else if (clipSupported()) startReplay(true); else clipFailed(); });
 
   /* ---------- input ---------- */
   function flashBtn(kind) {
@@ -4931,16 +5050,89 @@ h1 .rush { color: var(--you); }
       stepParts(dt);
       if (G.shake > 0) { G.shake *= Math.pow(0.002, dt); if (G.shake < 0.3) G.shake = 0; }
       voTick(); draw(); hud();
+      if (CLIP) clipFrame();
       if (G.over && !G.shown && G.t >= G.endAt) { G.shown = true; showEnd(); }
     }
     requestAnimationFrame(frame);
   }
 
+  var installEvt = null;
+  var isStandalone = (function () { try { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } })();
+  var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); installEvt = e; });
+  window.addEventListener('appinstalled', function () { installEvt = null; PROFILE.installAsked = 9; saveProfile(); $('installBtn').hidden = true; });
+  function showInstallOffer() {
+    var b = $('installBtn');
+    b.hidden = !(!isStandalone && PROFILE.rounds >= 2 && (PROFILE.installAsked || 0) < 3 && (installEvt || isIOS));
+    if (!b.hidden && !b.dataset.counted) { b.dataset.counted = '1'; PROFILE.installAsked = (PROFILE.installAsked || 0) + 1; saveProfile(); }
+  }
+  $('installBtn').addEventListener('click', function () {
+    var msg = $('shareMsg');
+    PROFILE.installAsked = 9; saveProfile();
+    if (installEvt) { installEvt.prompt(); installEvt.userChoice.then(function (c) { msg.textContent = c && c.outcome === 'accepted' ? 'Installed! Open Head Rush from your home screen.' : 'No problem. You can add it later from the browser menu.'; installEvt = null; $('installBtn').hidden = true; }); }
+    else if (isIOS) msg.textContent = 'On iPhone: tap the Share button at the bottom of Safari, then “Add to Home Screen”.';
+  });
+  if ('serviceWorker' in navigator && location.protocol === 'https:') { window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); }); }
+
+  /* ---------- streak reminder (opt-in web push at 7 pm Eastern) ---------- */
+  var VAPID_PUBLIC = 'BCjcNESNup2z2dwXgPZL278xFyT_XGEyXQHJVobsqkux6XQVYmeBBcN-II-fqlWaeiYYRfR_YnUKSAPOCdhlytI';
+  function pushSupported() { return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && location.protocol === 'https:'; }
+  function b64u(s) { var p = '='.repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+  function pushSave(sub, on) {
+    var pl = currentPlayer(); if (!pl) return Promise.reject(new Error('no player'));
+    ensureCloud(pl);
+    var s = PROFILE.streak || {};
+    return syncPlayer().then(function () {
+      return sbFetch('/rest/v1/rpc/save_push', { method: 'POST', body: { p_id: pl.cloudId, p_secret: pl.secret, p_sub: sub ? JSON.parse(JSON.stringify(sub)) : null, p_on: on, p_streak: s.n || 0, p_last: s.last || null } });
+    });
+  }
+  function renderRemind() {
+    var t = $('remindToggle'), m = $('remindMsg');
+    t.checked = !!PROFILE.remind;
+    if (!pushSupported()) { t.disabled = true; m.textContent = isIOS && !isStandalone ? 'On iPhone, add Head Rush to your home screen first, then turn this on from there.' : 'This browser can’t show reminders.'; }
+    else if (PROFILE.remind) m.textContent = 'We’ll nudge you at 7 pm Eastern if your streak is about to end. Nothing else.';
+    else m.textContent = '';
+  }
+  $('remindToggle').addEventListener('change', function () {
+    var t = $('remindToggle'), m = $('remindMsg');
+    if (!t.checked) {
+      PROFILE.remind = false; saveProfile(); renderRemind();
+      pushSave(null, false).catch(function () {});
+      return;
+    }
+    m.textContent = 'Asking for permission…';
+    Notification.requestPermission().then(function (perm) {
+      if (perm !== 'granted') throw new Error('denied');
+      return navigator.serviceWorker.register('sw.js').then(function () { return navigator.serviceWorker.ready; });
+    }).then(function (reg) {
+      return reg.pushManager.getSubscription().then(function (old) { return old || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(VAPID_PUBLIC) }); }).then(function (sub) {
+        return pushSave(sub, true).then(function () { reg.showNotification('Head Rush', { body: 'Streak reminders are on. See you at 7 pm if your streak needs you.', icon: 'icons/icon-192.png', tag: 'streak' }); });
+      });
+    }).then(function () { PROFILE.remind = true; saveProfile(); renderRemind(); }, function (e) {
+      PROFILE.remind = false; saveProfile(); renderRemind();
+      m.textContent = e && e.message === 'denied' ? 'Notifications are blocked for this site. Allow them in your browser settings to get reminders.' : 'Couldn’t turn on reminders. Check your connection and try again.';
+    });
+  });
+  renderRemind();
+  var INVITE = null;
+  try {
+    var qs = new URLSearchParams(location.search), rc = (qs.get('room') || '').toUpperCase();
+    if (/^[A-Z]{4}$/.test(rc) && rc.split('').every(function (ch) { return CODE_CHARS.indexOf(ch) >= 0; })) INVITE = rc;
+    if (qs.get('room') || qs.get('source')) history.replaceState(null, '', location.pathname);
+  } catch (e) {}
+  function useInvite() {
+    if (!INVITE || !currentPlayer()) return false;
+    var code = INVITE; INVITE = null;
+    hideAllOverlays(); $('roomScreen').hidden = false; roomView('join'); $('roomCode').value = code;
+    joinRoom(code, false);
+    return true;
+  }
   renderProfile();
   $('howto').open = !(PROFILE.rounds > 0 || loadBest('neon').rounds > 0);
   pickMode(mode);
   pickDiff(difficulty);
-  if (!currentPlayer()) showNameScreen(false);
+  if (!currentPlayer()) { showNameScreen(false); if (INVITE) $('nameErr').textContent = 'Type your name to join room ' + INVITE + '.'; }
+  else useInvite();
   if (document.fonts && document.fonts.load) document.fonts.load('40px "Lilita One"').catch(function () {});
   requestAnimationFrame(frame);
 })();
