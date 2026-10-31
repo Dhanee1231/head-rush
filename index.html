@@ -243,6 +243,9 @@ h1 .rush { color: var(--you); }
 .concept { margin: 0; padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--line); font-size: 14px; line-height: 1.45; color: var(--muted); }
 .concept b { color: var(--ink); }
 .concept .link-btn { padding: 0; }
+.alpha-badge { display: inline-block; padding: 2px 8px; margin-right: 6px; border-radius: 999px; background: var(--you); color: var(--bg); letter-spacing: .12em; }
+.legal-row { display: flex; gap: 18px; align-items: center; }
+.link-btn.danger { color: var(--heart); }
 .stars { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
 .star {
   height: 48px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); color: var(--gone);
@@ -372,9 +375,9 @@ h1 .rush { color: var(--you); }
         <div class="coins" aria-label="Coins"><svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg><b id="coinsNum">0</b></div>
       </div>
       <div class="who"><span>Playing as <b id="whoName">Player</b></span><button class="link-btn" id="switchPlayer" type="button">Switch player</button></div>
-      <div class="eyebrow">Concept test · early build</div>
+      <div class="eyebrow"><span class="alpha-badge">Alpha</span> Early test build</div>
       <h1>Head<br><span class="rush">Rush</span></h1>
-      <p class="concept"><b>This is an early test of the idea.</b> The new 3D look is a preview. Graphics, sounds and levels will keep improving in the real game. <button class="link-btn" id="fbOpenMenu" type="button">Tell us what to improve</button></p>
+      <p class="concept"><b>Alpha test:</b> things may change, break or be reset. Graphics, sounds and levels keep improving toward the real game. <button class="link-btn" id="fbOpenMenu" type="button">Tell us what to improve</button></p>
       <div class="modes" role="group" aria-label="Game mode">
         <button class="mode" type="button" data-mode="party" aria-pressed="true">Party</button>
         <button class="mode" type="button" data-mode="solo" aria-pressed="false">Solo</button>
@@ -427,6 +430,8 @@ h1 .rush { color: var(--you); }
       </div>
       <label class="setting" for="voiceToggle"><input type="checkbox" id="voiceToggle"> Announcer voice</label>
       <label class="setting" for="fpsToggle"><input type="checkbox" id="fpsToggle"> Show frame rate</label>
+      <div class="legal-row"><a class="link-btn" href="privacy.html" target="_blank" rel="noopener">Privacy</a><button class="link-btn danger" id="deleteData" type="button">Delete my data</button></div>
+      <p class="note" id="deleteMsg" role="status" aria-live="polite"></p>
     </div>
   </div>
 
@@ -487,7 +492,7 @@ h1 .rush { color: var(--you); }
       </div>
       <p class="err" id="nameErr" role="alert"></p>
       <button class="btn" id="nameGo" type="submit">Let's go</button>
-      <p class="note">Your name shows on the leaderboard. Each player on this phone keeps their own coins, levels and looks.</p>
+      <p class="note"><b>Your name and scores appear on the shared leaderboard.</b> Use a first name or nickname, not your full name. Each player on this phone keeps their own coins, levels and looks. <a class="link-btn" href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>
     </form>
   </div>
 
@@ -543,9 +548,9 @@ h1 .rush { color: var(--you); }
 
   <div class="overlay" id="fbScreen" hidden>
     <form class="card" id="fbForm" novalidate>
-      <div class="eyebrow">Concept test feedback</div>
+      <div class="eyebrow">Alpha test feedback</div>
       <h2 class="result">How's Head Rush?</h2>
-      <p class="sub">This is an early version of the idea. Your honest thoughts shape the real game.</p>
+      <p class="sub">This is an alpha test. Your honest thoughts shape the real game.</p>
       <div class="field">
         <label id="starLabel">Your rating</label>
         <div class="stars" role="group" aria-labelledby="starLabel" id="stars">
@@ -720,6 +725,26 @@ h1 .rush { color: var(--you); }
     savePlayers(); saveProfile();
   }
   function usePlayer(id) { PLAYERS.current = id; savePlayers(); PROFILE = loadProfile(); }
+  /* Delete my data: removes this player's leaderboard entry and round history online, then everything about them on this phone. */
+  var deleteArmed = 0;
+  function deleteMyData() {
+    var pl = currentPlayer(), msg = $('deleteMsg'), btn = $('deleteData');
+    if (!pl) return;
+    if (Date.now() - deleteArmed > 4000) { deleteArmed = Date.now(); btn.textContent = 'Tap again to delete ' + pl.name; msg.textContent = 'This removes ' + pl.name + "'s scores, progress and round history for good."; return; }
+    deleteArmed = 0; btn.disabled = true; msg.textContent = 'Deleting\u2026';
+    ensureCloud(pl);
+    sbFetch('/rest/v1/rpc/delete_player', { method: 'POST', body: { p_id: pl.cloudId, p_secret: pl.secret } }).then(function () {
+      try { localStorage.removeItem(profKey(pl.id)); } catch (e) {}
+      try { var q = JSON.parse(localStorage.getItem('headrush.roundlog.v1')) || []; localStorage.setItem('headrush.roundlog.v1', JSON.stringify(q.filter(function (r) { return r.pid !== pl.cloudId; }))); } catch (e) {}
+      PLAYERS.list = PLAYERS.list.filter(function (x) { return x.id !== pl.id; });
+      PLAYERS.current = PLAYERS.list.length ? PLAYERS.list[0].id : null; savePlayers();
+      PROFILE = PLAYERS.current ? loadProfile() : blankProfile();
+      btn.disabled = false; btn.textContent = 'Delete my data'; msg.textContent = pl.name + "'s data was deleted.";
+      renderProfile(); if (!PLAYERS.current) showNameScreen(false);
+    }, function () {
+      btn.disabled = false; btn.textContent = 'Delete my data'; msg.textContent = 'Could not reach the server, so nothing was deleted. Check your connection and try again.';
+    });
+  }
 
   /* ---------- online leaderboard (Supabase) ---------- */
   var SB_URL = 'https://yxmdlqmmzozghquqlnss.supabase.co';
@@ -3811,6 +3836,7 @@ h1 .rush { color: var(--you); }
   gfxBtns.forEach(function (b) { b.addEventListener('click', function () { pickGfx(b.getAttribute('data-gfx')); }); });
   pickGfx(gfx);
   window.addEventListener('hr3d-ready', function () { pickGfx(gfx); });
+  $('deleteData').addEventListener('click', deleteMyData);
   $('voiceToggle').checked = voiceOn;
   $('voiceToggle').addEventListener('change', function () {
     voiceOn = this.checked;
