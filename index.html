@@ -268,6 +268,54 @@ h1 .rush { color: var(--you); }
 .tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--you); color: var(--bg); font-size: 11px; font-weight: 700; letter-spacing: .06em; vertical-align: middle; }
 .tag.play { background: var(--fast); }
 .tag.old { background: var(--heart); color: var(--ink); }
+.board li { position: relative; }
+.match-box { display: grid; gap: 10px; padding: 12px; border-radius: 16px; background: var(--bg); border: 1px solid var(--line); }
+.match-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.match-head b { font-family: var(--font-display); font-size: 20px; font-weight: 400; }
+.match-head span { font-size: 13px; color: var(--muted); }
+.board.mboard li { grid-template-columns: 22px 1fr auto auto; gap: 8px; padding: 8px 10px; background: var(--panel); }
+.board.mboard .rk { font-size: 17px; }
+.board.mboard .nm { display: flex; align-items: center; gap: 8px; }
+.mboard .nm .tx { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mboard .wins { color: var(--you); font-size: 12px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
+.mboard .add { font-family: var(--font-display); font-size: 15px; color: var(--fast); min-width: 24px; text-align: right; }
+.board.mboard .vl { font-size: 18px; white-space: nowrap; }
+.board.mboard .vl small { font-family: var(--font-ui); font-size: 11px; color: var(--muted); margin-left: 3px; }
+.mface { flex: none; position: relative; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #191a33; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.18); }
+.mface::before, .mface::after { content: ''; position: absolute; top: 34%; width: 16%; height: 26%; border-radius: 50%; background: #191a33; }
+.mface::before { left: 25%; } .mface::after { right: 25%; }
+.next-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; }
+.next-row span { font-family: var(--font-display); font-size: 20px; }
+.btn.small { height: 44px; font-size: 18px; padding: 0 18px; border-radius: 12px; }
+.emotes { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.emo { aspect-ratio: 1; min-height: 44px; border-radius: 12px; border: 2px solid var(--line); background: var(--panel); padding: 5px; cursor: pointer; transition: transform .12s, opacity .2s; }
+.emo img { width: 100%; height: 100%; display: block; pointer-events: none; }
+.emo:active { transform: scale(.9); }
+.emo.cool { opacity: .4; }
+.emo:focus-visible { outline: 3px solid var(--you); outline-offset: 2px; }
+.emo-pop { position: absolute; left: 30px; top: -22px; width: 44px; height: 44px; pointer-events: none; z-index: 3; animation: emoPop 2s ease-out forwards; filter: drop-shadow(0 3px 4px rgba(0,0,0,.4)); }
+@keyframes emoPop { 0% { transform: scale(.2) translateY(12px); opacity: 0; } 12% { transform: scale(1.18); opacity: 1; } 22% { transform: scale(1); } 78% { opacity: 1; transform: translateY(-8px); } 100% { opacity: 0; transform: translateY(-16px); } }
+.champ-card { position: relative; overflow: hidden; text-align: center; }
+.champ-card .btn-row, .champ-card .board { text-align: left; }
+.podium { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 8px; }
+.pod { display: grid; justify-items: center; gap: 6px; min-width: 0; position: relative; }
+.pod .face { position: relative; width: 52px; height: 52px; border-radius: 50%; border: 3px solid #191a33; box-shadow: inset 0 -6px 0 rgba(0,0,0,0.18); }
+.pod .face::before, .pod .face::after { content: ''; position: absolute; top: 32%; width: 15%; height: 24%; border-radius: 50%; background: #191a33; }
+.pod .face::before { left: 25%; } .pod .face::after { right: 25%; }
+.pod.p1 .face { width: 70px; height: 70px; }
+.pod .crown { width: 40px; height: 26px; margin-bottom: -6px; }
+.pod .pn { font-weight: 700; font-size: 14px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pod .pp { font-size: 12px; color: var(--muted); margin-top: -4px; }
+.pod .blk { width: 100%; border-radius: 12px 12px 0 0; background: var(--bg); border: 1px solid var(--line); border-bottom: 0; display: grid; place-items: center; font-family: var(--font-display); font-size: 30px; color: var(--muted); }
+.pod.p1 .blk { height: 92px; color: var(--you); border-color: var(--you); }
+.pod.p2 .blk { height: 64px; }
+.pod.p3 .blk { height: 44px; }
+.pod.empty { visibility: hidden; }
+.pod .emo-pop { left: 50%; top: 0; margin-left: -22px; }
+.confetti-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 2; }
+.confetti-layer i { position: absolute; top: -16px; width: 8px; height: 13px; border-radius: 2px; animation: fall linear forwards; }
+@keyframes fall { to { transform: translateY(1100px) rotate(760deg); } }
+@media (prefers-reduced-motion: reduce) { .confetti-layer { display: none; } .emo-pop { animation-duration: 2s; } }
 .colors-row { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; }
 .colorn { aspect-ratio: 1; max-width: 100%; border-radius: 50%; border: 3px solid transparent; cursor: pointer; padding: 0; box-shadow: inset 0 -4px 0 rgba(0,0,0,0.18); font: 700 13px var(--font-ui); color: #191a33; }
 .colorn[aria-pressed="true"] { border-color: var(--ink); outline: 2px solid var(--you); outline-offset: 2px; }
@@ -440,6 +488,12 @@ h1 .rush { color: var(--you); }
       <div class="eyebrow" id="endEyebrow">Round over</div>
       <h2 class="result" id="endTitle">You won!</h2>
       <p class="sub" id="endSub">Last runner standing.</p>
+      <div class="match-box" id="matchBox" hidden>
+        <div class="match-head"><b id="matchHead">Round 1 of 5</b><span id="matchNote">First to 3 round wins</span></div>
+        <ol class="board mboard" id="matchList"></ol>
+        <div class="next-row" id="nextRow"><span id="nextIn" role="status" aria-live="polite">Next round in 5</span><button class="btn small" id="skipBtn" type="button">Skip</button></div>
+        <div class="emotes" data-emotes role="group" aria-label="Send an emote"></div>
+      </div>
       <div class="stats">
         <div class="stat"><span id="stLabel1">Place</span><b id="stPlace">1st</b></div>
         <div class="stat"><span>Survived</span><b id="stTime">1:30</b></div>
@@ -513,6 +567,11 @@ h1 .rush { color: var(--you); }
         <div class="code-big" id="roomCodeBig">ABCD</div>
         <button class="btn ghost" id="roomCopy" type="button">Copy invite for friends</button>
         <ol class="board" id="roomPlayers"></ol>
+        <div class="emotes" data-emotes role="group" aria-label="Send an emote"></div>
+        <div class="match-box" id="lobbyMatch" hidden>
+          <div class="match-head"><b id="lobbyMatchHead">Match</b><span id="lobbyMatchNote"></span></div>
+          <ol class="board mboard" id="lobbyMatchList"></ol>
+        </div>
         <div class="picker">
           <div class="picker-label" id="roomColorLabel">Your color</div>
           <div class="colors-row" id="roomColors" role="group" aria-labelledby="roomColorLabel"></div>
@@ -543,6 +602,24 @@ h1 .rush { color: var(--you); }
       <p class="err" id="roomErr" role="alert"></p>
       <p class="note" id="roomStatus" role="status" aria-live="polite"></p>
       <button class="btn ghost" id="roomBack" type="button">Back</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="champScreen" hidden>
+    <div class="card champ-card">
+      <div class="confetti-layer" id="champConfetti" aria-hidden="true"></div>
+      <div class="eyebrow" id="champEyebrow">Match over</div>
+      <h2 class="result win" id="champTitle">Champion!</h2>
+      <p class="sub" id="champSub"></p>
+      <div class="podium" id="podium"></div>
+      <ol class="board mboard" id="champList"></ol>
+      <div class="emotes" data-emotes role="group" aria-label="Send an emote"></div>
+      <div class="btn-row">
+        <button class="btn" id="champNew" type="button">New match</button>
+        <button class="btn ghost" id="champRoom" type="button">Back to room</button>
+        <button class="btn ghost" id="champLeave" type="button">Leave room</button>
+      </div>
+      <p class="note" id="champNote"></p>
     </div>
   </div>
 
@@ -808,7 +885,8 @@ h1 .rush { color: var(--you); }
       if (!item) { rlogBusy = false; return; }
       sbFetch('/rest/v1/rpc/log_round', { method: 'POST', body: {
         p_id: item.pid, p_secret: item.sec, p_mode: item.mode, p_arena: item.arena, p_difficulty: item.diff, p_seconds: item.secs,
-        p_place: item.place || null, p_win: item.win, p_hits: item.hits, p_close: item.close, p_stars: item.stars, p_version: GAME_VERSION
+        p_place: item.place || null, p_win: item.win, p_hits: item.hits, p_close: item.close, p_stars: item.stars, p_version: GAME_VERSION,
+        p_match: item.match || null, p_daily: item.daily || null
       } }).then(function () {
         q.shift(); try { localStorage.setItem(RLOG_KEY, JSON.stringify(q)); } catch (e) {} next();
       }, function () { rlogBusy = false; });
@@ -1915,6 +1993,13 @@ h1 .rush { color: var(--you); }
         ctx.fillStyle = 'rgba(14,15,34,0.72)'; ctx.fillRect(r.cx - tw / 2, ly - S * 0.035, tw, S * 0.07);
         ctx.fillStyle = q.color; ctx.fillText(q.name, r.cx, ly + 1);
       });
+      runs.forEach(function (r) {
+        var q = r.p, age = q.emo ? g.t - q.emoAt : 9;
+        if (age > 2 || age < 0 || r.top === undefined || q.out) return;
+        var im = EMO_IMG[q.emo]; if (!im || !im.complete) return;
+        var sz = S * 0.17 * (age < 0.15 ? 0.3 + age / 0.15 * 0.85 : 1), al = age > 1.6 ? (2 - age) / 0.4 : 1;
+        ctx.globalAlpha = Math.max(0, al); ctx.drawImage(im, r.cx - sz / 2, r.top - Math.max(30, S * 0.17) - S * 0.13 - sz / 2 - age * S * 0.03, sz, sz); ctx.globalAlpha = 1;
+      });
     }
     if (g.t < g.slowUntil) { ctx.fillStyle = COL.puSlow; ctx.globalAlpha = 0.08; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
     var yr = runs[0], youX = yr.cx !== undefined ? yr.cx : cx, footY = yr.foot !== undefined ? yr.foot : cy + S * 0.5, topY = yr.top !== undefined ? yr.top : footY - S * 0.3;
@@ -2019,13 +2104,14 @@ h1 .rush { color: var(--you); }
       noise(1.1, 0.06, 'highpass', 6000, 4000, 0.4, 0.33);
     },
     out: function () { osc('sine', 1500, 280, 0.65, 0.12, 0, [7, 25]); osc('sine', 140, 45, 0.35, 0.3, 0.55); noise(0.15, 0.08, 'lowpass', 900, 200, 0.7, 0.55); },
+    pop: function () { osc('sine', 520, 1040, 0.09, 0.07); osc('triangle', 1200, 1500, 0.06, 0.03, 0.04); },
     pickup: function () { osc('sine', 880, 880, 0.12, 0.08); osc('sine', 1320, 1320, 0.14, 0.08, 0.06); osc('sine', 1760, 1760, 0.2, 0.07, 0.12); }
   };
 
   /* ---------- announcer: recorded voice lines ---------- */
   var voiceOn = true;
   try { voiceOn = localStorage.getItem('headrush.voice') !== '0'; } catch (e) {}
-  var VO_IDS = ['go', 'ready', 'a_neon', 'a_gear', 'a_frost', 'a_lava', 'a_orbit', 'a_carnival', 'ko1', 'ko2', 'ko3', 'ko4', 'ko5', 'ko_pip', 'ko_juno', 'ko_mako', 'ko_rex', 'ko_tali', 'ko_bo', 'ko_zuzu', 'you_out1', 'you_out2', 'final2', 'win1', 'win2', 'win_you', 'lose', 'time_up', 'clear', 'close1', 'close2', 'close3', 'faster', 'newbar', 'reverse', 'pu_shield', 'pu_slow', 'pu_heart', 'm30', 'm60', 'm90', 'm120', 'm150', 'm180'];
+  var VO_IDS = ['go', 'ready', 'a_neon', 'a_gear', 'a_frost', 'a_lava', 'a_orbit', 'a_carnival', 'ko1', 'ko2', 'ko3', 'ko4', 'ko5', 'ko_pip', 'ko_juno', 'ko_mako', 'ko_rex', 'ko_tali', 'ko_bo', 'ko_zuzu', 'you_out1', 'you_out2', 'final2', 'win1', 'win2', 'win_you', 'lose', 'time_up', 'clear', 'close1', 'close2', 'close3', 'faster', 'newbar', 'reverse', 'pu_shield', 'pu_slow', 'pu_heart', 'm30', 'm60', 'm90', 'm120', 'm150', 'm180', 'rd2', 'rd3', 'rd4', 'rd_final', 'mpoint', 'champ1', 'champ2', 'champ_you'];
   var VOBUF = {}, voLoading = false, voEnd = 0, voSrc = null, voPending = null, voLowAt = -99;
   function loadVO() {
     if (voLoading || !AC || !voiceOn || !window.fetch) return;
@@ -3020,11 +3106,13 @@ h1 .rush { color: var(--you); }
       title.classList.toggle('win', win);
       if (win) sub = 'Last runner standing.';
       else if (g.result === 'out') sub = HIT_TEXT[you.lastHit] || HIT_TEXT.low;
+      else if (g.result === 'decided') sub = 'Round over.';
       else sub = 'Time ran out with ' + (place - 1) + ' player' + (place === 2 ? '' : 's') + ' holding more hearts.';
       $('stLabel1').textContent = 'Place'; $('stPlace').textContent = ordinal(place);
       $('againBtn').textContent = 'Back to room';
       $('bestLine').textContent = '';
       if (ROOM) { ROOM.status = 'lobby'; trackMe(); }
+      if (g.matchPlace) { place = g.matchPlace; win = place === 1; title.textContent = win ? 'You won the round!' : ordinal(place) + ' of ' + nP; title.classList.toggle('win', win); $('stPlace').textContent = ordinal(place); }
     } else if (md === 'solo') {
       var cleared = g.result === 'clear', prev = soloStars(g.levelIdx);
       st = cleared ? Math.max(1, 3 - g.hits) : 0;
@@ -3058,6 +3146,7 @@ h1 .rush { color: var(--you); }
       $('bestLine').textContent = '';
     }
     $('endSub').textContent = sub;
+    if (md === 'room') setTimeout(renderMatchUI, 0); else $('matchBox').hidden = true;
     $('stTime').textContent = clockUp(survived);
     $('stClose').textContent = g.close;
     $('stCoins').textContent = '+' + coins;
@@ -3067,7 +3156,7 @@ h1 .rush { color: var(--you); }
     if (g.diff !== 'medium') $('endEyebrow').textContent += ' · ' + g.D.name;
     var res = applyRound({ mode: md, arena: g.arena.id, survived: survived, place: place, win: win, stars: st, close: g.close, coins: coins, xp: xp, pickups: g.pickups, clean: g.firstHit != null ? g.firstHit : survived });
     renderEndProgress(res);
-    var roundRec = { mode: md, arena: g.arena.id, diff: g.diff, secs: Math.round(survived * 10) / 10, place: place, win: !!win, hits: g.hits || 0, close: g.close || 0, stars: st || 0 };
+    var roundRec = { mode: md, arena: g.arena.id, diff: g.diff, secs: Math.round(survived * 10) / 10, place: place, win: !!win, hits: g.hits || 0, close: g.close || 0, stars: st || 0, match: md === 'room' && ROOM && ROOM.match ? ROOM.match.id : null, daily: g.dailyKey || null };
     var pn = (currentPlayer() || { name: 'I' }).name;
     if (md === 'room') shareText = pn + (win ? ' won' : ' finished ' + ordinal(place) + ' of ' + g.players.length) + ' in our Head Rush room in ' + name + '. Rematch?';
     else if (md === 'party') shareText = pn + (win ? ' won' : ' finished ' + ordinal(place) + ' of 8') + ' in ' + name + ' on Head Rush, with ' + g.close + ' close shave' + (g.close === 1 ? '' : 's') + '. Beat that!';
@@ -3400,7 +3489,7 @@ h1 .rush { color: var(--you); }
   $('boardDone').addEventListener('click', function () { $('boardScreen').hidden = true; $('startScreen').hidden = false; });
 
   /* ---------- Party Rooms: live multiplayer over Supabase Realtime ---------- */
-  var ROOM = null, sbClient = null, sbLoading = null, GAME_VERSION = 9;
+  var ROOM = null, sbClient = null, sbLoading = null, GAME_VERSION = 10;
   var ROOM_COLORS = [
     { name: 'Sunny', hex: '#ffd23f' }, { name: 'Coral', hex: '#ff6b6b' }, { name: 'Mint', hex: '#5ee0a0' }, { name: 'Violet', hex: '#b48cff' },
     { name: 'Bubblegum', hex: '#ff8fd8' }, { name: 'Snow', hex: '#f4f2ff' }, { name: 'Lime', hex: '#c6f06a' }, { name: 'Peach', hex: '#f6b8a0' }
@@ -3448,7 +3537,7 @@ h1 .rush { color: var(--you); }
     $('roomBack').textContent = which === 'lobby' ? 'Leave room' : 'Back';
   }
   function setRoomBusy(b) { $('roomCreate').disabled = b; $('roomJoinBtn').disabled = b; }
-  function hideAllOverlays() { ['startScreen', 'endScreen', 'lockerScreen', 'nameScreen', 'boardScreen', 'fbScreen', 'roomScreen'].forEach(function (id) { $(id).hidden = true; }); }
+  function hideAllOverlays() { ['startScreen', 'endScreen', 'lockerScreen', 'nameScreen', 'boardScreen', 'fbScreen', 'roomScreen', 'champScreen'].forEach(function (id) { $(id).hidden = true; }); }
   function openRooms() {
     hideAllOverlays(); $('roomScreen').hidden = false;
     $('roomErr').textContent = ''; $('roomStatus').textContent = '';
@@ -3471,12 +3560,16 @@ h1 .rush { color: var(--you); }
       var pl = currentPlayer(); ensureCloud(pl); savePlayers();
       var me = pl.cloudId;
       var ch = client.channel('headrush-room-' + code, { config: { broadcast: { self: false }, presence: { key: me } } });
-      var room = { code: code, ch: ch, me: me, joinedAt: Date.now(), arena: arenaId, bots: 0, diff: difficulty, c: savedRoomColor(), status: 'lobby', creating: creating, subscribed: false };
+      var room = { code: code, ch: ch, me: me, joinedAt: Date.now(), arena: 'random', match: null, roundSeed: null, resDone: true, nextAt: 0, nextFired: true, seenKeys: {}, bots: 0, diff: difficulty, c: savedRoomColor(), status: 'lobby', creating: creating, subscribed: false };
       ROOM = room;
       ch.on('presence', { event: 'sync' }, function () { if (ROOM === room) onRoomSync(); });
       ch.on('presence', { event: 'leave' }, function (e) { if (ROOM === room) onRoomLeave(e); });
       ch.on('broadcast', { event: 'start' }, function (e) { if (ROOM === room) onRoomStart(e.payload); });
       ch.on('broadcast', { event: 'g' }, function (e) { if (ROOM === room) onNet(e.payload); });
+      ch.on('broadcast', { event: 'res' }, function (e) { if (ROOM === room) onRes(e.payload); });
+      ch.on('broadcast', { event: 'ms' }, function (e) { if (ROOM === room) onMatchState(e.payload); });
+      ch.on('broadcast', { event: 'skip' }, function (e) { if (ROOM === room) onSkip(e.payload); });
+      ch.on('broadcast', { event: 'emo' }, function (e) { if (ROOM === room) onEmote(e.payload); });
       var settled = false;
       var to = setTimeout(function () { if (!settled && ROOM === room) { settled = true; failRoom('Couldn’t connect to the room. Check your internet connection and try again.'); } }, 10000);
       ch.subscribe(function (st) {
@@ -3503,6 +3596,15 @@ h1 .rush { color: var(--you); }
     renderLobby();
   }
   var roomArenaBtns = [];
+  (function () {
+    var b = document.createElement('button');
+    b.className = 'arena'; b.type = 'button'; b.setAttribute('aria-pressed', 'true'); b.setAttribute('data-arena', 'random');
+    var sw = document.createElement('span'); sw.className = 'swatch'; sw.style.background = 'linear-gradient(90deg, var(--low), var(--you), var(--fast), var(--high), var(--b2))';
+    var nm = document.createElement('span'); nm.className = 'an'; nm.textContent = 'Random';
+    b.appendChild(sw); b.appendChild(nm);
+    b.addEventListener('click', function () { if (!ROOM || !amHost()) return; ROOM.arena = 'random'; trackMe(); renderLobby(); });
+    $('roomArenas').appendChild(b); roomArenaBtns.push(b);
+  })();
   ORDER.forEach(function (id) {
     var a = ARENAS[id], b = document.createElement('button');
     b.className = 'arena'; b.type = 'button'; b.setAttribute('aria-pressed', 'false'); b.setAttribute('data-arena', id);
@@ -3527,7 +3629,7 @@ h1 .rush { color: var(--you); }
     var arena = iHost ? ROOM.arena : (host && host.arena) || ROOM.arena;
     var ol = $('roomPlayers'); ol.textContent = '';
     mem.forEach(function (m, i) {
-      var li = document.createElement('li'); if (m.me) li.className = 'me';
+      var li = document.createElement('li'); if (m.me) li.className = 'me'; li.setAttribute('data-pid', m.id);
       var dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = ROOM_COLORS[m.c] ? ROOM_COLORS[m.c].hex : skinById(m.skin).color;
       var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = m.name + (m.me ? ' (you)' : '');
       if (i === 0) { var tg = document.createElement('span'); tg.className = 'tag'; tg.textContent = 'HOST'; nm.appendChild(tg); }
@@ -3549,12 +3651,15 @@ h1 .rush { color: var(--you); }
     roomBotBtns.forEach(function (b, n) { b.disabled = n > maxBots; b.setAttribute('aria-pressed', n === bots ? 'true' : 'false'); });
     $('roomBotsLabel').textContent = 'Bots · fill up to 8 runners';
     var botTxt = bots ? ' + ' + bots + (bots === 1 ? ' bot' : ' bots') : '';
+    var mt = ROOM.match, midMatch = !!(mt && !mt.over && mt.n > 0), roundOn = !!(ROOM.roundSeed != null && !ROOM.resDone);
+    renderLobbyMatch();
     if (iHost) {
-      $('roomStart').hidden = false; $('roomStart').disabled = others < 1 && bots < 1;
-      $('roomArenaNote').textContent = (others < 1 && bots < 1) ? 'Waiting for friends to join. Send them the code, or add bots to play now.' : humans + (humans === 1 ? ' player' : ' players') + botTxt + '. Pick an arena and start.' + (mem.length > 8 ? ' Only the first 8 players join each round.' : '');
+      $('roomStart').hidden = false; $('roomStart').disabled = (others < 1 && bots < 1) || roundOn;
+      $('roomStart').textContent = midMatch ? 'Start round ' + (mt.n + 1) + ' of ' + MATCH_OF : 'Start match';
+      $('roomArenaNote').textContent = roundOn ? 'A round is still going. You can start the next one when it ends.' : (others < 1 && bots < 1) ? 'Waiting for friends to join. Send them the code, or add bots to play now.' : humans + (humans === 1 ? ' player' : ' players') + botTxt + '. Best of 5: first to 3 round wins is champion.' + (mem.length > 8 ? ' Only the first 8 players join each round.' : '');
     } else {
       $('roomStart').hidden = true;
-      $('roomArenaNote').textContent = 'Arena: ' + (ARENAS[arena] ? ARENAS[arena].name : 'Neon Rooftop') + ' · ' + DIFFS[rdiff].name + botTxt + '. Waiting for ' + (host ? host.name : 'the host') + ' to start.';
+      $('roomArenaNote').textContent = 'Arena: ' + (ARENAS[arena] ? ARENAS[arena].name : 'Random each round') + ' · ' + DIFFS[rdiff].name + botTxt + '. ' + (roundOn ? 'A round is going. You join the next one.' : 'Waiting for ' + (host ? host.name : 'the host') + ' to start.');
     }
   }
   function resolveRoomColor() {
@@ -3591,6 +3696,10 @@ h1 .rush { color: var(--you); }
   }
   function onRoomSync() {
     resolveRoomColor();
+    var keys = {}, fresh = false;
+    roomMembers().forEach(function (m) { keys[m.id] = true; if (!ROOM.seenKeys[m.id]) fresh = true; });
+    ROOM.seenKeys = keys;
+    if (fresh && ROOM.match && amHost()) setTimeout(shareMatchState, 300);
     if (!$('roomLobby').hidden && !$('roomScreen').hidden) renderLobby();
   }
   function onRoomLeave(e) {
@@ -3607,6 +3716,10 @@ h1 .rush { color: var(--you); }
     }, 1500);
   }
   function startRoomRound(payload) {
+    if (payload.match) { ROOM.match = cloneMatch(payload.match); }
+    ROOM.roundSeed = payload.seed >>> 0; ROOM.resDone = false; ROOM.roundWall = Date.now(); ROOM.decideAt = 0;
+    ROOM.nextAt = 0; ROOM.nextFired = true; ROOM.skipAsked = false;
+    if (!$('roomLobby').hidden) renderLobby();
     var roster = (payload.roster || []).slice(0, 8).map(function (r) { return { id: String(r.id), name: String(r.name || 'Player').slice(0, 14), skin: r.skin, bot: !!r.bot, bi: r.bi || 0, c: typeof r.c === 'number' ? r.c : -1, sh: ['round', 'triangle', 'square', 'diamond', 'star'].indexOf(r.sh) >= 0 ? r.sh : 'round', me: r.id === ROOM.me }; });
     if (!roster.some(function (r) { return r.me; })) {
       if (!$('roomScreen').hidden) $('roomStatus').textContent = 'A round started without you. You’ll join the next one.';
@@ -3620,24 +3733,310 @@ h1 .rush { color: var(--you); }
     var iAmHost = payload.host === ROOM.me;
     newRound(aid, 'room', 0, { seed: payload.seed >>> 0, roster: roster, host: iAmHost, diff: DIFFS[payload.diff] ? payload.diff : 'medium' });
     G.hostBots = iAmHost && roster.some(function (r) { return r.bot; });
-    running = true; audioOn(); roundStartVO(aid);
+    G.roomSeed = ROOM.roundSeed;
+    running = true; audioOn(); matchStartVO(aid);
   }
   function onRoomStart(payload) {
     if (!payload || !ROOM) return;
-    if (running && G && G.mode === 'room' && !G.over) return;
+    if ((payload.seed >>> 0) === ROOM.roundSeed) return;
     startRoomRound(payload);
   }
   function hostStart() {
     if (!ROOM || !amHost()) return;
     var mem = roomMembers().slice(0, 8), nb = Math.max(0, Math.min(ROOM.bots || 0, 8 - mem.length));
-    if (mem.length < 2 && nb < 1) return;
+    if (mem.length < 2 && nb < 1) return false;
+    if (ROOM.roundSeed != null && !ROOM.resDone) return false;
     var used = {}, roster = mem.map(function (m) { var c = m.me ? ROOM.c : m.c; if (used[c] || !ROOM_COLORS[c]) c = -1; else used[c] = true; return { id: m.id, name: m.name, skin: m.skin, sh: m.me ? PROFILE.shape : m.sh, c: c }; });
     roster.forEach(function (r) { if (r.c < 0) for (var c = 0; c < ROOM_COLORS.length; c++) if (!used[c]) { r.c = c; used[c] = true; break; } });
     var freeCols = []; for (var fc = 0; fc < ROOM_COLORS.length; fc++) if (!used[fc]) freeCols.push(fc);
     for (var i = 0; i < nb; i++) roster.push({ id: 'bot-' + i, name: BOT_NAMES[i % BOT_NAMES.length], bot: true, bi: i, c: freeCols.length ? freeCols.shift() : -1 });
-    var payload = { seed: Math.floor(Math.random() * 4294967295), arena: ROOM.arena, diff: ROOM.diff, host: ROOM.me, roster: roster };
+    var seed = Math.floor(Math.random() * 4294967295), m = ROOM.match;
+    if (!m || m.over) m = ROOM.match = newMatch();
+    m.n += 1; m.last = null;
+    roster.forEach(function (r) {
+      m.who[r.id] = { name: r.name, c: r.c, bot: !!r.bot };
+      if (m.pts[r.id] == null) m.pts[r.id] = 0;
+      if (m.wins[r.id] == null) m.wins[r.id] = 0;
+    });
+    var arena = ROOM.arena;
+    if (!ARENAS[arena]) {
+      var left = ORDER.filter(function (a) { return m.used.indexOf(a) < 0; });
+      if (!left.length) { m.used = []; left = ORDER.slice(); }
+      arena = left[Math.floor(mulberry32(seed ^ 0x5bd1e995)() * left.length)];
+    }
+    m.used.push(arena);
+    var payload = { seed: seed, arena: arena, diff: ROOM.diff, host: ROOM.me, roster: roster, match: m };
     ROOM.ch.send({ type: 'broadcast', event: 'start', payload: payload });
     startRoomRound(payload);
+    return true;
+  }
+  /* ---------- best-of-5 match: host keeps the score, every phone shows the same board ---------- */
+  var MATCH_OF = 5, MATCH_WINS = 3, MATCH_NEXT_MS = 6500, MATCH_PTS = [0, 3, 2, 1];
+  function newMatch() { return { id: 'm' + Date.now().toString(36) + Math.floor(Math.random() * 1e8).toString(36), n: 0, pts: {}, wins: {}, who: {}, used: [], over: false, champ: null, last: null }; }
+  function cloneMatch(m) {
+    try { var c = JSON.parse(JSON.stringify(m)); } catch (e) { return null; }
+    if (!c || typeof c !== 'object' || typeof c.n !== 'number') return null;
+    ['pts', 'wins', 'who'].forEach(function (k) { if (!c[k] || typeof c[k] !== 'object') c[k] = {}; });
+    if (!Array.isArray(c.used)) c.used = [];
+    Object.keys(c.who).forEach(function (id) { var w = c.who[id] || {}; c.who[id] = { name: String(w.name || 'Player').slice(0, 14), c: typeof w.c === 'number' ? w.c : -1, bot: !!w.bot }; });
+    return c;
+  }
+  function matchStandings(m) {
+    var ids = Object.keys(m.who), lastPlace = {};
+    (m.last || []).forEach(function (e) { lastPlace[e.id] = e.place; });
+    ids.sort(function (a, b) {
+      if (m.champ === a) return -1; if (m.champ === b) return 1;
+      return ((m.pts[b] || 0) - (m.pts[a] || 0)) || ((m.wins[b] || 0) - (m.wins[a] || 0)) || ((lastPlace[a] || 9) - (lastPlace[b] || 9)) || (m.who[a].name < m.who[b].name ? -1 : 1);
+    });
+    return ids;
+  }
+  function whoColor(m, id) { var w = m.who[id]; return w && ROOM_COLORS[w.c] ? ROOM_COLORS[w.c].hex : '#a9a8d0'; }
+  function hostResolve() {
+    if (!ROOM || !ROOM.match || ROOM.resDone || ROOM.roundSeed == null || !ROOM.subscribed || !amHost()) return;
+    var mine = G && G.mode === 'room' && G.roomSeed === ROOM.roundSeed;
+    var wallUp = Date.now() - (ROOM.roundWall || 0) > (ROUND + 12) * 1000;
+    if (!mine) {
+      /* Host took over mid-round without having played it: give up on that round after its time, no points. */
+      if (wallUp) { ROOM.resDone = true; ROOM.nextAt = 0; ROOM.nextFired = true; shareMatchState(); renderMatchUI(); }
+      return;
+    }
+    var alive = G.players.filter(function (p) { return !p.out; });
+    if (!(alive.length <= 1 || (G.dur != null && G.t >= G.dur) || wallUp)) { ROOM.decideAt = 0; return; }
+    if (!ROOM.decideAt) { ROOM.decideAt = Date.now(); return; }
+    if (Date.now() - ROOM.decideAt < 450) return;
+    var list = G.players.map(function (p) { return { id: p.netId, out: p.out, outAt: p.outAt, hearts: p.hearts }; });
+    function better(a, b) { if (a.out !== b.out) return !a.out; return a.out ? a.outAt > b.outAt + 0.05 : a.hearts > b.hearts; }
+    list.forEach(function (e) { e.place = 1 + list.filter(function (o) { return o !== e && better(o, e); }).length; });
+    var m = ROOM.match;
+    m.last = list.map(function (e) {
+      var add = MATCH_PTS[e.place] || 0;
+      m.pts[e.id] = (m.pts[e.id] || 0) + add;
+      if (e.place === 1) m.wins[e.id] = (m.wins[e.id] || 0) + 1;
+      return { id: e.id, place: e.place, add: add };
+    });
+    var top = Object.keys(m.who).filter(function (id) { return (m.wins[id] || 0) >= MATCH_WINS; });
+    if (top.length || m.n >= MATCH_OF) { m.over = true; m.champ = top.length ? top.sort(function (a, b) { return (m.pts[b] || 0) - (m.pts[a] || 0); })[0] : matchStandings(m)[0]; }
+    var payload = { seed: ROOM.roundSeed, match: m };
+    try { ROOM.ch.send({ type: 'broadcast', event: 'res', payload: payload }); } catch (e) {}
+    onRes(payload);
+  }
+  function onRes(pl) {
+    if (!ROOM || !pl || !pl.match) return;
+    var m = cloneMatch(pl.match); if (!m) return;
+    ROOM.match = m;
+    if ((pl.seed >>> 0) === ROOM.roundSeed) ROOM.resDone = true;
+    ROOM.nextAt = m.over ? 0 : Date.now() + MATCH_NEXT_MS; ROOM.nextFired = m.over; ROOM.skipAsked = false;
+    var mine = null;
+    (m.last || []).forEach(function (e) { if (e.id === ROOM.me) mine = e; });
+    if (G && G.mode === 'room' && G.roomSeed === (pl.seed >>> 0) && mine) {
+      G.matchPlace = mine.place;
+      if (!G.over) { G.place = mine.place; finish(mine.place === 1 ? 'win' : (G.dur != null && G.t >= G.dur - 1 ? 'time' : 'decided'), 0.6); }
+    }
+    renderMatchUI();
+    if (!$('roomLobby').hidden) renderLobby();
+    if (m.over) {
+      var id = m.id;
+      setTimeout(function () {
+        if (ROOM && ROOM.match && ROOM.match.id === id && ROOM.match.over && (ROOM.roundSeed == null || ROOM.resDone)) showChampion();
+      }, 3400);
+    }
+  }
+  function shareMatchState(idle) {
+    if (!ROOM || !ROOM.match) return;
+    try { ROOM.ch.send({ type: 'broadcast', event: 'ms', payload: { match: ROOM.match, seed: ROOM.roundSeed, done: ROOM.resDone, idle: !!idle } }); } catch (e) {}
+  }
+  function onMatchState(pl) {
+    if (!ROOM || !pl || !pl.match) return;
+    var m = cloneMatch(pl.match); if (!m) return;
+    if (ROOM.match && ROOM.match.id === m.id && ROOM.match.n > m.n) return;
+    ROOM.match = m;
+    if (ROOM.roundSeed == null && typeof pl.seed === 'number') { ROOM.roundSeed = pl.seed >>> 0; ROOM.resDone = !!pl.done; ROOM.roundWall = Date.now(); }
+    else if (pl.seed === ROOM.roundSeed && pl.done) ROOM.resDone = true;
+    if (pl.idle) { ROOM.nextAt = 0; ROOM.nextFired = true; }
+    renderMatchUI();
+    if (!$('roomLobby').hidden) renderLobby();
+  }
+  function skipWait() {
+    if (!ROOM || !ROOM.nextAt || ROOM.nextFired) return;
+    if (amHost()) { ROOM.nextAt = Date.now(); roomTicker(); return; }
+    if (ROOM.skipAsked) return;
+    ROOM.skipAsked = true;
+    try { ROOM.ch.send({ type: 'broadcast', event: 'skip', payload: { id: ROOM.me } }); } catch (e) {}
+    $('nextIn').textContent = 'Starting…'; $('skipBtn').disabled = true;
+  }
+  function onSkip() { if (ROOM && amHost() && ROOM.nextAt && !ROOM.nextFired) { ROOM.nextAt = Date.now(); roomTicker(); } }
+  function roomTicker() {
+    if (!ROOM) return;
+    hostResolve();
+    if (ROOM.nextAt && !ROOM.nextFired) {
+      var left = Math.max(0, Math.ceil((ROOM.nextAt - Date.now()) / 1000));
+      $('nextIn').textContent = left > 0 ? 'Next round in ' + left : 'Starting…';
+      if (Date.now() >= ROOM.nextAt && amHost()) {
+        ROOM.nextFired = true;
+        if (!hostStart()) {
+          ROOM.nextAt = 0; shareMatchState(true); renderMatchUI();
+          if (!$('endScreen').hidden) { $('endScreen').hidden = true; showLobby(); }
+        }
+      }
+    }
+  }
+  setInterval(roomTicker, 250);
+  function fillMatchBoard(ol, m, withAdd) {
+    ol.textContent = '';
+    var add = {}, ids = matchStandings(m);
+    (m.last || []).forEach(function (e) { add[e.id] = e.add; });
+    ids.forEach(function (id, i) {
+      var w = m.who[id], li = document.createElement('li');
+      li.setAttribute('data-pid', id); if (ROOM && id === ROOM.me) li.className = 'me';
+      var rk = document.createElement('span'); rk.className = 'rk'; rk.textContent = i + 1;
+      var nm = document.createElement('span'); nm.className = 'nm';
+      var face = document.createElement('span'); face.className = 'mface'; face.style.background = whoColor(m, id);
+      var tx = document.createElement('span'); tx.className = 'tx'; tx.textContent = w.name + (ROOM && id === ROOM.me ? ' (you)' : '');
+      nm.appendChild(face); nm.appendChild(tx);
+      var wn = m.wins[id] || 0;
+      if (wn) { var wb = document.createElement('span'); wb.className = 'wins'; wb.textContent = wn + (wn === 1 ? ' win' : ' wins'); nm.appendChild(wb); }
+      var ad = document.createElement('span'); ad.className = 'add'; ad.textContent = withAdd && add[id] ? '+' + add[id] : '';
+      var vl = document.createElement('span'); vl.className = 'vl'; vl.textContent = m.pts[id] || 0;
+      var sm = document.createElement('small'); sm.textContent = 'pts'; vl.appendChild(sm);
+      li.appendChild(rk); li.appendChild(nm); li.appendChild(ad); li.appendChild(vl); ol.appendChild(li);
+    });
+  }
+  function matchLeaderText(m) {
+    var ids = matchStandings(m), lead = ids[0];
+    if (!lead) return 'First to 3 round wins';
+    var need = MATCH_WINS - (m.wins[lead] || 0);
+    return need === 1 && !m.over ? m.who[lead].name + ' is one win from champion' : 'First to 3 round wins';
+  }
+  function renderMatchUI() {
+    var box = $('matchBox'), m = ROOM && ROOM.match;
+    var show = !!(m && m.n > 0 && G && G.mode === 'room');
+    box.hidden = !show;
+    if (!show) return;
+    var done = ROOM.resDone && m.last;
+    $('matchHead').textContent = m.over ? 'Final scores' : done ? 'After round ' + m.n + ' of ' + MATCH_OF : 'Round ' + m.n + ' of ' + MATCH_OF;
+    $('matchNote').textContent = matchLeaderText(m);
+    fillMatchBoard($('matchList'), m, done);
+    var nr = $('nextRow');
+    if (m.over) { nr.hidden = false; $('nextIn').textContent = 'Champion coming up…'; $('skipBtn').hidden = true; }
+    else if (ROOM.nextAt && !ROOM.nextFired) { nr.hidden = false; $('skipBtn').hidden = false; $('skipBtn').disabled = !!ROOM.skipAsked; roomTicker(); }
+    else if (!done) { nr.hidden = false; $('nextIn').textContent = 'Others are still running…'; $('skipBtn').hidden = true; }
+    else nr.hidden = true;
+    if (G && G.roomSeed === ROOM.roundSeed && G.matchPlace && G.shown) {
+      var nP = G.players.length, pl = G.matchPlace;
+      $('endTitle').textContent = pl === 1 ? 'You won the round!' : ordinal(pl) + ' of ' + nP;
+      $('endTitle').classList.toggle('win', pl === 1);
+      $('stPlace').textContent = ordinal(pl);
+    }
+  }
+  function renderLobbyMatch() {
+    var box = $('lobbyMatch'), m = ROOM && ROOM.match;
+    box.hidden = !(m && m.n > 0);
+    if (box.hidden) return;
+    $('lobbyMatchHead').textContent = m.over ? 'Last match' : 'Match · round ' + m.n + ' of ' + MATCH_OF;
+    $('lobbyMatchNote').textContent = m.over && m.who[m.champ] ? 'Champion: ' + m.who[m.champ].name : (ROOM.nextAt && !ROOM.nextFired ? 'Next round starting soon' : matchLeaderText(m));
+    fillMatchBoard($('lobbyMatchList'), m, false);
+  }
+  var CROWN_SVG = '<svg class="crown" viewBox="0 0 40 26" aria-hidden="true"><path d="M3 22 L6 6 L14 14 L20 3 L26 14 L34 6 L37 22 Z" fill="#ffd23f" stroke="#191a33" stroke-width="2.5" stroke-linejoin="round"/><circle cx="20" cy="15" r="2.6" fill="#ff6b6b"/></svg>';
+  function showChampion() {
+    if (!ROOM || !ROOM.match) return;
+    var m = ROOM.match, ids = matchStandings(m), champ = m.who[m.champ] ? m.champ : ids[0];
+    hideAllOverlays(); $('champScreen').hidden = false;
+    var youWon = champ === ROOM.me, cn = m.who[champ] ? m.who[champ].name : 'Someone';
+    $('champEyebrow').textContent = 'Room ' + ROOM.code + ' · match over after ' + m.n + (m.n === 1 ? ' round' : ' rounds');
+    $('champTitle').textContent = youWon ? 'You’re the champion!' : cn + ' is champion!';
+    var wn = m.wins[champ] || 0;
+    $('champSub').textContent = cn + ' won ' + wn + (wn === 1 ? ' round' : ' rounds') + ' with ' + (m.pts[champ] || 0) + ' points.' + (youWon ? ' Take a bow.' : '');
+    var pod = $('podium'); pod.textContent = '';
+    [1, 0, 2].forEach(function (k) {
+      var id = ids[k], d = document.createElement('div');
+      d.className = 'pod p' + (k + 1) + (id ? '' : ' empty');
+      if (id) {
+        d.setAttribute('data-pid', id);
+        if (k === 0) d.insertAdjacentHTML('beforeend', CROWN_SVG);
+        var f = document.createElement('div'); f.className = 'face'; f.style.background = whoColor(m, id);
+        var n = document.createElement('div'); n.className = 'pn'; n.textContent = m.who[id].name;
+        var p = document.createElement('div'); p.className = 'pp'; p.textContent = (m.pts[id] || 0) + ' pts';
+        d.appendChild(f); d.appendChild(n); d.appendChild(p);
+      }
+      var b = document.createElement('div'); b.className = 'blk'; b.textContent = k + 1; d.appendChild(b);
+      pod.appendChild(d);
+    });
+    fillMatchBoard($('champList'), m, false);
+    $('champNew').hidden = !amHost();
+    $('champNote').textContent = amHost() ? '' : 'Waiting for ' + ((roomMembers()[0] || {}).name || 'the host') + ' to start a new match.';
+    var layer = $('champConfetti'); layer.textContent = '';
+    if (!reduceMotion) {
+      var cols = ['#ffd23f', '#ff6b6b', '#5ee0a0', '#3fa9ff', '#ff8fd8', '#b48cff', '#ff8a2a'];
+      for (var i = 0; i < 70; i++) {
+        var c = document.createElement('i');
+        c.style.left = (Math.random() * 100) + '%'; c.style.background = cols[i % cols.length];
+        c.style.animationDuration = (2.4 + Math.random() * 2.2) + 's'; c.style.animationDelay = (Math.random() * 1.4) + 's';
+        c.style.transform = 'rotate(' + Math.floor(Math.random() * 360) + 'deg)';
+        layer.appendChild(c);
+      }
+    }
+    audioOn(); sfx.win(); buzz([40, 60, 40, 60, 160]);
+    say(youWon ? 'champ_you' : ['champ1', 'champ2'], 2);
+  }
+  $('skipBtn').addEventListener('click', skipWait);
+  $('champNew').addEventListener('click', function () { if (!ROOM || !amHost()) return; if (!hostStart()) showLobby(); });
+  $('champRoom').addEventListener('click', function () { if (ROOM) showLobby(); else openRooms(); });
+  $('champLeave').addEventListener('click', function () { leaveRoom(); hideAllOverlays(); running = false; $('startScreen').hidden = false; renderProfile(); });
+  function matchStartVO(aid) {
+    var m = ROOM && ROOM.match;
+    if (!m || m.n <= 1) { roundStartVO(aid); return; }
+    say(m.n >= MATCH_OF ? 'rd_final' : 'rd' + m.n, 2);
+    var mp = Object.keys(m.who).some(function (id) { return (m.wins[id] || 0) === MATCH_WINS - 1; });
+    setTimeout(function () { say(mp && m.n < MATCH_OF ? 'mpoint' : 'a_' + aid, 1); }, 60);
+  }
+  /* ---------- emotes ---------- */
+  var EMOTES = [
+    { id: 'haha', name: 'Haha', svg: '<path d="M16 27q6-8 12 0M36 27q6-8 12 0" fill="none" stroke="#191a33" stroke-width="4" stroke-linecap="round"/><path d="M17 36h30a15 15 0 0 1-30 0z" fill="#191a33"/><path d="M24 45q8 6 16 0q-8-3-16 0z" fill="#ff6b6b"/><path d="M7 26q-5 8 0 11q5-3 0-11zM57 26q-5 8 0 11q5-3 0-11z" fill="#3fa9ff"/>' },
+    { id: 'wow', name: 'Wow', svg: '<path d="M14 17q6-5 12-1M38 16q6-4 12 1" fill="none" stroke="#191a33" stroke-width="3.5" stroke-linecap="round"/><circle cx="22" cy="28" r="7" fill="#fff" stroke="#191a33" stroke-width="3"/><circle cx="42" cy="28" r="7" fill="#fff" stroke="#191a33" stroke-width="3"/><circle cx="22" cy="29" r="3.2" fill="#191a33"/><circle cx="42" cy="29" r="3.2" fill="#191a33"/><ellipse cx="32" cy="47" rx="6" ry="8" fill="#191a33"/>' },
+    { id: 'grr', name: 'Grr', face: '#ff8a5c', svg: '<path d="M14 19l13 7M50 19l-13 7" stroke="#191a33" stroke-width="4.5" stroke-linecap="round"/><circle cx="23" cy="31" r="3.6" fill="#191a33"/><circle cx="41" cy="31" r="3.6" fill="#191a33"/><rect x="19" y="40" width="26" height="11" rx="3" fill="#fff" stroke="#191a33" stroke-width="3"/><path d="M19 45.5h26M25.5 40v11M32 40v11M38.5 40v11" stroke="#191a33" stroke-width="2"/>' },
+    { id: 'cool', name: 'Cool', svg: '<path d="M10 22h44" stroke="#191a33" stroke-width="3.5" stroke-linecap="round"/><path d="M12 22h17v6a7 7 0 0 1-7 7h-3a7 7 0 0 1-7-7zM35 22h17v6a7 7 0 0 1-7 7h-3a7 7 0 0 1-7-7z" fill="#191a33"/><path d="M15 25l5 0M38 25l5 0" stroke="#7fd0ff" stroke-width="2.5" stroke-linecap="round"/><path d="M23 45q9 7 19-3" fill="none" stroke="#191a33" stroke-width="4" stroke-linecap="round"/>' },
+    { id: 'oops', name: 'Oops', svg: '<path d="M15 22q6-5 11-2M38 20q5-3 11 2" fill="none" stroke="#191a33" stroke-width="3.5" stroke-linecap="round"/><circle cx="22" cy="30" r="3.6" fill="#191a33"/><circle cx="42" cy="30" r="3.6" fill="#191a33"/><path d="M19 46q3.25-4 6.5 0t6.5 0t6.5 0t6.5 0" fill="none" stroke="#191a33" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M52 6q-7 10 0 14q7-4 0-14z" fill="#3fa9ff" stroke="#191a33" stroke-width="2"/>' },
+    { id: 'love', name: 'Love', svg: '<path d="M22 37l-8-8a4.6 4.6 0 0 1 8-6a4.6 4.6 0 0 1 8 6zM42 37l-8-8a4.6 4.6 0 0 1 8-6a4.6 4.6 0 0 1 8 6z" fill="#ff4d6d" stroke="#191a33" stroke-width="2.2" stroke-linejoin="round"/><path d="M21 43q11 10 22 0" fill="none" stroke="#191a33" stroke-width="4" stroke-linecap="round"/><circle cx="13" cy="41" r="4" fill="#ff8fd8" opacity=".7"/><circle cx="51" cy="41" r="4" fill="#ff8fd8" opacity=".7"/>' }
+  ];
+  var EMO_SRC = {}, EMO_NAME = {}, EMO_IMG = {};
+  EMOTES.forEach(function (e) {
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="33" r="28" fill="' + (e.face || '#ffd23f') + '" stroke="#191a33" stroke-width="4"/><path d="M12 44a24 24 0 0 0 40 0" fill="none" stroke="rgba(0,0,0,.12)" stroke-width="5" stroke-linecap="round"/>' + e.svg + '</svg>';
+    EMO_SRC[e.id] = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); EMO_NAME[e.id] = e.name;
+    var im = new Image(); im.src = EMO_SRC[e.id]; EMO_IMG[e.id] = im;
+  });
+  var emoBtns = [];
+  Array.prototype.forEach.call(document.querySelectorAll('[data-emotes]'), function (bar) {
+    EMOTES.forEach(function (e) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'emo'; b.setAttribute('aria-label', 'Send ' + e.name); b.title = e.name;
+      var im = document.createElement('img'); im.src = EMO_SRC[e.id]; im.alt = ''; b.appendChild(im);
+      b.addEventListener('click', function () { sendEmote(e.id); });
+      bar.appendChild(b); emoBtns.push(b);
+    });
+  });
+  var lastEmo = 0, emoSeen = {};
+  function sendEmote(eid) {
+    if (!ROOM || !ROOM.subscribed || !EMO_SRC[eid]) return;
+    var now = Date.now(); if (now - lastEmo < 2000) return; lastEmo = now;
+    try { ROOM.ch.send({ type: 'broadcast', event: 'emo', payload: { id: ROOM.me, e: eid } }); } catch (e) {}
+    audioOn(); popEmote(ROOM.me, eid);
+    emoBtns.forEach(function (b) { b.classList.add('cool'); });
+    setTimeout(function () { emoBtns.forEach(function (b) { b.classList.remove('cool'); }); }, 2000);
+  }
+  function onEmote(pl) {
+    if (!pl || typeof pl.id !== 'string' || !EMO_SRC[pl.e]) return;
+    var now = Date.now(); if (emoSeen[pl.id] && now - emoSeen[pl.id] < 1500) return; emoSeen[pl.id] = now;
+    popEmote(pl.id, pl.e);
+  }
+  function popEmote(pid, eid) {
+    var shown = false;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-pid]'), function (el) {
+      if (el.getAttribute('data-pid') !== pid || el.offsetParent === null) return;
+      var im = document.createElement('img'); im.className = 'emo-pop'; im.src = EMO_SRC[eid]; im.alt = '';
+      el.appendChild(im); shown = true;
+      setTimeout(function () { if (im.parentNode) im.parentNode.removeChild(im); }, 2100);
+    });
+    if (shown) sfx.pop();
+    if (G && G.mode === 'room' && running) G.players.forEach(function (p) { if (p.netId === pid) { p.emo = eid; p.emoAt = G.t; } });
   }
   function netSend(kind) {
     if (!ROOM || !ROOM.ch || !ROOM.subscribed || !G || G.mode !== 'room') return;
