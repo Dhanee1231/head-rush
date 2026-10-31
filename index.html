@@ -78,6 +78,22 @@ body {
 .hearts svg.lost { fill: var(--gone); opacity: .55; transform: scale(.82); }
 .timer { font-family: var(--font-display); font-size: 30px; letter-spacing: .02em; font-variant-numeric: tabular-nums; text-align: center; min-width: 3.2ch; }
 .timer.low { color: var(--heart); }
+.timer.tense { animation: tense 0.5s ease-in-out infinite; }
+@keyframes tense { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.16); } }
+.vol-row { display: grid; grid-template-columns: 74px 1fr 40px; align-items: center; gap: 10px; font-size: 15px; }
+.vol-row input { width: 100%; accent-color: var(--you); height: 28px; }
+.vol-row output { font-size: 13px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.end-card { position: relative; overflow: hidden; }
+.end-card > *:not(.confetti-layer) { position: relative; z-index: 1; }
+.result.pop { animation: popIn .55s cubic-bezier(.2, 1.6, .4, 1) both; }
+@keyframes popIn { 0% { transform: scale(.4); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+.lvl-badge.burst { animation: lvlBurst 1s ease-out 0.4s both; }
+@keyframes lvlBurst { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,210,63,.8); } 30% { transform: scale(1.45); } 100% { transform: scale(1); box-shadow: 0 0 0 18px rgba(255,210,63,0); } }
+.replay-tag { position: absolute; z-index: 6; left: 50%; top: 64px; transform: translateX(-50%); padding: 8px 16px; border-radius: 999px; background: rgba(14,15,34,.82); border: 2px solid var(--heart); font-family: var(--font-display); font-size: 20px; letter-spacing: .04em; color: var(--ink); text-align: center; pointer-events: none; white-space: nowrap; }
+.replay-tag small { display: block; font-family: var(--font-ui); font-size: 12px; color: var(--muted); letter-spacing: 0; }
+.replay-tag .rec { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--heart); margin-right: 8px; vertical-align: 1px; animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .timer.tense, .result.pop, .lvl-badge.burst { animation: none; } }
 .alive { justify-self: end; font-size: 13px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
 .alive b { color: var(--ink); font-size: 18px; font-variant-numeric: tabular-nums; }
 .stage { position: relative; flex: 1; min-height: 0; touch-action: none; }
@@ -514,6 +530,11 @@ h1 .rush { color: var(--you); }
         </div>
         <p class="note" id="gfxNote"></p>
       </div>
+      <div class="picker">
+        <div class="picker-label">Sound</div>
+        <label class="vol-row" for="musicVol"><span>Music</span><input type="range" id="musicVol" min="0" max="100" step="5" value="60"><output id="musicVolOut">60%</output></label>
+        <label class="vol-row" for="sfxVol"><span>Effects</span><input type="range" id="sfxVol" min="0" max="100" step="5" value="100"><output id="sfxVolOut">100%</output></label>
+      </div>
       <label class="setting" for="voiceToggle"><input type="checkbox" id="voiceToggle"> Announcer voice</label>
       <label class="setting" for="fpsToggle"><input type="checkbox" id="fpsToggle"> Show frame rate</label>
       <div class="legal-row"><a class="link-btn" href="privacy.html" target="_blank" rel="noopener">Privacy</a><button class="link-btn" id="replayTut" type="button">Replay tutorial</button><button class="link-btn danger" id="deleteData" type="button">Delete my data</button></div>
@@ -522,7 +543,8 @@ h1 .rush { color: var(--you); }
   </div>
 
   <div class="overlay" id="endScreen" hidden>
-    <div class="card">
+    <div class="card end-card">
+      <div class="confetti-layer" id="endConfetti" aria-hidden="true"></div>
       <div class="eyebrow" id="endEyebrow">Round over</div>
       <h2 class="result" id="endTitle">You won!</h2>
       <div class="perfect-badge" id="perfectBadge" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9z" fill="#191a33"/></svg>Perfect round</div>
@@ -549,6 +571,7 @@ h1 .rush { color: var(--you); }
       <div class="btn-row">
         <button class="btn" id="againBtn" type="button">Run again</button>
         <button class="btn ghost" id="retryBtn" type="button" hidden>Replay level</button>
+        <button class="btn ghost" id="replayBtn" type="button" hidden>Watch knockout replay</button>
         <button class="btn ghost" id="shareBtn" type="button">Copy my score</button>
         <button class="btn ghost" id="fbOpenEnd" type="button">Give feedback</button>
         <button class="btn ghost" id="switchBtn" type="button">Main menu</button>
@@ -645,6 +668,8 @@ h1 .rush { color: var(--you); }
       <button class="btn ghost" id="roomBack" type="button">Back</button>
     </div>
   </div>
+
+  <div class="replay-tag" id="replayTag" hidden><span class="rec"></span>Replay · slow motion<small>Tap anywhere to skip</small></div>
 
   <div class="overlay" id="champScreen" hidden>
     <div class="card champ-card">
@@ -2181,7 +2206,9 @@ h1 .rush { color: var(--you); }
   resize();
 
   /* ---------- sound, haptics, wake lock ---------- */
-  var AC = null, SFXBUS = null, VOBUS = null, NOISE = null;
+  var AC = null, SFXBUS = null, VOBUS = null, NOISE = null, MUSICBUS = null, MUSDUCK = null;
+  var musicVol = 0.6, sfxVol = 1;
+  try { var mv = parseFloat(localStorage.getItem('headrush.musicVol')), sv = parseFloat(localStorage.getItem('headrush.sfxVol')); if (mv >= 0 && mv <= 1) musicVol = mv; if (sv >= 0 && sv <= 1) sfxVol = sv; } catch (e) {}
   function audioOn() {
     if (AC) { if (AC.state === 'suspended') AC.resume(); loadVO(); return; }
     try {
@@ -2189,7 +2216,9 @@ h1 .rush { color: var(--you); }
       var comp = AC.createDynamicsCompressor();
       comp.threshold.value = -16; comp.knee.value = 12; comp.ratio.value = 4; comp.attack.value = 0.003; comp.release.value = 0.18;
       var master = AC.createGain(); master.gain.value = 0.95; master.connect(comp); comp.connect(AC.destination);
-      SFXBUS = AC.createGain(); SFXBUS.gain.value = 0.85; SFXBUS.connect(master);
+      SFXBUS = AC.createGain(); SFXBUS.gain.value = 0.85 * sfxVol; SFXBUS.connect(master);
+      MUSDUCK = AC.createGain(); MUSDUCK.gain.value = 1; MUSDUCK.connect(master);
+      MUSICBUS = AC.createGain(); MUSICBUS.gain.value = 0; MUSICBUS.connect(MUSDUCK);
       VOBUS = AC.createGain(); VOBUS.gain.value = 1.05; VOBUS.connect(master);
       var len = Math.floor(AC.sampleRate * 1.5); NOISE = AC.createBuffer(1, len, AC.sampleRate);
       var nd = NOISE.getChannelData(0); for (var i = 0; i < len; i++) nd[i] = Math.random() * 2 - 1;
@@ -2253,6 +2282,101 @@ h1 .rush { color: var(--you); }
     pickup: function () { osc('sine', 880, 880, 0.12, 0.08); osc('sine', 1320, 1320, 0.14, 0.08, 0.06); osc('sine', 1760, 1760, 0.2, 0.07, 0.12); }
   };
 
+  /* ---------- arena music: a tiny in-browser sequencer (drums, bass, chords, lead). Tempo rises with bar speed. ---------- */
+  var MUSIC = {
+    neon:     { bpm: 112, root: 45, scale: [0, 2, 3, 5, 7, 8, 10], prog: [0, 5, 3, 4], kick: 'x...x...x...x...', snare: '....x.......x...', hat: '..x...x...x...x.', bass: 'x.xx..x.x.xx..x.', bassW: 'sawtooth', lead: 'arp', leadW: 'square', pad: true },
+    gear:     { bpm: 100, root: 43, scale: [0, 2, 3, 5, 7, 8, 10], prog: [0, 0, 5, 6], kick: 'x..x..x.x..x..x.', snare: '....x.......x..x', hat: 'xxxxxxxxxxxxxxxx', metal: '..x....x..x....x', bass: 'x..x..x.x..x....', bassW: 'square', lead: null, pad: false },
+    frost:    { bpm: 96, gain: 1.5,   root: 50, scale: [0, 2, 4, 7, 9], prog: [0, 3, 1, 4], kick: 'x.......x.......', snare: '........x.......', hat: '....x.......x...', bass: 'x.......x.......', bassW: 'triangle', lead: 'bell', pad: true },
+    lava:     { bpm: 104, root: 40, scale: [0, 1, 3, 5, 7, 8, 10], prog: [0, 0, 1, 0], kick: 'x..x..x...x..x..', tom: '..x...x.x...x.xx', hat: '..x...x...x...x.', bass: 'x...x...x...x...', bassW: 'sawtooth', lead: null, pad: false, drone: true },
+    orbit:    { bpm: 90, gain: 1.45,   root: 48, scale: [0, 2, 4, 6, 7, 9, 11], prog: [0, 4, 5, 3], kick: 'x.........x.....', snare: '........x.......', hat: '..x...x...x...x.', bass: 'x.....x.........', bassW: 'sine', lead: 'arp', leadW: 'triangle', pad: true },
+    carnival: { bpm: 120, gain: 1.45,  root: 48, scale: [0, 2, 4, 5, 7, 9, 11], prog: [0, 3, 4, 0], kick: 'x.......x.......', snare: '....x.......x...', hat: '', bass: 'x...x...x...x...', bassW: 'triangle', lead: 'organ', pad: false, oompah: true }
+  };
+  var MUS = { on: false, cfg: null, next: 0, step: 0, timer: null };
+  function mFreq(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+  function mVoice(type, f, t, dur, vol, cut, att) {
+    try {
+      var o = AC.createOscillator(), g = AC.createGain(), out = g;
+      o.type = type; o.frequency.setValueAtTime(f, t);
+      if (cut) { var fl = AC.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = cut; fl.Q.value = 0.7; o.connect(fl); fl.connect(g); } else o.connect(g);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + (att || 0.006));
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      out.connect(MUSICBUS); o.start(t); o.stop(t + dur + 0.05);
+    } catch (e) {}
+  }
+  function mNoise(t, dur, vol, type, f, q) {
+    if (!NOISE) return;
+    try {
+      var sN = AC.createBufferSource(), fl = AC.createBiquadFilter(), g = AC.createGain();
+      sN.buffer = NOISE; fl.type = type; fl.frequency.value = f; fl.Q.value = q || 0.8;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      sN.connect(fl); fl.connect(g); g.connect(MUSICBUS); sN.start(t, Math.random() * 0.8); sN.stop(t + dur + 0.05);
+    } catch (e) {}
+  }
+  function mKick(t, v) {
+    try {
+      var o = AC.createOscillator(), g = AC.createGain();
+      o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.12);
+      g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+      o.connect(g); g.connect(MUSICBUS); o.start(t); o.stop(t + 0.3);
+    } catch (e) {}
+  }
+  function mTom(t, f) {
+    try {
+      var o = AC.createOscillator(), g = AC.createGain();
+      o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 0.6, t + 0.25);
+      g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+      o.connect(g); g.connect(MUSICBUS); o.start(t); o.stop(t + 0.32);
+    } catch (e) {}
+  }
+  function chordNotes(c, bar) {
+    var sc = c.scale, d = c.prog[bar % c.prog.length], out = [];
+    for (var k = 0; k < 3; k++) { var i = d + k * 2; out.push(c.root + 12 + sc[i % sc.length] + 12 * Math.floor(i / sc.length)); }
+    return out;
+  }
+  function musicStep(c, st, t, sd) {
+    var p = st % 16, bar = Math.floor(st / 16), ch = chordNotes(c, bar), tense = G && G.dur != null && !G.over && (G.mode === 'party' || G.mode === 'room') && G.dur - G.t <= 10 && G.t > 0;
+    if (c.kick && c.kick[p] === 'x') mKick(t, 0.75);
+    if (tense && p % 4 === 0) { mKick(t, 0.5); mKick(t + sd * 0.9, 0.32); }
+    if (c.snare && c.snare[p] === 'x') { mNoise(t, 0.14, 0.32, 'bandpass', 1900, 0.9); mVoice('triangle', 190, t, 0.08, 0.12); }
+    if ((c.hat && c.hat[p] === 'x') || (tense && p % 2 === 1)) mNoise(t, 0.045, 0.11, 'highpass', 7500);
+    if (c.metal && c.metal[p] === 'x') { mVoice('square', 330, t, 0.09, 0.05, 2600); mVoice('square', 467, t, 0.07, 0.04, 2600); }
+    if (c.tom && c.tom[p] === 'x') mTom(t, p % 3 ? 110 : 150);
+    if (c.bass && c.bass[p] === 'x') {
+      var bn = c.oompah ? (p % 8 === 0 ? ch[0] - 24 : ch[2] - 24) : ch[0] - 24;
+      mVoice(c.bassW, mFreq(bn), t, sd * (c.oompah ? 1.6 : 2.2), c.bassW === 'sine' ? 0.32 : 0.2, 700 + (tense ? 500 : 0));
+    }
+    if (c.drone && p === 0) mVoice('sawtooth', mFreq(c.root - 12), t, sd * 16, 0.06, 300, 0.4);
+    if (c.pad && p === 0) ch.forEach(function (n) { mVoice('sawtooth', mFreq(n), t, sd * 15, 0.035, 1100, 0.35); mVoice('sawtooth', mFreq(n) * 1.004, t, sd * 15, 0.025, 1100, 0.35); });
+    if (c.lead === 'arp' && p % 2 === 0) { var an = ch[(p / 2) % 3] + 12 + ((p / 2) % 6 === 5 ? 12 : 0); mVoice(c.leadW, mFreq(an), t, sd * 1.4, 0.045, 2400); }
+    if (c.lead === 'bell' && (p === 0 || p === 6 || p === 10)) { var bf = mFreq(ch[(p / 2) % 3] + 24); mVoice('sine', bf, t, 1.1, 0.07); mVoice('sine', bf * 2.76, t, 0.5, 0.025); }
+    if (c.lead === 'organ' && (p % 4 === 2)) ch.forEach(function (n) { mVoice('square', mFreq(n + 12), t, sd * 1.5, 0.018, 1800); mVoice('sine', mFreq(n + 24), t, sd * 1.5, 0.03); });
+  }
+  function musicTick() {
+    if (!MUS.on || !AC || !G) return;
+    var c = MUS.cfg, ratio = G.omega0 ? Math.min(1.35, Math.max(1, G.omega / G.omega0)) : 1;
+    var tense = G.dur != null && (G.mode === 'party' || G.mode === 'room') && G.dur - G.t <= 10 && G.t > 0;
+    var bpm = c.bpm * ratio * (tense ? 1.08 : 1), sd = 60 / bpm / 4;
+    if (MUS.next < AC.currentTime) MUS.next = AC.currentTime + 0.02;
+    while (MUS.next < AC.currentTime + 0.12) { musicStep(c, MUS.step, MUS.next, sd); MUS.next += sd; MUS.step++; }
+  }
+  function musicStart(arenaId) {
+    if (!AC || !MUSICBUS || musicVol <= 0 || document.hidden) return;
+    MUS.cfg = MUSIC[arenaId] || MUSIC.neon; MUS.on = true; MUS.step = 0; MUS.next = AC.currentTime + 0.05;
+    MUSICBUS.gain.cancelScheduledValues(AC.currentTime); MUSICBUS.gain.setTargetAtTime(0.42 * musicVol * (MUS.cfg.gain || 1), AC.currentTime, 0.4);
+    if (!MUS.timer) MUS.timer = setInterval(musicTick, 25);
+  }
+  function musicStop(fade) {
+    MUS.on = false;
+    if (MUSICBUS && AC) { MUSICBUS.gain.cancelScheduledValues(AC.currentTime); MUSICBUS.gain.setTargetAtTime(0, AC.currentTime, fade || 0.25); }
+  }
+  document.addEventListener('visibilitychange', function () { if (document.hidden) musicStop(0.05); else if (running && G && G.t > 0 && !G.over && !G.tut) musicStart(G.arena.id); });
+  function setVol(kind, v) {
+    v = Math.max(0, Math.min(1, v));
+    if (kind === 'music') { musicVol = v; if (MUSICBUS && AC && MUS.on) MUSICBUS.gain.setTargetAtTime(0.42 * v * (MUS.cfg.gain || 1), AC.currentTime, 0.1); if (MUS.on && v === 0) musicStop(0.1); }
+    else { sfxVol = v; if (SFXBUS && AC) SFXBUS.gain.setTargetAtTime(0.85 * v, AC.currentTime, 0.05); }
+    try { localStorage.setItem(kind === 'music' ? 'headrush.musicVol' : 'headrush.sfxVol', String(v)); } catch (e) {}
+  }
+
   /* ---------- announcer: recorded voice lines ---------- */
   var voiceOn = true;
   try { voiceOn = localStorage.getItem('headrush.voice') !== '0'; } catch (e) {}
@@ -2276,8 +2400,9 @@ h1 .rush { color: var(--you); }
       var s = AC.createBufferSource(); s.buffer = buf; s.connect(VOBUS); s.start();
       voSrc = s; voEnd = AC.currentTime + buf.duration - 0.08;
       SFXBUS.gain.cancelScheduledValues(AC.currentTime);
-      SFXBUS.gain.setTargetAtTime(0.55, AC.currentTime, 0.03);
-      SFXBUS.gain.setTargetAtTime(0.85, voEnd, 0.15);
+      SFXBUS.gain.setTargetAtTime(0.55 * sfxVol, AC.currentTime, 0.03);
+      SFXBUS.gain.setTargetAtTime(0.85 * sfxVol, voEnd, 0.15);
+      if (MUSDUCK) { MUSDUCK.gain.cancelScheduledValues(AC.currentTime); MUSDUCK.gain.setTargetAtTime(0.32, AC.currentTime, 0.05); MUSDUCK.gain.setTargetAtTime(1, voEnd, 0.25); }
       return true;
     } catch (e) { return false; }
   }
@@ -2375,7 +2500,7 @@ h1 .rush { color: var(--you); }
     var txt, low = false;
     if (G.dur == null) txt = clockUp(Math.max(0, G.t));
     else { var remain = G.t < 0 ? G.dur : G.dur - Math.min(G.t, G.dur); txt = clock(remain); low = remain <= 10 && running; }
-    if (txt !== lastTimerText) { lastTimerText = txt; timerEl.textContent = txt; timerEl.classList.toggle('low', low); }
+    if (txt !== lastTimerText) { lastTimerText = txt; timerEl.textContent = txt; timerEl.classList.toggle('low', low); timerEl.classList.toggle('tense', low && !G.over && (G.mode === 'party' || G.mode === 'room')); }
   }
 
   /* ---------- game state ---------- */
@@ -2409,6 +2534,7 @@ h1 .rush { color: var(--you); }
   }
 
   function newRound(id, md, li, room, opt) {
+    RBUF = []; REPLAY = null;
     md = md || 'party';
     GR = room ? mulberry32(room.seed) : Math.random;
     var dk = room && DIFFS[room.diff] ? room.diff : opt && DIFFS[opt.diff] ? opt.diff : difficulty, D = DIFFS[dk];
@@ -2474,6 +2600,7 @@ h1 .rush { color: var(--you); }
       else if (tw === 'crowd') G.survAdds = [5].concat(G.survAdds).sort(function (a, b) { return a - b; });
       else if (tw === 'orbs') G.puNext = 4;
     }
+    G.omega0 = G.omega;
     lastTimerText = ''; setCue(null); updateHearts(); setAlive();
   }
 
@@ -2577,8 +2704,56 @@ h1 .rush { color: var(--you); }
     }
   }
 
+  var RBUF = [], REPLAY = null;
+  function snapNow() {
+    var g = G;
+    return { t: g.t, rot: g.rot, bf: g.bf, gearRot: g.gearRot, dir: g.dir,
+      P: g.players.map(function (p) { return [p.angle, p.air, p.duck, p.stun, p.hearts, p.out ? 1 : 0, p.outAt, p.laneX, p.lane, p.shield, p.dropAt || 0]; }),
+      B: g.bars.map(function (b) { return [b.id, b.angle, b.type]; }),
+      H: g.holes.map(function (o) { return [o.state, o.until]; }),
+      pu: g.pickup ? JSON.parse(JSON.stringify(g.pickup)) : null };
+  }
+  function applySnap(sn, byId) {
+    var g = G;
+    g.t = sn.t; g.rot = sn.rot; g.bf = sn.bf; g.gearRot = sn.gearRot; g.dir = sn.dir; g.pickup = sn.pu;
+    sn.P.forEach(function (a, i) { var p = g.players[i]; if (!p) return; p.angle = a[0]; p.air = a[1]; p.duck = a[2]; p.stun = a[3]; p.hearts = a[4]; p.out = !!a[5]; p.outAt = a[6]; p.laneX = a[7]; p.lane = a[8]; p.shield = a[9]; p.dropAt = a[10]; });
+    g.bars = sn.B.filter(function (a) { return byId[a[0]]; }).map(function (a) { var b = byId[a[0]]; b.angle = a[1]; b.type = a[2]; return b; });
+    sn.H.forEach(function (a, i) { if (g.holes[i]) { g.holes[i].state = a[0]; g.holes[i].until = a[1]; } });
+  }
+  function recordSnap() {
+    if (!G || G.mode === 'room' || G.tut || G.t < 0) return;
+    RBUF.push(snapNow());
+    while (RBUF.length && RBUF[0].t < G.t - 3.2) RBUF.shift();
+  }
+  function startReplay() {
+    var g = G, you = g.players[0];
+    if (!g || !you.out || !RBUF.length || running) return;
+    var from = g.youOutAt - 2.0, to = Math.min(RBUF[RBUF.length - 1].t, g.youOutAt + 0.9);
+    var frames = RBUF.filter(function (sn) { return sn.t >= from && sn.t <= to; });
+    if (frames.length < 10) return;
+    var byId = {}; g.bars.forEach(function (b) { byId[b.id] = b; });
+    REPLAY = { frames: frames, i: 0, clock: frames[0].t, end: frames[frames.length - 1].t, fin: snapNow(), byId: byId, hitAt: g.youOutAt };
+    $('endScreen').hidden = true; $('replayTag').hidden = false;
+    audioOn(); musicStop(0.05);
+  }
+  function replayStep(dt) {
+    var R = REPLAY;
+    R.clock += dt * 0.35;
+    while (R.i < R.frames.length - 1 && R.frames[R.i + 1].t <= R.clock) R.i++;
+    applySnap(R.frames[R.i], R.byId);
+    if (!R.bonked && R.clock >= R.hitAt) { R.bonked = true; sfx.bonk(0.9); sfx.out(); G.shake = reduceMotion ? 0 : 10; }
+    if (R.clock >= R.end + 0.4) endReplay();
+  }
+  function endReplay() {
+    if (!REPLAY) return;
+    var R = REPLAY; REPLAY = null;
+    applySnap(R.fin, R.byId);
+    $('replayTag').hidden = true; $('endScreen').hidden = false;
+  }
+  document.addEventListener('pointerdown', function () { if (REPLAY) endReplay(); }, true);
   function finish(kind, delay) {
     if (G.over) return;
+    musicStop(kind === 'win' || kind === 'clear' ? 0.15 : 0.6);
     G.over = true; G.result = kind; G.endAt = G.t + delay; setCue(null);
     if (kind === 'win' || kind === 'clear') { sfx.win(); confetti(); buzz([40, 60, 40, 60, 120]); }
     if (kind === 'win') announceWin(); else if (kind === 'clear') say('clear', 2); else if (kind === 'time') say('time_up', 2);
@@ -2722,6 +2897,31 @@ h1 .rush { color: var(--you); }
     G.t = -1.2;
     running = true;
   }
+  function celebrate(big, coins, lvlUp) {
+    var el = $('stCoins'), t0 = performance.now(), dur = Math.min(1100, 300 + coins * 6), lastTick = 0;
+    if (coins > 0 && !reduceMotion) {
+      el.textContent = '+0';
+      (function count(now) {
+        var k = Math.min(1, (now - t0) / dur), v = Math.round(coins * (1 - Math.pow(1 - k, 3)));
+        el.textContent = '+' + v;
+        if (now - lastTick > 70 && k < 1) { lastTick = now; osc('sine', 1400 + 600 * k, 1400 + 600 * k, 0.04, 0.025); }
+        if (k < 1 && !$('endScreen').hidden) requestAnimationFrame(count); else el.textContent = '+' + coins;
+      })(t0);
+    }
+    if (big) {
+      var title = $('endTitle'); void title.offsetWidth; title.classList.add('pop');
+      if (!reduceMotion) {
+        var layer = $('endConfetti'), cols = ['#ffd23f', '#ff6b6b', '#5ee0a0', '#3fa9ff', '#ff8fd8', '#b48cff', '#ff8a2a'];
+        for (var i = 0; i < 60; i++) {
+          var c = document.createElement('i');
+          c.style.left = (Math.random() * 100) + '%'; c.style.background = cols[i % cols.length];
+          c.style.animationDuration = (2.2 + Math.random() * 2) + 's'; c.style.animationDelay = (Math.random() * 0.9) + 's';
+          layer.appendChild(c);
+        }
+      }
+    }
+    if (lvlUp) { var lb = $('endLvl'); void lb.offsetWidth; lb.classList.add('burst'); setTimeout(function () { [784, 988, 1175, 1568].forEach(function (f, i) { osc('triangle', f, f, 0.2, 0.06, i * 0.08); }); }, 450); }
+  }
   function showTutEnd() {
     var g = G;
     teachBtn(null);
@@ -2804,7 +3004,7 @@ h1 .rush { color: var(--you); }
     g.t += dt;
     var t = g.t;
     if (t < 0) { var c = Math.ceil(-t); if (c !== g.lastCount) { g.lastCount = c; sfx.tick(); } return; }
-    if (was < 0) { sfx.go(); toast('Run!'); say('go', 1); }
+    if (was < 0) { sfx.go(); toast('Run!'); say('go', 1); if (!g.tut) musicStart(g.arena.id); }
 
     if (g.tut && !g.over) tutTick(g, t);
     if (!g.over && !g.tut) {
@@ -3423,6 +3623,7 @@ h1 .rush { color: var(--you); }
   function showEnd() {
     if (G.tut) { showTutEnd(); return; }
     $('tipLine').hidden = true; $('tryMedium').hidden = true;
+    $('endTitle').classList.remove('pop'); $('endLvl').classList.remove('burst'); $('endConfetti').textContent = '';
     var g = G, you = g.players[0], md = g.mode, title = $('endTitle'), name = g.arena.name;
     var survived = you.out ? g.youOutAt : (g.dur == null ? g.t : Math.min(g.t, g.dur));
     var sub = '', coins = 0, xp = 0, win = false, place = null, st = 0;
@@ -3434,7 +3635,7 @@ h1 .rush { color: var(--you); }
       coins = (g.closePts || 0) + Math.max(0, 9 - place) * 10 + (win ? 50 : 0) + g.bonus;
       xp = Math.floor(survived) + Math.max(0, 9 - place) * 5 + (win ? 30 : 0) + g.close * 3;
       $('endEyebrow').textContent = name + ' · Party';
-      title.textContent = win ? 'You won!' : ordinal(place) + ' of 8';
+      title.textContent = win ? 'WINNER!' : ordinal(place) + ' of 8';
       title.classList.toggle('win', win);
       if (win && g.players.filter(function (q) { return !q.out; }).length === 1) sub = 'Last runner standing.';
       else if (win) sub = 'Most hearts left when time ran out.';
@@ -3540,6 +3741,8 @@ h1 .rush { color: var(--you); }
       ['Play together:', ' tap “Play with friends online” to race your family on their own phones.'],
       ['Daily Challenge:', ' a new one every day. Your best of 3 tries goes on today’s board.']
     ];
+    celebrate(title.classList.contains('win'), Math.round(coins), res.after > res.before);
+    $('replayBtn').hidden = !(you.out && md !== 'room' && RBUF.length > 20);
     var tipN = PROFILE.rounds;
     if (tipN >= 1 && tipN <= TIPS.length) {
       var tl = $('tipLine'); tl.textContent = ''; tl.hidden = false;
@@ -3587,6 +3790,12 @@ h1 .rush { color: var(--you); }
     toast(dc.twist.name + '!');
   }
   $('dailyGo').addEventListener('click', startDaily);
+  [['musicVol', 'music', function () { return musicVol; }], ['sfxVol', 'sfx', function () { return sfxVol; }]].forEach(function (d) {
+    var el = $(d[0]), out = $(d[0] + 'Out');
+    el.value = Math.round(d[2]() * 100); out.textContent = el.value + '%';
+    el.addEventListener('input', function () { out.textContent = el.value + '%'; setVol(d[1], el.value / 100); });
+    el.addEventListener('change', function () { audioOn(); if (d[1] === 'sfx') sfx.close(); else if (musicVol > 0 && AC) { var c = MUSIC.neon, t0 = AC.currentTime + 0.05; MUSICBUS.gain.setTargetAtTime(0.42 * musicVol, AC.currentTime, 0.02); chordNotes(c, 0).forEach(function (n, i) { mVoice('square', mFreq(n + 12), t0 + i * 0.09, 0.25, 0.05, 2400); }); setTimeout(function () { if (!MUS.on && MUSICBUS) MUSICBUS.gain.setTargetAtTime(0, AC.currentTime, 0.2); }, 700); } });
+  });
   $('dailyBoardBtn').addEventListener('click', function () { boardTab = 'daily'; boardScope = 'online'; $('startScreen').hidden = true; $('boardScreen').hidden = false; renderBoard(); });
   function previewRound() {
     if (mode === 'solo') newRound(LEVELS[soloIdx].arena, 'solo', soloIdx);
@@ -3686,9 +3895,10 @@ h1 .rush { color: var(--you); }
     startRound();
   });
   $('retryBtn').addEventListener('click', startRound);
+  $('replayBtn').addEventListener('click', startReplay);
   $('tryMedium').addEventListener('click', function () { PROFILE.medAsked = true; saveProfile(); pickDiff('medium'); startRound(); });
   $('replayTut').addEventListener('click', startTutorial);
-  $('switchBtn').addEventListener('click', function () { if (ROOM) leaveRoom(); running = false; $('endScreen').hidden = true; $('startScreen').hidden = false; renderProfile(); pickMode(mode); });
+  $('switchBtn').addEventListener('click', function () { if (ROOM) leaveRoom(); running = false; musicStop(0.2); $('endScreen').hidden = true; $('startScreen').hidden = false; renderProfile(); pickMode(mode); });
 
   /* ---------- progress UI and Locker ---------- */
   function renderProfile() {
@@ -4711,7 +4921,8 @@ h1 .rush { color: var(--you); }
       else if (ts - fpsSince >= 500) { fpsEl.textContent = Math.round(fpsFrames * 1000 / (ts - fpsSince)) + ' fps'; fpsFrames = 0; fpsSince = ts; }
     }
     if (G) {
-      if (running) update(dt);
+      if (REPLAY) replayStep(dt);
+      if (running) { update(dt); recordSnap(); }
       if (view3d && running && G.t > 2 && !G.over && !slowHinted && dt > 0) {
         slowFrames = slowFrames * 0.97 + (dt > 1 / 32 ? 1 : 0) * 0.03;
         if (G.t > 8 && slowFrames > 0.6 && gfx !== 'hd') { slowHinted = true; toast('Running slow? Try Flat graphics in the menu'); }
