@@ -1,0 +1,6 @@
+-- Applied to project yxmdlqmmzozghquqlnss on 2026-10-30 (Phase 2). Kept here for reference.
+-- daily_scores: one row per player per Eastern day; best of the first 3 tries counts.
+-- submit_daily(p_id, p_secret, p_day, p_seconds, p_arena, p_difficulty): secret-checked upsert.
+-- daily_board(p_day, p_id): top 10, total, caller's rank, yesterday's winner name.
+-- rounds gained match_id (Party Room matches) and daily (Daily Challenge day) columns,
+-- and log_round gained a 14-argument version with p_match and p_daily.

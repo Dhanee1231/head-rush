@@ -207,6 +207,24 @@ h1 .rush { color: var(--you); }
 .chal li.done > span:first-child { color: var(--muted); }
 .chal li.levelup { color: var(--you); font-family: var(--font-display); font-size: 17px; grid-template-columns: 1fr; }
 .chal li.won { grid-template-columns: 1fr; }
+.today { display: grid; gap: 8px; padding: 14px; border-radius: 18px; background: linear-gradient(160deg, rgba(255,210,63,0.13), rgba(63,169,255,0.08)); border: 2px solid var(--you); }
+.today-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.today-head .picker-label { color: var(--you); }
+.streak { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 3px 6px; border-radius: 999px; background: var(--bg); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.streak svg { width: 18px; height: 18px; }
+.streak b { font-family: var(--font-display); font-size: 17px; font-weight: 400; color: #ff8a2a; }
+.streak.cold b { color: var(--muted); }
+.today-title { font-family: var(--font-display); font-size: 26px; line-height: 1.05; }
+.today-twist { font-size: 15px; line-height: 1.35; }
+.today-twist b { color: var(--you); }
+.today-meta { font-size: 13px; color: var(--muted); line-height: 1.4; }
+.today-crown { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; color: var(--muted); }
+.today-crown svg { width: 22px; height: 15px; flex: none; }
+.today-crown b { color: var(--ink); }
+.today .btn-row.two .btn { height: 52px; font-size: 22px; }
+.today .btn-row.two .btn.ghost { font-size: 18px; }
+.nudge { color: var(--you); font-weight: 700; }
+#bestLine:empty { display: none; }
 .howto summary {
   cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center;
   font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
@@ -240,6 +258,7 @@ h1 .rush { color: var(--you); }
 .player-btn:focus-visible { outline: 3px solid var(--you); outline-offset: 2px; }
 .tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; background: var(--bg); padding: 4px; border-radius: 14px; }
 .tabs.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tabs.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .concept { margin: 0; padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--line); font-size: 14px; line-height: 1.45; color: var(--muted); }
 .concept b { color: var(--ink); }
 .concept .link-btn { padding: 0; }
@@ -426,6 +445,17 @@ h1 .rush { color: var(--you); }
       <div class="eyebrow"><span class="alpha-badge">Alpha</span> Early test build</div>
       <h1>Head<br><span class="rush">Rush</span></h1>
       <p class="concept"><b>Alpha test:</b> things may change, break or be reset. Graphics, sounds and levels keep improving toward the real game. <button class="link-btn" id="fbOpenMenu" type="button">Tell us what to improve</button></p>
+      <section class="today" id="todayCard" aria-labelledby="todayLabel">
+        <div class="today-head"><span class="picker-label" id="todayLabel">Daily Challenge</span><span class="streak cold" id="streakChip" title="Play one round a day to keep your streak"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c1 4 5 6 5 11a5 5 0 0 1-10 0c0-2.2 1-3.6 2.2-4.8.2 1.8 1 2.8 2.1 3.2C10.6 8.6 11 5.4 12 2z" fill="#ff8a2a"/><path d="M12 12.5c1.2 1.4 2.4 2.4 2.4 4a2.4 2.4 0 0 1-4.8 0c0-1.3.9-2.4 2.4-4z" fill="#ffd23f"/></svg><b id="streakNum">0</b><span id="streakWord">day streak</span></span></div>
+        <div class="today-title" id="todayTitle">Today</div>
+        <div class="today-twist" id="todayTwist"></div>
+        <div class="today-meta" id="todayMeta"></div>
+        <p class="today-crown" id="todayCrown" hidden><svg viewBox="0 0 40 26" aria-hidden="true"><path d="M3 22 L6 6 L14 14 L20 3 L26 14 L34 6 L37 22 Z" fill="#ffd23f" stroke="#191a33" stroke-width="2.5" stroke-linejoin="round"/></svg><span>Yesterday's winner: <b id="todayCrownName"></b></span></p>
+        <div class="btn-row two">
+          <button class="btn" id="dailyGo" type="button">Play today’s</button>
+          <button class="btn ghost" id="dailyBoardBtn" type="button">Today’s top 10</button>
+        </div>
+      </section>
       <div class="modes" role="group" aria-label="Game mode">
         <button class="mode" type="button" data-mode="party" aria-pressed="true">Party</button>
         <button class="mode" type="button" data-mode="solo" aria-pressed="false">Solo</button>
@@ -500,6 +530,7 @@ h1 .rush { color: var(--you); }
         <div class="stat"><span>Close shaves</span><b id="stClose">0</b></div>
         <div class="stat"><span>Coins</span><b id="stCoins">0</b></div>
       </div>
+      <p class="note" id="bestLine"></p>
       <div class="progress-box">
         <div class="prog-row"><span class="lvl-badge" id="endLvl">Lv 1</span><div class="xpbar" aria-hidden="true"><span id="endXpFill"></span></div><span class="xp-gain" id="endXp">+0 XP</span></div>
         <ul class="chal" id="endChal" hidden></ul>
@@ -513,7 +544,6 @@ h1 .rush { color: var(--you); }
       </div>
       <p class="note" id="shareMsg" role="status" aria-live="polite"></p>
       <p class="share-box" id="shareText" hidden></p>
-      <p class="note" id="bestLine"></p>
       <p class="gate" id="syncLine"></p>
     </div>
   </div>
@@ -664,7 +694,8 @@ h1 .rush { color: var(--you); }
         <button class="mode" type="button" data-scope="local" aria-pressed="false">This phone</button>
       </div>
       <p class="sub" id="boardSub">Everyone playing with your link</p>
-      <div class="tabs" role="group" aria-label="Leaderboard type">
+      <div class="tabs four" role="group" aria-label="Leaderboard type">
+        <button class="mode" type="button" data-board="daily" aria-pressed="false">Today</button>
         <button class="mode" type="button" data-board="survival" aria-pressed="true">Survival</button>
         <button class="mode" type="button" data-board="party" aria-pressed="false">Party</button>
         <button class="mode" type="button" data-board="solo" aria-pressed="false">Solo</button>
@@ -928,6 +959,101 @@ h1 .rush { color: var(--you); }
     }
     PROFILE.daily = { day: day, list: pick.map(function (id) { return { id: id, p: 0, done: false }; }) };
     saveProfile();
+  }
+  /* ---------- Daily Challenge: one arena, difficulty and twist per day for everyone (resets at midnight Eastern) ---------- */
+  var DAILY_TWISTS = [
+    { id: 'nopu', name: 'No power-ups', text: 'no orbs to save you today.' },
+    { id: 'onehp', name: 'One heart', text: 'one hit and you are out.' },
+    { id: 'turbo', name: 'Turbo start', text: 'the bars start 20% faster.' },
+    { id: 'crowd', name: 'Crowded', text: 'a second bar joins after 5 seconds.' },
+    { id: 'orbs', name: 'Power-up rain', text: 'orbs show up twice as often.' }
+  ];
+  function easternDay(d) {
+    try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d || new Date()); }
+    catch (e) { return today(); }
+  }
+  function dayNum(key) { var p = String(key).split('-'); return Math.floor(Date.UTC(+p[0], +p[1] - 1, +p[2]) / 864e5); }
+  function dayKeyOf(n) { var d = new Date(n * 864e5); return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0'); }
+  function dailyFor(key) {
+    var h = 2166136261;
+    for (var i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619) >>> 0;
+    var r = mulberry32(h ^ 0xda1e), arena = ORDER[Math.floor(r() * ORDER.length)];
+    var twist = DAILY_TWISTS[Math.floor(r() * DAILY_TWISTS.length)];
+    var diff = ['medium', 'medium', 'hard', 'medium', 'hard', 'easy'][Math.floor(r() * 6)];
+    if (twist.id === 'onehp' && diff === 'hard') diff = 'medium';
+    return { key: key, arena: arena, twist: twist, diff: diff };
+  }
+  function dailyToday() { return dailyFor(easternDay()); }
+  function ensureDly() {
+    var key = easternDay();
+    if (!PROFILE.dly || PROFILE.dly.day !== key) PROFILE.dly = { day: key, tries: 0, best: 0, queue: (PROFILE.dly && PROFILE.dly.queue || []).filter(function (q) { return dayNum(key) - dayNum(q.day) <= 1; }) };
+    return PROFILE.dly;
+  }
+  function streakInfo() {
+    var s = PROFILE.streak, td = dayNum(easternDay());
+    if (!s || !s.last) return { n: 0, live: false, today: false };
+    var gap = td - dayNum(s.last), wk = Math.floor((td + 3) / 7);
+    if (gap === 0) return { n: s.n, live: true, today: true };
+    if (gap === 1 || (gap === 2 && s.froze !== wk)) return { n: s.n, live: true, today: false, risk: gap === 2 };
+    return { n: 0, live: false, today: false };
+  }
+  function bumpStreak() {
+    var key = easternDay(), d = dayNum(key), s = PROFILE.streak || (PROFILE.streak = { n: 0, last: null, froze: -1 });
+    if (s.last === key) return null;
+    var gap = s.last ? d - dayNum(s.last) : 99, wk = Math.floor((d + 3) / 7), froze = false;
+    if (gap === 1) s.n++;
+    else if (gap === 2 && s.froze !== wk) { s.n++; s.froze = wk; froze = true; }
+    else s.n = 1;
+    s.last = key;
+    var bonus = Math.min(70, 10 * s.n);
+    PROFILE.coins += bonus; saveProfile();
+    return { n: s.n, bonus: bonus, froze: froze };
+  }
+  var dailyBoardCache = null, dailyBoardAt = 0;
+  function fetchDailyBoard(force) {
+    var key = easternDay(), pl = currentPlayer();
+    if (!force && dailyBoardCache && dailyBoardCache.day === key && Date.now() - dailyBoardAt < 60000) return Promise.resolve(dailyBoardCache);
+    if (pl) ensureCloud(pl);
+    return sbFetch('/rest/v1/rpc/daily_board', { method: 'POST', body: { p_day: key, p_id: pl ? pl.cloudId : null } }).then(function (d) {
+      d = d || {}; d.day = key; d.top = Array.isArray(d.top) ? d.top : [];
+      dailyBoardCache = d; dailyBoardAt = Date.now(); return d;
+    });
+  }
+  var dlyBusy = false;
+  function flushDaily() {
+    var pl = currentPlayer(), dl = PROFILE.dly;
+    if (dlyBusy || !pl || !dl || !dl.queue || !dl.queue.length) return Promise.resolve();
+    dlyBusy = true; ensureCloud(pl);
+    var item = dl.queue[0];
+    return sbFetch('/rest/v1/rpc/submit_daily', { method: 'POST', body: { p_id: pl.cloudId, p_secret: pl.secret, p_day: item.day, p_seconds: item.secs, p_arena: item.arena, p_difficulty: item.diff } }).then(function () {
+      dl.queue.shift(); saveProfile(); dlyBusy = false; dailyBoardAt = 0; return flushDaily();
+    }, function () { dlyBusy = false; });
+  }
+  function renderToday() {
+    var dc = dailyToday(), dl = ensureDly(), A = ARENAS[dc.arena], si = streakInfo();
+    $('todayTitle').textContent = DIFFS[dc.diff].name + ' ' + A.name;
+    var tw = $('todayTwist'); tw.textContent = '';
+    var b = document.createElement('b'); b.textContent = dc.twist.name + ': '; tw.appendChild(b); tw.appendChild(document.createTextNode(dc.twist.text));
+    var left = Math.max(0, 3 - dl.tries);
+    var meta = left ? left + (left === 1 ? ' try' : ' tries') + ' left today' : 'All 3 tries used. Extra runs are just for fun';
+    if (dl.best) meta += ' · your best ' + clockUp(dl.best);
+    var bd = dailyBoardCache && dailyBoardCache.day === dc.key ? dailyBoardCache : null;
+    if (bd && bd.me && bd.me.rank) meta += ' · #' + bd.me.rank + ' of ' + bd.total;
+    else if (bd && bd.total) meta += ' · ' + bd.total + (bd.total === 1 ? ' player' : ' players') + ' today';
+    $('todayMeta').textContent = meta + '. New challenge at midnight Eastern.';
+    $('dailyGo').textContent = left ? 'Play today’s' : 'Play for fun';
+    $('todayCrown').hidden = !(bd && bd.yesterday);
+    if (bd && bd.yesterday) $('todayCrownName').textContent = bd.yesterday;
+    var chip = $('streakChip');
+    chip.classList.toggle('cold', !si.live || !si.today);
+    $('streakNum').textContent = si.n;
+    $('streakWord').textContent = si.n === 1 ? 'day streak' : 'day streak';
+    chip.title = !si.live ? 'Finish one round a day to build a streak and earn bonus coins.' : si.today ? 'Streak safe for today. Come back tomorrow for +' + Math.min(70, 10 * (si.n + 1)) + ' coins.' : 'Finish a round today to keep your ' + si.n + '-day streak' + (si.risk ? ' (your weekly freeze covers yesterday)' : '') + '.';
+    if (!bd || Date.now() - dailyBoardAt > 60000) {
+      flushDaily().then(function () { return fetchDailyBoard(); }).then(function (d) {
+        if (d && !$('startScreen').hidden && (!bd || bd !== d)) renderToday();
+      }, function () {});
+    }
   }
   function applyRound(r) {
     ensureDaily();
@@ -2215,6 +2341,7 @@ h1 .rush { color: var(--you); }
   function setAlive() {
     if (G.mode === 'party' || G.mode === 'room') { $('hudPre').textContent = ''; aliveEl.textContent = G.players.filter(function (p) { return !p.out; }).length; $('hudPost').textContent = ' left'; }
     else if (G.mode === 'solo') { $('hudPre').textContent = 'Level '; aliveEl.textContent = G.levelIdx + 1; $('hudPost').textContent = ''; }
+    else if (G.daily) { $('hudPre').textContent = 'Today '; aliveEl.textContent = clockUp(ensureDly().best || 0); $('hudPost').textContent = ''; }
     else { $('hudPre').textContent = 'Best '; aliveEl.textContent = clockUp(PROFILE.surv[survKey(G.arena.id, G.diff)] || 0); $('hudPost').textContent = ''; }
   }
   function setCue(kind) {
@@ -2261,10 +2388,10 @@ h1 .rush { color: var(--you); }
     return T >= o.until + 1.3 && T < o.until + 3.5;
   }
 
-  function newRound(id, md, li, room) {
+  function newRound(id, md, li, room, opt) {
     md = md || 'party';
     GR = room ? mulberry32(room.seed) : Math.random;
-    var dk = room && DIFFS[room.diff] ? room.diff : difficulty, D = DIFFS[dk];
+    var dk = room && DIFFS[room.diff] ? room.diff : opt && DIFFS[opt.diff] ? opt.diff : difficulty, D = DIFFS[dk];
     var a0 = A0, players = [], A = ARENAS[id] || ARENAS.neon, L = md === 'solo' ? LEVELS[li] : null;
     var count = md === 'party' ? 8 : md === 'room' ? room.roster.length : 1;
     for (var i = 0; i < count; i++) {
@@ -2312,6 +2439,15 @@ h1 .rush { color: var(--you); }
         A.walls.forEach(function (w) { var rel = wrap(w.a - p.angle); if (w.lane === p.lane && rel > 0 && rel < 0.8) p.lane = 1 - p.lane; });
         p.laneX = p.lane;
       });
+    }
+    if (opt && opt.daily) {
+      var tw = opt.daily.twist;
+      G.daily = opt.daily;
+      if (tw === 'nopu') G.puNext = Infinity;
+      else if (tw === 'onehp') players[0].hearts = 1;
+      else if (tw === 'turbo') G.omega *= 1.2;
+      else if (tw === 'crowd') G.survAdds = [5].concat(G.survAdds).sort(function (a, b) { return a - b; });
+      else if (tw === 'orbs') G.puNext = 4;
     }
     lastTimerText = ''; setCue(null); updateHearts(); setAlive();
   }
@@ -2392,7 +2528,7 @@ h1 .rush { color: var(--you); }
   }
   function collect(p, pu) {
     var g = G, t = g.t, col = pu.type === 'shield' ? COL.puShield : pu.type === 'slow' ? COL.puSlow : COL.heart;
-    g.pickup = null; g.puNext = t + 8 + Math.random() * 7;
+    g.pickup = null; g.puNext = t + (g.daily && g.daily.twist === 'orbs' ? 4 + Math.random() * 3 : 8 + Math.random() * 7);
     burstAt(p, col, 10, 0.8);
     if (pu.type === 'shield') p.shield = t + 15;
     else if (pu.type === 'slow') g.slowUntil = t + 3.5;
@@ -2519,7 +2655,7 @@ h1 .rush { color: var(--you); }
         g.calmUntil = t + 3.5; g.nextMile += 30;
       }
       if (g.mode !== 'solo' && g.mode !== 'room') {
-        if (g.pickup && t - g.pickup.born > 12) { g.pickup = null; g.puNext = t + 6 + Math.random() * 6; }
+        if (g.pickup && t - g.pickup.born > 12) { g.pickup = null; g.puNext = t + (g.daily && g.daily.twist === 'orbs' ? 3 + Math.random() * 3 : 6 + Math.random() * 6); }
         if (!g.pickup && t >= g.puNext) spawnPickup();
       }
       if (A.reverse) {
@@ -3078,7 +3214,7 @@ h1 .rush { color: var(--you); }
     var g = G, you = g.players[0], md = g.mode, title = $('endTitle'), name = g.arena.name;
     var survived = you.out ? g.youOutAt : (g.dur == null ? g.t : Math.min(g.t, g.dur));
     var sub = '', coins = 0, xp = 0, win = false, place = null, st = 0;
-    $('retryBtn').hidden = true;
+    $('retryBtn').hidden = true; $('bestLine').className = 'note';
     if (md === 'party') {
       win = g.result === 'win'; place = g.place || 1;
       coins = g.close * 5 + Math.max(0, 9 - place) * 10 + (win ? 50 : 0) + g.bonus;
@@ -3113,6 +3249,28 @@ h1 .rush { color: var(--you); }
       $('bestLine').textContent = '';
       if (ROOM) { ROOM.status = 'lobby'; trackMe(); }
       if (g.matchPlace) { place = g.matchPlace; win = place === 1; title.textContent = win ? 'You won the round!' : ordinal(place) + ' of ' + nP; title.classList.toggle('win', win); $('stPlace').textContent = ordinal(place); }
+    } else if (g.daily) {
+      var dl = ensureDly(), prevBest = dl.day === g.daily.key ? dl.best || 0 : 0, counted = g.daily.counted && dl.day === g.daily.key && dl.tries < 3;
+      var isB = counted && survived > prevBest;
+      if (counted) {
+        dl.tries++;
+        if (isB) dl.best = Math.floor(survived * 10) / 10;
+        dl.queue = (dl.queue || []).concat([{ day: g.daily.key, secs: Math.floor(survived * 10) / 10, arena: g.arena.id, diff: g.diff }]);
+      }
+      var leftT = Math.max(0, 3 - dl.tries);
+      coins = Math.floor(survived / 2) + g.close * 5 + g.bonus + (counted ? 15 : 0);
+      xp = Math.floor(survived * 1.5) + g.close * 3;
+      $('endEyebrow').textContent = 'Daily Challenge · ' + name;
+      title.textContent = 'Lasted ' + clockUp(survived);
+      title.classList.toggle('win', isB);
+      if (isB) sub = prevBest ? 'New best for today! Your old best was ' + clockUp(prevBest) + '.' : 'Your first score of the day is on the board.';
+      else sub = HIT_TEXT[you.lastHit] || HIT_TEXT.low;
+      $('stLabel1').textContent = 'Today’s best'; $('stPlace').textContent = clockUp(dl.best || survived);
+      $('againBtn').textContent = leftT ? 'Try again (' + leftT + ' left)' : 'Play for fun';
+      var nudge = !counted ? 'Just for fun: only your first 3 tries a day count.' : isB ? (prevBest ? 'New record! ' : '') : (prevBest - survived).toFixed(1) + ' s off your best today. ';
+      if (counted) nudge += leftT ? leftT + (leftT === 1 ? ' try' : ' tries') + ' left today.' : 'That was your last try. Your best counts on today’s board.';
+      $('bestLine').textContent = nudge; $('bestLine').className = 'note nudge';
+      saveProfile();
     } else if (md === 'solo') {
       var cleared = g.result === 'clear', prev = soloStars(g.levelIdx);
       st = cleared ? Math.max(1, 3 - g.hits) : 0;
@@ -3143,7 +3301,7 @@ h1 .rush { color: var(--you); }
       else sub = HIT_TEXT[you.lastHit] || HIT_TEXT.low;
       $('stLabel1').textContent = 'Best'; $('stPlace').textContent = clockUp(Math.max(best, survived));
       $('againBtn').textContent = 'Run again';
-      $('bestLine').textContent = '';
+      $('bestLine').textContent = isBest ? (best > 0 ? 'New record!' : '') : (best - survived).toFixed(1) + ' s off your record of ' + clockUp(best) + '.'; $('bestLine').className = 'note nudge';
     }
     $('endSub').textContent = sub;
     if (md === 'room') setTimeout(renderMatchUI, 0); else $('matchBox').hidden = true;
@@ -3154,17 +3312,26 @@ h1 .rush { color: var(--you); }
     coins = Math.round(coins * g.D.reward); xp = Math.round(xp * g.D.reward);
     $('stCoins').textContent = '+' + coins;
     if (g.diff !== 'medium') $('endEyebrow').textContent += ' · ' + g.D.name;
-    var res = applyRound({ mode: md, arena: g.arena.id, survived: survived, place: place, win: win, stars: st, close: g.close, coins: coins, xp: xp, pickups: g.pickups, clean: g.firstHit != null ? g.firstHit : survived });
+    var res = applyRound({ mode: g.daily ? 'daily' : md, arena: g.arena.id, survived: survived, place: place, win: win, stars: st, close: g.close, coins: coins, xp: xp, pickups: g.pickups, clean: g.firstHit != null ? g.firstHit : survived });
+    var stk = bumpStreak();
+    res.streak = stk;
     renderEndProgress(res);
-    var roundRec = { mode: md, arena: g.arena.id, diff: g.diff, secs: Math.round(survived * 10) / 10, place: place, win: !!win, hits: g.hits || 0, close: g.close || 0, stars: st || 0, match: md === 'room' && ROOM && ROOM.match ? ROOM.match.id : null, daily: g.dailyKey || null };
+    var roundRec = { mode: md, arena: g.arena.id, diff: g.diff, secs: Math.round(survived * 10) / 10, place: place, win: !!win, hits: g.hits || 0, close: g.close || 0, stars: st || 0, match: md === 'room' && ROOM && ROOM.match ? ROOM.match.id : null, daily: g.daily ? g.daily.key : null };
+    if (g.daily) roundRec.mode = 'daily';
     var pn = (currentPlayer() || { name: 'I' }).name;
     if (md === 'room') shareText = pn + (win ? ' won' : ' finished ' + ordinal(place) + ' of ' + g.players.length) + ' in our Head Rush room in ' + name + '. Rematch?';
     else if (md === 'party') shareText = pn + (win ? ' won' : ' finished ' + ordinal(place) + ' of 8') + ' in ' + name + ' on Head Rush, with ' + g.close + ' close shave' + (g.close === 1 ? '' : 's') + '. Beat that!';
     else if (md === 'solo') shareText = pn + (g.result === 'clear' ? ' cleared Solo level ' + (g.levelIdx + 1) + ' with ' + st + (st === 1 ? ' star' : ' stars') : ' is stuck on Solo level ' + (g.levelIdx + 1)) + ' on Head Rush. ' + totalStars() + ' of ' + LEVELS.length * 3 + ' stars so far.';
+    else if (g.daily) shareText = pn + ' lasted ' + clockUp(survived) + ' in today’s Head Rush Daily Challenge (' + g.D.name + ' ' + name + '). Beat that!';
     else shareText = pn + ' lasted ' + clockUp(survived) + ' in ' + name + ' Survival on Head Rush. Beat that!';
     $('shareMsg').textContent = ''; $('shareText').hidden = true;
     var sl = $('syncLine'); sl.textContent = 'Saving to the online leaderboard…';
-    syncPlayer().then(function (ok) { logRound(roundRec); sl.textContent = ok ? 'Saved to the online leaderboard.' : 'Couldn’t reach the online leaderboard. Your score saves on this phone and uploads next time.'; });
+    syncPlayer().then(function (ok) {
+      logRound(roundRec); sl.textContent = ok ? 'Saved to the online leaderboard.' : 'Couldn’t reach the online leaderboard. Your score saves on this phone and uploads next time.';
+      if (ok && g.daily) flushDaily().then(function () { return fetchDailyBoard(true); }).then(function (d) {
+        if (d && d.me && d.me.rank && G === g) sl.textContent = 'You’re #' + d.me.rank + ' of ' + d.total + ' on today’s board.';
+      }, function () {});
+    });
     if (md !== 'room') running = false;
     $('endScreen').hidden = false;
     setTimeout(function () { try { $('againBtn').focus({ preventScroll: true }); } catch (e) {} }, 50);
@@ -3179,6 +3346,18 @@ h1 .rush { color: var(--you); }
     newRound(id, mode, soloIdx); running = true;
     roundStartVO(id);
   }
+  function startDaily() {
+    var dc = dailyToday(), dl = ensureDly();
+    audioOn(); keepAwake();
+    hideAllOverlays();
+    arenaUi(dc.arena);
+    newRound(dc.arena, 'survival', 0, null, { diff: dc.diff, daily: { key: dc.key, twist: dc.twist.id, counted: dl.tries < 3 } });
+    running = true;
+    roundStartVO(dc.arena);
+    toast(dc.twist.name + '!');
+  }
+  $('dailyGo').addEventListener('click', startDaily);
+  $('dailyBoardBtn').addEventListener('click', function () { boardTab = 'daily'; boardScope = 'online'; $('startScreen').hidden = true; $('boardScreen').hidden = false; renderBoard(); });
   function previewRound() {
     if (mode === 'solo') newRound(LEVELS[soloIdx].arena, 'solo', soloIdx);
     else newRound(arenaId, mode);
@@ -3269,6 +3448,7 @@ h1 .rush { color: var(--you); }
   }
   $('startBtn').addEventListener('click', startRound);
   $('againBtn').addEventListener('click', function () {
+    if (G && G.daily) { startDaily(); return; }
     if (G && G.mode === 'room') { $('endScreen').hidden = true; if (ROOM) showLobby(); else openRooms(); return; }
     if (G && G.mode === 'solo' && G.result === 'clear' && G.levelIdx + 1 < LEVELS.length) soloIdx = G.levelIdx + 1;
     startRound();
@@ -3285,6 +3465,7 @@ h1 .rush { color: var(--you); }
     $('lvlBadge').textContent = 'Lv ' + li.lvl;
     $('xpFill').style.width = (100 * li.into / li.need) + '%';
     $('coinsNum').textContent = PROFILE.coins;
+    renderToday();
     var ul = $('chalList');
     ul.textContent = '';
     PROFILE.daily.list.forEach(function (c) {
@@ -3315,6 +3496,7 @@ h1 .rush { color: var(--you); }
       add('Level up! You reached level ' + res.after + '.', 'levelup');
       SKINS.forEach(function (sk) { if (sk.lvl > res.before && sk.lvl <= res.after) add(sk.name + ' is now in the Locker.', 'levelup'); });
     }
+    if (res.streak) add((res.streak.froze ? 'Your weekly freeze saved your streak! Day ' + res.streak.n : res.streak.n === 1 ? 'Day 1 of a new streak!' : 'Day ' + res.streak.n + ' streak!') + ' +' + res.streak.bonus + ' coins', 'levelup');
     res.done.forEach(function (d) { add('Challenge done: ' + d.text + '. +' + d.reward + ' coins', 'won'); });
     ul.hidden = !ul.children.length;
   }
@@ -3430,7 +3612,28 @@ h1 .rush { color: var(--you); }
       ol.appendChild(li);
     });
   }
+  function renderDailyOnline() {
+    var req = ++boardReq, dc = dailyToday();
+    $('boardSub').textContent = 'Today: ' + DIFFS[dc.diff].name + ' ' + ARENAS[dc.arena].name + ', ' + dc.twist.name.toLowerCase() + '. Best of 3 tries counts.';
+    $('boardHint').textContent = 'Loading today’s scores…';
+    var pre = PROFILE.unsynced ? syncPlayer() : Promise.resolve();
+    pre.then(flushDaily).then(function () { return fetchDailyBoard(true); }).then(function (d) {
+      if (req !== boardReq) return;
+      var rows = d.top.map(function (r) { return { name: r.name, label: clockUp(Number(r.seconds)), note: 'Lasted', me: !!r.me }; });
+      boardRows(rows);
+      var hint = rows.length ? '' : 'No scores yet today. Be the first on the board.';
+      if (d.me && d.me.rank) hint = 'You’re #' + d.me.rank + ' of ' + d.total + ' today with ' + clockUp(Number(d.me.seconds)) + '.';
+      else if (rows.length) hint = d.total + (d.total === 1 ? ' player' : ' players') + ' today. Play today’s challenge to get on the board.';
+      if (d.yesterday) hint += ' Yesterday’s winner: ' + d.yesterday + '.';
+      $('boardHint').textContent = hint + ' New challenge at midnight Eastern.';
+    }, function () {
+      if (req !== boardReq) return;
+      boardRows([]);
+      $('boardHint').textContent = 'Couldn’t reach today’s leaderboard. Check your connection and open it again.';
+    });
+  }
   function renderOnline() {
+    if (boardTab === 'daily') { renderDailyOnline(); return; }
     var req = ++boardReq, myIds = {};
     PLAYERS.list.forEach(function (pl) { if (pl.cloudId) myIds[pl.cloudId] = pl.id === PLAYERS.current ? 'me' : 'phone'; });
     $('boardSub').textContent = 'Everyone playing with your link';
@@ -3466,7 +3669,10 @@ h1 .rush { color: var(--you); }
     $('boardSub').textContent = 'Players on this phone';
     var rows = PLAYERS.list.map(function (pl) {
       var p = pl.id === PLAYERS.current ? PROFILE : readProfile(pl.id), v = 0, label = '', note = '';
-      if (boardTab === 'survival') {
+      if (boardTab === 'daily') {
+        var dd = p.dly && p.dly.day === easternDay() ? p.dly : null;
+        v = dd ? dd.best : 0; label = v ? clockUp(v) : '–'; note = dd ? dd.tries + (dd.tries === 1 ? ' try' : ' tries') + ' today' : 'Not played today';
+      } else if (boardTab === 'survival') {
         var bestA = null;
         Object.keys(p.surv).forEach(function (k) { if (/@easy$/.test(k)) return; if (p.surv[k] > v) { v = p.surv[k]; bestA = k; } });
         label = v ? clockUp(v) : '–'; note = bestA && ARENAS[survArena(bestA)] ? ARENAS[survArena(bestA)].name + (/@hard$/.test(bestA) ? ' · Hard' : '') : 'No run yet';
