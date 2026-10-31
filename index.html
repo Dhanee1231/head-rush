@@ -224,6 +224,11 @@ h1 .rush { color: var(--you); }
 .today .btn-row.two .btn { height: 52px; font-size: 22px; }
 .today .btn-row.two .btn.ghost { font-size: 18px; }
 .nudge { color: var(--you); font-weight: 700; }
+.tip { margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--bg); border-left: 4px solid var(--fast); font-size: 14px; line-height: 1.45; }
+.tip b { color: var(--fast); }
+.ctl.teach { animation: teach 0.9s ease-in-out infinite; }
+@keyframes teach { 0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,210,63,0); } 50% { transform: scale(1.07); box-shadow: 0 0 0 6px rgba(255,210,63,.55); } }
+@media (prefers-reduced-motion: reduce) { .ctl.teach { animation: none; box-shadow: 0 0 0 4px rgba(255,210,63,.7); } }
 .perfect-badge { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px 5px 8px; border-radius: 999px; background: linear-gradient(135deg, #ffe07a, #f2b632); color: #191a33; font-family: var(--font-display); font-size: 17px; letter-spacing: .03em; box-shadow: 0 0 0 2px rgba(255,210,63,.35), 0 4px 14px rgba(242,182,50,.35); }
 .perfect-badge svg { width: 18px; height: 18px; }
 #bestLine:empty { display: none; }
@@ -511,7 +516,7 @@ h1 .rush { color: var(--you); }
       </div>
       <label class="setting" for="voiceToggle"><input type="checkbox" id="voiceToggle"> Announcer voice</label>
       <label class="setting" for="fpsToggle"><input type="checkbox" id="fpsToggle"> Show frame rate</label>
-      <div class="legal-row"><a class="link-btn" href="privacy.html" target="_blank" rel="noopener">Privacy</a><button class="link-btn danger" id="deleteData" type="button">Delete my data</button></div>
+      <div class="legal-row"><a class="link-btn" href="privacy.html" target="_blank" rel="noopener">Privacy</a><button class="link-btn" id="replayTut" type="button">Replay tutorial</button><button class="link-btn danger" id="deleteData" type="button">Delete my data</button></div>
       <p class="note" id="deleteMsg" role="status" aria-live="polite"></p>
     </div>
   </div>
@@ -534,6 +539,8 @@ h1 .rush { color: var(--you); }
         <div class="stat"><span>Close shaves</span><b id="stClose">0</b></div>
         <div class="stat"><span>Coins</span><b id="stCoins">0</b></div>
       </div>
+      <p class="tip" id="tipLine" hidden></p>
+      <button class="btn friends" id="tryMedium" type="button" hidden>Ready? Try Medium</button>
       <p class="note" id="bestLine"></p>
       <div class="progress-box">
         <div class="prog-row"><span class="lvl-badge" id="endLvl">Lv 1</span><div class="xpbar" aria-hidden="true"><span id="endXpFill"></span></div><span class="xp-gain" id="endXp">+0 XP</span></div>
@@ -2249,7 +2256,7 @@ h1 .rush { color: var(--you); }
   /* ---------- announcer: recorded voice lines ---------- */
   var voiceOn = true;
   try { voiceOn = localStorage.getItem('headrush.voice') !== '0'; } catch (e) {}
-  var VO_IDS = ['go', 'ready', 'a_neon', 'a_gear', 'a_frost', 'a_lava', 'a_orbit', 'a_carnival', 'ko1', 'ko2', 'ko3', 'ko4', 'ko5', 'ko_pip', 'ko_juno', 'ko_mako', 'ko_rex', 'ko_tali', 'ko_bo', 'ko_zuzu', 'you_out1', 'you_out2', 'final2', 'win1', 'win2', 'win_you', 'lose', 'time_up', 'clear', 'close1', 'close2', 'close3', 'faster', 'newbar', 'reverse', 'pu_shield', 'pu_slow', 'pu_heart', 'm30', 'm60', 'm90', 'm120', 'm150', 'm180', 'rd2', 'rd3', 'rd4', 'rd_final', 'mpoint', 'champ1', 'champ2', 'champ_you', 'onfire', 'splitbar', 'switchbar', 'perfect'];
+  var VO_IDS = ['go', 'ready', 'a_neon', 'a_gear', 'a_frost', 'a_lava', 'a_orbit', 'a_carnival', 'ko1', 'ko2', 'ko3', 'ko4', 'ko5', 'ko_pip', 'ko_juno', 'ko_mako', 'ko_rex', 'ko_tali', 'ko_bo', 'ko_zuzu', 'you_out1', 'you_out2', 'final2', 'win1', 'win2', 'win_you', 'lose', 'time_up', 'clear', 'close1', 'close2', 'close3', 'faster', 'newbar', 'reverse', 'pu_shield', 'pu_slow', 'pu_heart', 'm30', 'm60', 'm90', 'm120', 'm150', 'm180', 'rd2', 'rd3', 'rd4', 'rd_final', 'mpoint', 'champ1', 'champ2', 'champ_you', 'onfire', 'splitbar', 'switchbar', 'perfect', 'tut_hi', 'tut_jump', 'tut_duck', 'tut_nice', 'tut_both', 'tut_done'];
   var VOBUF = {}, voLoading = false, voEnd = 0, voSrc = null, voPending = null, voLowAt = -99;
   function loadVO() {
     if (voLoading || !AC || !voiceOn || !window.fetch) return;
@@ -2353,6 +2360,7 @@ h1 .rush { color: var(--you); }
   function setAlive() {
     if (G.mode === 'party' || G.mode === 'room') { $('hudPre').textContent = ''; aliveEl.textContent = G.players.filter(function (p) { return !p.out; }).length; $('hudPost').textContent = ' left'; }
     else if (G.mode === 'solo') { $('hudPre').textContent = 'Level '; aliveEl.textContent = G.levelIdx + 1; $('hudPost').textContent = ''; }
+    else if (G.tut) { $('hudPre').textContent = 'Step '; aliveEl.textContent = Math.min(3, G.tut.step + 1); $('hudPost').textContent = ' of 3'; }
     else if (G.daily) { $('hudPre').textContent = 'Today '; aliveEl.textContent = clockUp(ensureDly().best || 0); $('hudPost').textContent = ''; }
     else { $('hudPre').textContent = 'Best '; aliveEl.textContent = clockUp(PROFILE.surv[survKey(G.arena.id, G.diff)] || 0); $('hudPost').textContent = ''; }
   }
@@ -2452,6 +2460,11 @@ h1 .rush { color: var(--you); }
         p.laneX = p.lane;
       });
     }
+    if (opt && opt.tut) {
+      G.tut = { step: 0, phase: 'spawn', at: 0.4, frozen: false, prompt: '', sub: '', need: null, hit: false };
+      G.bars = []; G.puNext = Infinity; G.survAdds = [];
+      G.omega = BAR0 * 0.9;
+    }
     if (opt && opt.daily) {
       var tw = opt.daily.twist;
       G.daily = opt.daily;
@@ -2535,7 +2548,7 @@ h1 .rush { color: var(--you); }
     if (kind === 'jump') { if (t < p.duck) p.duck = t; p.air = t + G.arena.jumpT; }
     else { if (t < p.air) { p.air = t; p.dropAt = t; } p.duck = t + DUCK_T; }
     p.actAt = t;
-    if (p.you) { if (kind === 'jump') sfx.jump(); else sfx.duck(); if (G.mode === 'room') netSend(kind); }
+    if (p.you) { if (kind === 'jump') sfx.jump(); else sfx.duck(); if (G.mode === 'room') netSend(kind); if (G.tut) tutAct(kind); }
   }
   function switchLane(p) { p.lane = 1 - p.lane; p.laneAt = G.t; if (p.you) { sfx.lane(); if (G.mode === 'room') netSend(); } }
 
@@ -2601,6 +2614,11 @@ h1 .rush { color: var(--you); }
 
   function hit(p, cause) {
     var t = G.t;
+    if (G.tut) {
+      p.stun = t + 0.5; p.air = p.duck = -9; burstAt(p, p.color, 10, 0.8); sfx.bonk(0.7); buzz(60);
+      G.tut.hit = true; toast(cause === 'high' ? 'Blue bars need a DUCK' : 'Orange bars need a JUMP');
+      return;
+    }
     if (p.shield > t) {
       p.shield = 0; p.stun = t + 0.45;
       burstAt(p, COL.puShield, 12, 1);
@@ -2646,6 +2664,89 @@ h1 .rush { color: var(--you); }
     ctx.font = sz + 'px ' + DISPLAY; ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(3, sz * 0.18); ctx.strokeStyle = 'rgba(8,8,24,0.8)';
     ctx.strokeText('x' + m, x, y); ctx.fillStyle = col; ctx.fillText('x' + m, x, y);
     if (m === 5 && !reduceMotion) { ctx.globalAlpha = 0.35 + 0.25 * Math.sin(G.t * 12); ctx.fillStyle = '#ffd23f'; ctx.fillText('x5', x, y); ctx.globalAlpha = 1; }
+  }
+  /* ---------- guided first round ---------- */
+  function tutBar(type, ahead) {
+    var you = G.players[0];
+    var b = { id: G.nextId++, angle: you.angle + ahead, type: type, born: G.t - 1, ph: 0 };
+    G.bars.push(b); return b;
+  }
+  function tutTti(b) { var you = G.players[0], v = G.omega + speedAt(you); return wrap(b.angle - you.angle) / v; }
+  function tutTick(g, t) {
+    var T = g.tut, you = g.players[0];
+    if (T.phase === 'spawn' && t >= T.at) {
+      T.hit = false;
+      if (T.step === 0) { T.bars = [tutBar('low', 2.2)]; T.need = 'jump'; T.prompt = 'Orange bar coming'; T.sub = 'Orange sweeps low'; if (t < 1) say('tut_hi', 2); }
+      else if (T.step === 1) { T.bars = [tutBar('high', 2.2)]; T.need = 'duck'; T.prompt = 'Blue bar coming'; T.sub = 'Blue swings high'; }
+      else { T.bars = [tutBar('low', 1.6), tutBar('high', 1.6 + 1.0 * (g.omega + RUN))]; T.need = null; T.prompt = 'Now both, full speed!'; T.sub = 'Jump orange, duck blue'; say('tut_both', 1); }
+      T.phase = 'run';
+    }
+    if (T.phase !== 'run') return;
+    var first = T.bars[0];
+    if (T.step < 2 && !T.frozen && !T.released && first && tutTti(first) <= 0.6) {
+      T.frozen = true;
+      T.prompt = T.need === 'jump' ? 'Swipe up or tap Jump' : 'Swipe down or tap Duck';
+      T.sub = T.need === 'jump' ? 'Orange means jump' : 'Blue means duck';
+      say(T.need === 'jump' ? 'tut_jump' : 'tut_duck', 2);
+      teachBtn(T.need);
+    }
+    var passed = T.bars.every(function (b) { return wrap(b.angle - you.angle) < -0.35; });
+    if (passed) {
+      G.bars = G.bars.filter(function (b) { return T.bars.indexOf(b) < 0; });
+      teachBtn(null); T.released = false; T.frozen = false;
+      if (T.hit) { T.prompt = 'Let’s try that again'; T.sub = ''; T.phase = 'spawn'; T.at = t + 1.0; return; }
+      T.step++;
+      if (T.step >= 3) { T.prompt = 'You’ve got it!'; T.sub = ''; T.phase = 'done'; say('tut_done', 2); sfx.win(); confetti(); buzz([30, 50, 30, 50, 90]); finish('clear', 1.6); return; }
+      setAlive(); T.prompt = 'Nice!'; T.sub = ''; say('tut_nice', 1); sfx.close(); burstAt(you, COL.you, 14, 1);
+      T.phase = 'spawn'; T.at = t + 1.1;
+    }
+  }
+  function tutAct(kind) {
+    var T = G.tut;
+    if (!T || !T.frozen) return;
+    if (kind !== T.need) { toast(T.need === 'jump' ? 'That was a duck. Orange bars need a JUMP' : 'That was a jump. Blue bars need a DUCK'); return; }
+    var you = G.players[0], b = T.bars[0];
+    T.frozen = false; T.released = true; G.bf = 1;
+    b.angle = you.angle + 0.22 * (G.omega + speedAt(you));
+    T.prompt = ''; T.sub = ''; teachBtn(null);
+  }
+  function teachBtn(kind) {
+    btnJump.classList.toggle('teach', kind === 'jump');
+    btnDuck.classList.toggle('teach', kind === 'duck');
+  }
+  function startTutorial() {
+    audioOn(); keepAwake();
+    hideAllOverlays();
+    arenaUi('neon');
+    newRound('neon', 'survival', 0, null, { diff: 'easy', tut: true });
+    G.t = -1.2;
+    running = true;
+  }
+  function showTutEnd() {
+    var g = G;
+    teachBtn(null);
+    var first = !PROFILE.tutDone;
+    PROFILE.tutDone = true;
+    if (first) PROFILE.coins += 30;
+    saveProfile();
+    $('retryBtn').hidden = true; $('perfectBadge').hidden = true; $('matchBox').hidden = true; $('tryMedium').hidden = true;
+    $('endEyebrow').textContent = 'Tutorial · Neon Rooftop';
+    $('endTitle').textContent = 'You’ve got it!'; $('endTitle').classList.add('win');
+    $('endSub').textContent = 'Jump the orange bars, duck the blue ones. Bars speed up every 10 seconds, and more join in.';
+    $('stLabel1').textContent = 'Steps'; $('stPlace').textContent = '3 of 3';
+    $('stTime').textContent = clockUp(g.t); $('stClose').textContent = g.close; $('stCoins').textContent = first ? '+30' : '+0';
+    $('bestLine').textContent = ''; $('bestLine').className = 'note';
+    var tl = $('tipLine'); tl.hidden = false; tl.textContent = '';
+    var tb = document.createElement('b'); tb.textContent = 'Next: '; tl.appendChild(tb);
+    tl.appendChild(document.createTextNode('a real Party round against 7 bots, on Easy. Last runner standing wins.'));
+    var li = levelInfo(PROFILE.xp);
+    $('endLvl').textContent = 'Lv ' + li.lvl; $('endXp').textContent = '+0 XP'; $('endXpFill').style.width = (100 * li.into / li.need) + '%';
+    $('endChal').hidden = true;
+    $('againBtn').textContent = 'Play my first round';
+    $('syncLine').textContent = '';
+    logRound({ mode: 'tutorial', arena: 'neon', diff: 'easy', secs: Math.round(g.t * 10) / 10, place: null, win: true, hits: 0, close: g.close || 0, stars: 0, match: null, daily: null });
+    running = false;
+    $('endScreen').hidden = false;
   }
   function closeShave(p, color) { G.close++; var cm = comboMult(G.run || 0); G.closePts = (G.closePts || 0) + 5 * cm; toast('Close shave! +' + 5 * cm); sfx.close(); buzz(15); burstAt(p, color, 6, 0.6); if (Math.random() < 0.35) say(['close1', 'close2', 'close3'], 0); }
 
@@ -2705,7 +2806,8 @@ h1 .rush { color: var(--you); }
     if (t < 0) { var c = Math.ceil(-t); if (c !== g.lastCount) { g.lastCount = c; sfx.tick(); } return; }
     if (was < 0) { sfx.go(); toast('Run!'); say('go', 1); }
 
-    if (!g.over) {
+    if (g.tut && !g.over) tutTick(g, t);
+    if (!g.over && !g.tut) {
       var lv = Math.floor(t / 10);
       if (lv > g.level) {
         g.level = lv;
@@ -2751,7 +2853,7 @@ h1 .rush { color: var(--you); }
     /* Speed limit: bars never get closer together in time than this difficulty's reaction gap. */
     var gapCap = minBarGap() / g.D.gapT - RUN * (A.belts.length ? 1.65 : 1);
     if (g.omega > gapCap) g.omega = Math.max(0.5, gapCap);
-    var bfTarget = t < g.slowUntil ? 0.45 : t < g.calmUntil ? 0.6 : 1;
+    var bfTarget = g.tut && g.tut.frozen ? 0 : t < g.slowUntil ? 0.45 : t < g.calmUntil ? 0.6 : 1;
     g.bf += (bfTarget - g.bf) * Math.min(1, dt * 5);
     for (i = 0; i < g.bars.length; i++) g.bars[i].angle -= g.omega * g.bf * g.dir * dt;
     for (i = 0; i < g.bars.length; i++) { var sb = g.bars[i]; if (sb.lead) { var lb = barById(sb.lead); if (lb) sb.angle = lb.angle + splitOff(); } }
@@ -2778,7 +2880,7 @@ h1 .rush { color: var(--you); }
         if (p.laneX !== p.lane) { var dlr = dt / LANE_T; p.laneX = p.lane > p.laneX ? Math.min(p.lane, p.laneX + dlr) : Math.max(p.lane, p.laneX - dlr); }
         continue;
       }
-      p.angle += speedAt(p) * (t < p.stun ? 0.45 : 1) * dt;
+      p.angle += speedAt(p) * (t < p.stun ? 0.45 : 1) * (g.tut ? g.bf : 1) * dt;
       if (p.laneX !== p.lane) {
         var dl = dt / LANE_T;
         p.laneX = p.lane > p.laneX ? Math.min(p.lane, p.laneX + dl) : Math.max(p.lane, p.laneX - dl);
@@ -3277,6 +3379,16 @@ h1 .rush { color: var(--you); }
   }
   function centerTexts(g, A, S, cx, cy) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (running && g.tut && g.tut.prompt && g.t >= 0) {
+      var T = g.tut, big = Math.round(Math.max(30, S * 0.12));
+      ctx.font = big + 'px ' + DISPLAY;
+      var tw = ctx.measureText(T.prompt).width; if (tw > W * 0.9) big = Math.floor(big * W * 0.9 / tw);
+      ctx.globalAlpha = T.frozen && !reduceMotion ? 0.75 + 0.25 * Math.sin(g.t * 8) : 1;
+      var pc = T.need === 'jump' ? COL.low : T.need === 'duck' ? COL.high : COL.you;
+      textOut(T.prompt, cx, cy - S * 0.44, T.frozen ? pc : COL.you, big);
+      ctx.globalAlpha = 1;
+      if (T.sub) textOut(T.sub, cx, cy - S * 0.44 + big * 0.95, COL.ink, Math.round(Math.max(16, S * 0.055)));
+    }
     if (running && g.mode === 'survival' && !g.over) {
       var mf = g.t - g.mileFlash;
       if (mf >= 0 && mf < 1.6) {
@@ -3309,6 +3421,8 @@ h1 .rush { color: var(--you); }
     hammer: 'A hammer got you. Match its color: orange jump, blue duck.'
   };
   function showEnd() {
+    if (G.tut) { showTutEnd(); return; }
+    $('tipLine').hidden = true; $('tryMedium').hidden = true;
     var g = G, you = g.players[0], md = g.mode, title = $('endTitle'), name = g.arena.name;
     var survived = you.out ? g.youOutAt : (g.dur == null ? g.t : Math.min(g.t, g.dur));
     var sub = '', coins = 0, xp = 0, win = false, place = null, st = 0;
@@ -3419,6 +3533,19 @@ h1 .rush { color: var(--you); }
     res.streak = stk;
     res.combo = g.bestRun || 0; res.perfect = perfect ? PROFILE.perfect : 0;
     renderEndProgress(res);
+    var TIPS = [
+      ['Power-ups:', ' grab the glowing orbs. A shield blocks a hit, a clock slows the bars, a heart heals you.'],
+      ['Close shaves:', ' jump or duck at the very last moment for bonus coins, and dodge cleanly in a row to build your combo.'],
+      ['Ducked too early?', ' Tap Jump and you spring straight up. Duck in mid-air to drop down fast.'],
+      ['Play together:', ' tap “Play with friends online” to race your family on their own phones.'],
+      ['Daily Challenge:', ' a new one every day. Your best of 3 tries goes on today’s board.']
+    ];
+    var tipN = PROFILE.rounds;
+    if (tipN >= 1 && tipN <= TIPS.length) {
+      var tl = $('tipLine'); tl.textContent = ''; tl.hidden = false;
+      var tbb = document.createElement('b'); tbb.textContent = TIPS[tipN - 1][0]; tl.appendChild(tbb); tl.appendChild(document.createTextNode(TIPS[tipN - 1][1]));
+    }
+    $('tryMedium').hidden = !(PROFILE.rounds >= 3 && difficulty === 'easy' && !PROFILE.medAsked && md !== 'room' && md !== 'solo' && !g.daily);
     var roundRec = { mode: md, arena: g.arena.id, diff: g.diff, secs: Math.round(survived * 10) / 10, place: place, win: !!win, hits: g.hits || 0, close: g.close || 0, stars: st || 0, match: md === 'room' && ROOM && ROOM.match ? ROOM.match.id : null, daily: g.daily ? g.daily.key : null };
     if (g.daily) roundRec.mode = 'daily';
     var pn = (currentPlayer() || { name: 'I' }).name;
@@ -3552,11 +3679,15 @@ h1 .rush { color: var(--you); }
   $('startBtn').addEventListener('click', startRound);
   $('againBtn').addEventListener('click', function () {
     if (G && G.daily) { startDaily(); return; }
+    if (G && G.tut) { pickMode('party'); pickDiff('easy'); startRound(); return; }
     if (G && G.mode === 'room') { $('endScreen').hidden = true; if (ROOM) showLobby(); else openRooms(); return; }
+    if (G && !G.tut && !G.daily && PROFILE.rounds >= 3 && difficulty === 'easy' && !PROFILE.medAsked) { PROFILE.medAsked = true; saveProfile(); }
     if (G && G.mode === 'solo' && G.result === 'clear' && G.levelIdx + 1 < LEVELS.length) soloIdx = G.levelIdx + 1;
     startRound();
   });
   $('retryBtn').addEventListener('click', startRound);
+  $('tryMedium').addEventListener('click', function () { PROFILE.medAsked = true; saveProfile(); pickDiff('medium'); startRound(); });
+  $('replayTut').addEventListener('click', startTutorial);
   $('switchBtn').addEventListener('click', function () { if (ROOM) leaveRoom(); running = false; $('endScreen').hidden = true; $('startScreen').hidden = false; renderProfile(); pickMode(mode); });
 
   /* ---------- progress UI and Locker ---------- */
@@ -3699,6 +3830,7 @@ h1 .rush { color: var(--you); }
     var taken = PLAYERS.list.some(function (pl) { return pl.name.toLowerCase() === name.toLowerCase(); });
     if (taken) { $('nameErr').textContent = name + ' is already on this phone. Tap their name above or pick another.'; return; }
     addPlayer(name); closeNameScreen(); syncPlayer();
+    if (!PROFILE.rounds && !PROFILE.tutDone) { pickDiff('easy'); startTutorial(); }
   });
   $('switchPlayer').addEventListener('click', function () { showNameScreen(false); });
 
