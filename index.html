@@ -53,7 +53,7 @@
   --coin-edge: #b9840b;
   --pu-shield: #7fe3ff; --pu-slow: #c58cff;
   --sk-lime: #c6f06a; --sk-gum: #ff9ad5; --sk-frost: #bde8ff; --sk-devil: #e8455f;
-  --sk-royal: #b48cff; --sk-ghost: #f4f2ff; --sk-champ: #ffcf5a;
+  --sk-royal: #b48cff; --sk-ghost: #f4f2ff; --sk-champ: #ffcf5a; --sk-gold: #f2b632;
   --font-display: 'Lilita One', 'Arial Rounded MT Bold', 'Trebuchet MS', system-ui, sans-serif;
   --font-ui: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color-scheme: dark;
@@ -224,6 +224,8 @@ h1 .rush { color: var(--you); }
 .today .btn-row.two .btn { height: 52px; font-size: 22px; }
 .today .btn-row.two .btn.ghost { font-size: 18px; }
 .nudge { color: var(--you); font-weight: 700; }
+.perfect-badge { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px 5px 8px; border-radius: 999px; background: linear-gradient(135deg, #ffe07a, #f2b632); color: #191a33; font-family: var(--font-display); font-size: 17px; letter-spacing: .03em; box-shadow: 0 0 0 2px rgba(255,210,63,.35), 0 4px 14px rgba(242,182,50,.35); }
+.perfect-badge svg { width: 18px; height: 18px; }
 #bestLine:empty { display: none; }
 .howto summary {
   cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center;
@@ -258,7 +260,8 @@ h1 .rush { color: var(--you); }
 .player-btn:focus-visible { outline: 3px solid var(--you); outline-offset: 2px; }
 .tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; background: var(--bg); padding: 4px; border-radius: 14px; }
 .tabs.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.tabs.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.tabs.four { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.tabs.four .mode { padding-left: 2px; padding-right: 2px; font-size: 15px; }
 .concept { margin: 0; padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--line); font-size: 14px; line-height: 1.45; color: var(--muted); }
 .concept b { color: var(--ink); }
 .concept .link-btn { padding: 0; }
@@ -517,6 +520,7 @@ h1 .rush { color: var(--you); }
     <div class="card">
       <div class="eyebrow" id="endEyebrow">Round over</div>
       <h2 class="result" id="endTitle">You won!</h2>
+      <div class="perfect-badge" id="perfectBadge" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9z" fill="#191a33"/></svg>Perfect round</div>
       <p class="sub" id="endSub">Last runner standing.</p>
       <div class="match-box" id="matchBox" hidden>
         <div class="match-head"><b id="matchHead">Round 1 of 5</b><span id="matchNote">First to 3 round wins</span></div>
@@ -699,6 +703,7 @@ h1 .rush { color: var(--you); }
         <button class="mode" type="button" data-board="survival" aria-pressed="true">Survival</button>
         <button class="mode" type="button" data-board="party" aria-pressed="false">Party</button>
         <button class="mode" type="button" data-board="solo" aria-pressed="false">Solo</button>
+        <button class="mode" type="button" data-board="combo" aria-pressed="false">Combo</button>
       </div>
       <ol class="board" id="boardList"></ol>
       <p class="note" id="boardHint"></p>
@@ -792,7 +797,8 @@ h1 .rush { color: var(--you); }
     { id: 'devil', name: 'Little Devil', color: C('sk-devil'), acc: 'horns', price: 150, lvl: 2 },
     { id: 'royal', name: 'Royal', color: C('sk-royal'), acc: 'crown', price: 250, lvl: 3 },
     { id: 'ghost', name: 'Ghost', color: C('sk-ghost'), acc: 'halo', price: 300, lvl: 5 },
-    { id: 'champ', name: 'Champion', color: C('sk-champ'), acc: 'star', price: 500, lvl: 8 }
+    { id: 'champ', name: 'Champion', color: C('sk-champ'), acc: 'star', price: 500, lvl: 8 },
+    { id: 'gold', name: 'Perfect Gold', color: C('sk-gold'), acc: 'halo', price: 0, lvl: 1, perfect: 10 }
   ];
   function skinById(id) { for (var i = 0; i < SKINS.length; i++) if (SKINS[i].id === id) return SKINS[i]; return SKINS[0]; }
   /* Players on this phone: each has a name and their own profile. */
@@ -897,7 +903,8 @@ h1 .rush { color: var(--you); }
       p_id: pl.cloudId, p_secret: pl.secret, p_name: pl.name,
       p_survival_best: Math.floor(s.best * 10) / 10, p_survival_arena: s.arena,
       p_party_wins: PROFILE.wins, p_party_rounds: PROFILE.partyRounds, p_best_place: PROFILE.bestPlace || null,
-      p_solo_stars: s.stars, p_level: levelInfo(PROFILE.xp).lvl, p_skin: PROFILE.skin
+      p_solo_stars: s.stars, p_level: levelInfo(PROFILE.xp).lvl, p_skin: PROFILE.skin,
+      p_best_combo: PROFILE.bestCombo || 0, p_perfect: PROFILE.perfect || 0
     } }).then(function () { syncState = 'ok'; PROFILE.unsynced = false; saveProfile(); return true; },
       function () { syncState = 'fail'; PROFILE.unsynced = true; saveProfile(); return false; });
   }
@@ -929,6 +936,7 @@ h1 .rush { color: var(--you); }
     return { lvl: lvl, into: rest, need: need };
   }
   var CHALLENGES = {
+    perfect1: { text: 'Finish a round without getting hit', target: 1, reward: 80, add: function (r) { return r.perfect ? 1 : 0; } },
     survive45: { text: 'Survive 45 seconds in one round', target: 1, reward: 50, add: function (r) { return r.survived >= 45 ? 1 : 0; } },
     close3: { text: 'Get 3 close shaves in one round', target: 1, reward: 60, add: function (r) { return r.close >= 3 ? 1 : 0; } },
     close10: { text: 'Get 10 close shaves today', target: 10, reward: 80, add: function (r) { return r.close; } },
@@ -2128,6 +2136,7 @@ h1 .rush { color: var(--you); }
       });
     }
     if (g.t < g.slowUntil) { ctx.fillStyle = COL.puSlow; ctx.globalAlpha = 0.08; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+    if (g.swFlash && g.t - g.swFlash.t < 0.35) { ctx.fillStyle = g.swFlash.col; ctx.globalAlpha = 0.22 * (1 - (g.t - g.swFlash.t) / 0.35); ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
     var yr = runs[0], youX = yr.cx !== undefined ? yr.cx : cx, footY = yr.foot !== undefined ? yr.foot : cy + S * 0.5, topY = yr.top !== undefined ? yr.top : footY - S * 0.3;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     if (!you.out) {
@@ -2140,6 +2149,7 @@ h1 .rush { color: var(--you); }
       textOut(best.need === 'jump' ? '▲ JUMP' : best.need === 'duck' ? '▼ DUCK' : 'SWITCH LANE', youX, topY - Math.max(22, S * 0.11), best.need === 'jump' ? COL.low : best.need === 'duck' ? COL.high : COL.ice, Math.round(S * 0.09));
       ctx.globalAlpha = 1;
     }
+    drawCombo(youX + Math.max(40, S * 0.17), topY + Math.max(8, S * 0.04), S);
     centerTexts(g, A, S, cx, cy);
   }
   function textOut(s, x, y, col, size) {
@@ -2230,6 +2240,8 @@ h1 .rush { color: var(--you); }
       noise(1.1, 0.06, 'highpass', 6000, 4000, 0.4, 0.33);
     },
     out: function () { osc('sine', 1500, 280, 0.65, 0.12, 0, [7, 25]); osc('sine', 140, 45, 0.35, 0.3, 0.55); noise(0.15, 0.08, 'lowpass', 900, 200, 0.7, 0.55); },
+    combo: function (m) { var f = 440 * (1 + m * 0.18); osc('triangle', f, f * 2, 0.16, 0.07); osc('sine', f * 1.5, f * 3, 0.12, 0.04, 0.06); },
+    flip: function () { osc('square', 1200, 300, 0.12, 0.035); osc('square', 300, 1200, 0.12, 0.035, 0.12); },
     pop: function () { osc('sine', 520, 1040, 0.09, 0.07); osc('triangle', 1200, 1500, 0.06, 0.03, 0.04); },
     pickup: function () { osc('sine', 880, 880, 0.12, 0.08); osc('sine', 1320, 1320, 0.14, 0.08, 0.06); osc('sine', 1760, 1760, 0.2, 0.07, 0.12); }
   };
@@ -2237,7 +2249,7 @@ h1 .rush { color: var(--you); }
   /* ---------- announcer: recorded voice lines ---------- */
   var voiceOn = true;
   try { voiceOn = localStorage.getItem('headrush.voice') !== '0'; } catch (e) {}
-  var VO_IDS = ['go', 'ready', 'a_neon', 'a_gear', 'a_frost', 'a_lava', 'a_orbit', 'a_carnival', 'ko1', 'ko2', 'ko3', 'ko4', 'ko5', 'ko_pip', 'ko_juno', 'ko_mako', 'ko_rex', 'ko_tali', 'ko_bo', 'ko_zuzu', 'you_out1', 'you_out2', 'final2', 'win1', 'win2', 'win_you', 'lose', 'time_up', 'clear', 'close1', 'close2', 'close3', 'faster', 'newbar', 'reverse', 'pu_shield', 'pu_slow', 'pu_heart', 'm30', 'm60', 'm90', 'm120', 'm150', 'm180', 'rd2', 'rd3', 'rd4', 'rd_final', 'mpoint', 'champ1', 'champ2', 'champ_you'];
+  var VO_IDS = ['go', 'ready', 'a_neon', 'a_gear', 'a_frost', 'a_lava', 'a_orbit', 'a_carnival', 'ko1', 'ko2', 'ko3', 'ko4', 'ko5', 'ko_pip', 'ko_juno', 'ko_mako', 'ko_rex', 'ko_tali', 'ko_bo', 'ko_zuzu', 'you_out1', 'you_out2', 'final2', 'win1', 'win2', 'win_you', 'lose', 'time_up', 'clear', 'close1', 'close2', 'close3', 'faster', 'newbar', 'reverse', 'pu_shield', 'pu_slow', 'pu_heart', 'm30', 'm60', 'm90', 'm120', 'm150', 'm180', 'rd2', 'rd3', 'rd4', 'rd_final', 'mpoint', 'champ1', 'champ2', 'champ_you', 'onfire', 'splitbar', 'switchbar', 'perfect'];
   var VOBUF = {}, voLoading = false, voEnd = 0, voSrc = null, voPending = null, voLowAt = -99;
   function loadVO() {
     if (voLoading || !AC || !voiceOn || !window.fetch) return;
@@ -2452,24 +2464,66 @@ h1 .rush { color: var(--you); }
     lastTimerText = ''; setCue(null); updateHearts(); setAlive();
   }
 
-  function addBar(type) {
-    var angs = G.bars.map(function (b) { return ((b.angle % TAU) + TAU) % TAU; }).sort(function (a, b) { return a - b; });
-    var best = 0, at = 0;
-    for (var i = 0; i < angs.length; i++) {
-      var a = angs[i], n = i + 1 < angs.length ? angs[i + 1] : angs[0] + TAU;
+  function barById(id) { for (var i = 0; i < G.bars.length; i++) if (G.bars[i].id === id) return G.bars[i]; return null; }
+  /* A split bar is a low half with a high half 0.4 s behind it. The pair counts as one unit for bar spacing. */
+  function splitOff() { return 0.4 * (G.omega * G.dir + RUN); }
+  function barUnits() {
+    var u = [];
+    G.bars.forEach(function (b) {
+      if (b.lead) return;
+      var a = ((b.angle % TAU) + TAU) % TAU, lo = a, hi = a, m = b.mate ? barById(b.mate) : null;
+      if (m) { var d = wrap(m.angle - b.angle); if (d > 0) hi = a + d; else lo = a + d; }
+      u.push({ lo: lo, hi: hi });
+    });
+    return u.sort(function (x, y) { return x.lo - y.lo; });
+  }
+  function widestGap() {
+    var u = barUnits(), best = 0, at = 0;
+    for (var i = 0; i < u.length; i++) {
+      var a = u[i].hi, n = i + 1 < u.length ? u[i + 1].lo : u[0].lo + TAU;
       if (n - a > best) { best = n - a; at = a + best / 2; }
     }
+    return { best: best, at: at };
+  }
+  function addBar(type, sw) {
+    var wg = widestGap(), best = wg.best, at = wg.at;
     /* Never add a bar that would leave less time between bars than a player needs to react and switch moves. */
     if (G.bars.length && Math.min(minBarGap(), best / 2) / barRelSpeed() < G.D.gapT) return false;
-    G.bars.push({ id: G.nextId++, angle: at, type: type, born: G.t, ph: GR() * 3.7 });
-    toast(type === 'low' ? 'Another orange bar!' : 'Another blue bar!'); say('newbar', 0);
+    var nb = { id: G.nextId++, angle: at, type: type, born: G.t, ph: GR() * 3.7 };
+    if (sw) { nb.sw = true; nb.base = type; }
+    G.bars.push(nb);
+    if (sw) { toast('Switch bar! It flips color before it reaches you'); say('switchbar', 1); }
+    else { toast(type === 'low' ? 'Another orange bar!' : 'Another blue bar!'); say('newbar', 0); }
+    return true;
+  }
+  /* A switch bar flips color about 0.8 s before it reaches you. An existing plain bar becomes one, so spacing never gets tighter. */
+  function makeSwitch() {
+    for (var i = 0; i < G.bars.length; i++) {
+      var b = G.bars[i];
+      if (b.sw || b.lead || b.mate || G.t - b.born < 3) continue;
+      b.sw = true; b.base = b.type;
+      toast('Switch bar! One bar now flips color before it reaches you'); say('switchbar', 1);
+      return true;
+    }
+    return false;
+  }
+  function addSplit() {
+    var wg = widestGap(), off = splitOff();
+    if (!G.bars.length || off <= 0.05) return false;
+    var room = (wg.best - off) / 2;
+    if (Math.min(minBarGap(), room) / barRelSpeed() < G.D.gapT) return false;
+    var ph = GR() * 3.7, lo = wg.at - off / 2;
+    var a = { id: G.nextId++, angle: lo, type: 'low', born: G.t, ph: ph };
+    var b = { id: G.nextId++, angle: lo + off, type: 'high', born: G.t, ph: ph, lead: a.id };
+    a.mate = b.id; G.bars.push(a); G.bars.push(b);
+    toast('Split bar! Jump, then duck'); say('splitbar', 1);
     return true;
   }
   function minBarGap() {
-    var angs = G.bars.map(function (b) { return ((b.angle % TAU) + TAU) % TAU; }).sort(function (a, b) { return a - b; });
-    if (angs.length < 2) return TAU;
+    var u = barUnits();
+    if (u.length < 2) return u.length ? TAU - (u[0].hi - u[0].lo) : TAU;
     var m = TAU;
-    for (var i = 0; i < angs.length; i++) { var n = i + 1 < angs.length ? angs[i + 1] : angs[0] + TAU; m = Math.min(m, n - angs[i]); }
+    for (var i = 0; i < u.length; i++) { var n = i + 1 < u.length ? u[i + 1].lo : u[0].lo + TAU; m = Math.min(m, n - u[i].hi); }
     return m;
   }
   function barRelSpeed() { return G.omega + RUN * (G.arena.belts.length ? 1.65 : 1); }
@@ -2554,7 +2608,7 @@ h1 .rush { color: var(--you); }
       return;
     }
     p.hearts--; p.stun = t + STUN_T; p.air = p.duck = -9; p.queued = null; p.lastHit = cause;
-    if (p.you) { G.hits++; if (G.firstHit == null) G.firstHit = t; }
+    if (p.you) { G.hits++; if (G.firstHit == null) G.firstHit = t; if ((G.run || 0) >= COMBO_STEPS[1]) toast('Combo lost'); G.run = 0; }
     burstAt(p, cause === 'hole' ? COL.lava : p.color, 14, 1);
     if (p.you) { G.shake = reduceMotion ? 0 : 12; sfx.bonk(1); buzz(p.hearts > 0 ? 90 : [60, 40, 180]); updateHearts(); }
     else sfx.bonk(0.22);
@@ -2570,20 +2624,45 @@ h1 .rush { color: var(--you); }
     if (p.you && G.mode === 'room') netSend();
   }
 
-  function closeShave(p, color) { G.close++; toast('Close shave! +5'); sfx.close(); buzz(15); burstAt(p, color, 6, 0.6); if (Math.random() < 0.35) say(['close1', 'close2', 'close3'], 0); }
+  /* Combo: clean dodges in a row (a close shave counts double). x2 at 6, x3 at 12, x4 at 20, x5 at 30. A hit resets it. */
+  var COMBO_STEPS = [0, 6, 12, 20, 30];
+  function comboMult(n) { var m = 1; for (var i = 1; i < COMBO_STEPS.length; i++) if (n >= COMBO_STEPS[i]) m = i + 1; return m; }
+  function dodge(p, close) {
+    if (!p.you || !G) return;
+    var before = comboMult(G.run || 0);
+    G.run = (G.run || 0) + (close ? 2 : 1);
+    if (G.run > (G.bestRun || 0)) G.bestRun = G.run;
+    var m = comboMult(G.run);
+    if (m > before) { G.comboAt = G.t; toast('Combo x' + m + '!'); sfx.combo(m); buzz(m === 5 ? [20, 30, 20, 30, 40] : 25); if (m === 5) say('onfire', 1); }
+  }
+  function drawCombo(x, y, S) {
+    if (!G || G.players[0].out || G.over) return;
+    var m = comboMult(G.run || 0);
+    if (m < 2) return;
+    var age = G.t - (G.comboAt || -9), k = 1 + 0.45 * Math.max(0, 1 - age / 0.35);
+    var col = ['', '', '#5ee0a0', '#3fa9ff', '#c58cff', '#ff8a2a'][m];
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    var sz = Math.round(Math.max(18, S * 0.075) * k);
+    ctx.font = sz + 'px ' + DISPLAY; ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(3, sz * 0.18); ctx.strokeStyle = 'rgba(8,8,24,0.8)';
+    ctx.strokeText('x' + m, x, y); ctx.fillStyle = col; ctx.fillText('x' + m, x, y);
+    if (m === 5 && !reduceMotion) { ctx.globalAlpha = 0.35 + 0.25 * Math.sin(G.t * 12); ctx.fillStyle = '#ffd23f'; ctx.fillText('x5', x, y); ctx.globalAlpha = 1; }
+  }
+  function closeShave(p, color) { G.close++; var cm = comboMult(G.run || 0); G.closePts = (G.closePts || 0) + 5 * cm; toast('Close shave! +' + 5 * cm); sfx.close(); buzz(15); burstAt(p, color, 6, 0.6); if (Math.random() < 0.35) say(['close1', 'close2', 'close3'], 0); }
 
   function resolve(p, need, cause) {
     var t = G.t;
     if (t < p.stun) return;
     var safe = need === 'jump' ? t < p.air : t < p.duck;
-    if (safe) { if (p.you && t - p.actAt < CLOSE_T) closeShave(p, need === 'jump' ? COL.low : COL.high); return; }
+    if (safe) { var cl = p.you && t - p.actAt < CLOSE_T; if (cl) closeShave(p, need === 'jump' ? COL.low : COL.high); dodge(p, cl); return; }
     hit(p, cause);
   }
   function resolveWall(p, w) {
     var t = G.t;
     if (t < p.stun || t < 0.6) return;
     if (Math.abs(p.laneX - w.lane) < 0.5) { hit(p, 'wall'); return; }
-    if (p.you && t - p.laneAt < CLOSE_T + 0.08) closeShave(p, COL.ice);
+    var cl = p.you && t - p.laneAt < CLOSE_T + 0.08;
+    if (cl) closeShave(p, COL.ice);
+    dodge(p, cl);
   }
   function crossed(p, key, ang) {
     var rel = wrap(ang - p.angle), pr = p.prev[key];
@@ -2640,6 +2719,10 @@ h1 .rush { color: var(--you); }
           g.omega = Math.min(g.omega * (1 + (t < 60 ? 0.08 : 0.03) * g.D.ramp), g.D.cap * g.D.speed);
           if (lv % 3 !== 0) toast('Faster!');
         }
+        if (g.mode !== 'solo') {
+          if (g.diff !== 'easy' && !A.reverse && !A.hammers.length && lv >= 4 && (g.splits || 0) < Math.min(2, 1 + Math.floor((lv - 4) / 4)) && addSplit()) g.splits = (g.splits || 0) + 1;
+          if (g.diff === 'hard' && (A.id === 'carnival' || A.id === 'orbit') && lv >= 5 && (g.switches || 0) < Math.min(2, 1 + Math.floor((lv - 5) / 4)) && makeSwitch()) g.switches = (g.switches || 0) + 1;
+        }
       }
       while (g.extra.length && t >= g.extra[0].at) addBar(g.extra.shift().type);
       while (g.survAdds.length && t >= g.survAdds[0]) {
@@ -2671,6 +2754,7 @@ h1 .rush { color: var(--you); }
     var bfTarget = t < g.slowUntil ? 0.45 : t < g.calmUntil ? 0.6 : 1;
     g.bf += (bfTarget - g.bf) * Math.min(1, dt * 5);
     for (i = 0; i < g.bars.length; i++) g.bars[i].angle -= g.omega * g.bf * g.dir * dt;
+    for (i = 0; i < g.bars.length; i++) { var sb = g.bars[i]; if (sb.lead) { var lb = barById(sb.lead); if (lb) sb.angle = lb.angle + splitOff(); } }
     g.gearRot -= g.omega * g.bf * g.dir * dt;
 
     g.holes.forEach(function (o) {
@@ -2755,6 +2839,18 @@ h1 .rush { color: var(--you); }
       }
       var pu = g.pickup;
       if (pu && !p.out && crossed(p, 'pu' + pu.id, pu.a) && (A.lanes.length < 2 || Math.abs(p.laneX - pu.lane) < 0.5)) collect(p, pu);
+    }
+
+    var swYou = g.players[0], swV = -g.omega * g.bf * g.dir - speedAt(swYou);
+    for (j = 0; j < g.bars.length; j++) {
+      var swb = g.bars[j];
+      if (!swb.sw || Math.abs(swV) < 1e-3) continue;
+      var swt = -wrap(swb.angle - swYou.angle) / swV;
+      if (!swb.flipped && swt > 0 && swt <= 0.8 && t - swb.born > 0.5) {
+        swb.flipped = true; swb.type = swb.base === 'low' ? 'high' : 'low';
+        g.swFlash = { t: t, col: swb.type === 'low' ? COL.low : COL.high };
+        if (!swYou.out) { sfx.flip(); buzz(25); }
+      } else if (swb.flipped && (swt < -0.12 || swt > 1.0)) { swb.flipped = false; swb.type = swb.base; }
     }
 
     if (!g.over && g.dur != null && t >= g.dur) {
@@ -3143,6 +3239,7 @@ h1 .rush { color: var(--you); }
       });
     }
     if (g.t < g.slowUntil) { ctx.fillStyle = COL.puSlow; ctx.globalAlpha = 0.08; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+    if (g.swFlash && g.t - g.swFlash.t < 0.35) { ctx.fillStyle = g.swFlash.col; ctx.globalAlpha = 0.22 * (1 - (g.t - g.swFlash.t) / 0.35); ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
 
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     var youX = cx + sx, youY = cy + sy + runnerR(you) * S;
@@ -3151,6 +3248,7 @@ h1 .rush { color: var(--you); }
       var cp = currentPlayer();
       ctx.fillText(cp ? cp.name.toUpperCase() : 'YOU', youX, youY + S * 0.13);
     }
+    drawCombo(youX + S * 0.15, youY - S * 0.06, S);
 
     var best = pickCue(g, you);
     if (best) {
@@ -3215,9 +3313,11 @@ h1 .rush { color: var(--you); }
     var survived = you.out ? g.youOutAt : (g.dur == null ? g.t : Math.min(g.t, g.dur));
     var sub = '', coins = 0, xp = 0, win = false, place = null, st = 0;
     $('retryBtn').hidden = true; $('bestLine').className = 'note';
+    var perfect = (g.hits || 0) === 0 && !you.out && g.result !== 'out' && (g.dur == null ? false : Math.min(g.t, g.dur) >= 15);
+    $('perfectBadge').hidden = !perfect;
     if (md === 'party') {
       win = g.result === 'win'; place = g.place || 1;
-      coins = g.close * 5 + Math.max(0, 9 - place) * 10 + (win ? 50 : 0) + g.bonus;
+      coins = (g.closePts || 0) + Math.max(0, 9 - place) * 10 + (win ? 50 : 0) + g.bonus;
       xp = Math.floor(survived) + Math.max(0, 9 - place) * 5 + (win ? 30 : 0) + g.close * 3;
       $('endEyebrow').textContent = name + ' · Party';
       title.textContent = win ? 'You won!' : ordinal(place) + ' of 8';
@@ -3235,7 +3335,7 @@ h1 .rush { color: var(--you); }
       $('bestLine').textContent = bestText(aid);
     } else if (md === 'room') {
       var nP = g.players.length; win = g.result === 'win'; place = g.place || 1;
-      coins = g.close * 5 + Math.max(0, nP + 1 - place) * 10 + (win ? 50 : 0);
+      coins = (g.closePts || 0) + Math.max(0, nP + 1 - place) * 10 + (win ? 50 : 0);
       xp = Math.floor(survived) + Math.max(0, nP + 1 - place) * 5 + (win ? 30 : 0) + g.close * 3;
       $('endEyebrow').textContent = 'Room ' + (ROOM ? ROOM.code : '') + ' · ' + name;
       title.textContent = win ? 'You won the room!' : ordinal(place) + ' of ' + nP;
@@ -3258,7 +3358,7 @@ h1 .rush { color: var(--you); }
         dl.queue = (dl.queue || []).concat([{ day: g.daily.key, secs: Math.floor(survived * 10) / 10, arena: g.arena.id, diff: g.diff }]);
       }
       var leftT = Math.max(0, 3 - dl.tries);
-      coins = Math.floor(survived / 2) + g.close * 5 + g.bonus + (counted ? 15 : 0);
+      coins = Math.floor(survived / 2) + (g.closePts || 0) + g.bonus + (counted ? 15 : 0);
       xp = Math.floor(survived * 1.5) + g.close * 3;
       $('endEyebrow').textContent = 'Daily Challenge · ' + name;
       title.textContent = 'Lasted ' + clockUp(survived);
@@ -3274,7 +3374,7 @@ h1 .rush { color: var(--you); }
     } else if (md === 'solo') {
       var cleared = g.result === 'clear', prev = soloStars(g.levelIdx);
       st = cleared ? Math.max(1, 3 - g.hits) : 0;
-      coins = (cleared ? 10 + st * 10 : 0) + g.close * 5;
+      coins = (cleared ? 10 + st * 10 : 0) + (g.closePts || 0);
       xp = Math.floor(survived) + st * 10 + g.close * 3;
       if (st > prev) PROFILE.solo[g.levelIdx] = st;
       $('endEyebrow').textContent = 'Level ' + (g.levelIdx + 1) + ' · ' + name;
@@ -3292,7 +3392,7 @@ h1 .rush { color: var(--you); }
     } else {
       var sk2 = survKey(g.arena.id, g.diff), best = PROFILE.surv[sk2] || 0, isBest = survived > best;
       if (isBest) PROFILE.surv[sk2] = Math.floor(survived * 10) / 10;
-      coins = Math.floor(survived / 3) + g.close * 5 + g.bonus;
+      coins = Math.floor(survived / 3) + (g.closePts || 0) + g.bonus;
       xp = Math.floor(survived * 1.5) + g.close * 3;
       $('endEyebrow').textContent = 'Survival · ' + name;
       title.textContent = 'Lasted ' + clockUp(survived);
@@ -3312,9 +3412,12 @@ h1 .rush { color: var(--you); }
     coins = Math.round(coins * g.D.reward); xp = Math.round(xp * g.D.reward);
     $('stCoins').textContent = '+' + coins;
     if (g.diff !== 'medium') $('endEyebrow').textContent += ' · ' + g.D.name;
-    var res = applyRound({ mode: g.daily ? 'daily' : md, arena: g.arena.id, survived: survived, place: place, win: win, stars: st, close: g.close, coins: coins, xp: xp, pickups: g.pickups, clean: g.firstHit != null ? g.firstHit : survived });
+    if (perfect) { PROFILE.perfect = (PROFILE.perfect || 0) + 1; say('perfect', 1); }
+    if ((g.bestRun || 0) > (PROFILE.bestCombo || 0)) PROFILE.bestCombo = g.bestRun;
+    var res = applyRound({ perfect: perfect, mode: g.daily ? 'daily' : md, arena: g.arena.id, survived: survived, place: place, win: win, stars: st, close: g.close, coins: coins, xp: xp, pickups: g.pickups, clean: g.firstHit != null ? g.firstHit : survived });
     var stk = bumpStreak();
     res.streak = stk;
+    res.combo = g.bestRun || 0; res.perfect = perfect ? PROFILE.perfect : 0;
     renderEndProgress(res);
     var roundRec = { mode: md, arena: g.arena.id, diff: g.diff, secs: Math.round(survived * 10) / 10, place: place, win: !!win, hits: g.hits || 0, close: g.close || 0, stars: st || 0, match: md === 'room' && ROOM && ROOM.match ? ROOM.match.id : null, daily: g.daily ? g.daily.key : null };
     if (g.daily) roundRec.mode = 'daily';
@@ -3496,6 +3599,8 @@ h1 .rush { color: var(--you); }
       add('Level up! You reached level ' + res.after + '.', 'levelup');
       SKINS.forEach(function (sk) { if (sk.lvl > res.before && sk.lvl <= res.after) add(sk.name + ' is now in the Locker.', 'levelup'); });
     }
+    if (res.perfect) add(res.perfect === 10 ? '10 perfect rounds! Perfect Gold is free in the Locker.' : 'Perfect round! That makes ' + res.perfect + '.', 'levelup');
+    if (res.combo >= COMBO_STEPS[2]) add('Best combo: ' + res.combo + ' clean dodges in a row (x' + comboMult(res.combo) + ')' + (res.combo >= (PROFILE.bestCombo || 0) && res.combo > 0 ? '. Your record!' : ''), 'won');
     if (res.streak) add((res.streak.froze ? 'Your weekly freeze saved your streak! Day ' + res.streak.n : res.streak.n === 1 ? 'Day 1 of a new streak!' : 'Day ' + res.streak.n + ' streak!') + ' +' + res.streak.bonus + ' coins', 'levelup');
     res.done.forEach(function (d) { add('Challenge done: ' + d.text + '. +' + d.reward + ' coins', 'won'); });
     ul.hidden = !ul.children.length;
@@ -3507,7 +3612,7 @@ h1 .rush { color: var(--you); }
     $('coinsLocker').textContent = PROFILE.coins;
     grid.textContent = '';
     SKINS.forEach(function (sk) {
-      var owned = PROFILE.owned.indexOf(sk.id) >= 0, worn = PROFILE.skin === sk.id, locked = !owned && lvl < sk.lvl;
+      var owned = PROFILE.owned.indexOf(sk.id) >= 0, worn = PROFILE.skin === sk.id, pLock = !owned && sk.perfect && (PROFILE.perfect || 0) < sk.perfect, locked = !owned && (lvl < sk.lvl || pLock);
       var b = document.createElement('button');
       b.type = 'button';
       b.className = 'skin' + (locked ? ' locked' : '') + (pendingBuy === sk.id ? ' pending' : '');
@@ -3517,7 +3622,9 @@ h1 .rush { color: var(--you); }
       var st = document.createElement('span'); st.className = 'ss';
       if (worn) st.textContent = 'Wearing';
       else if (owned) st.textContent = 'Tap to wear';
+      else if (pLock) st.textContent = (PROFILE.perfect || 0) + ' of ' + sk.perfect + ' perfect rounds';
       else if (locked) st.textContent = 'Unlocks at level ' + sk.lvl;
+      else if (!sk.price) st.textContent = 'Free: tap to wear';
       else { st.textContent = sk.price + ' coins'; st.className = 'ss price'; }
       b.appendChild(cnv); b.appendChild(nm); b.appendChild(st);
       b.addEventListener('click', function () { tapSkin(sk); });
@@ -3529,6 +3636,8 @@ h1 .rush { color: var(--you); }
     var msg = $('lockerMsg'), owned = PROFILE.owned.indexOf(sk.id) >= 0, lvl = levelInfo(PROFILE.xp).lvl;
     if (!owned) {
       if (lvl < sk.lvl) { pendingBuy = null; msg.textContent = 'Reach level ' + sk.lvl + ' to unlock ' + sk.name + '.'; renderLocker(); return; }
+      if (sk.perfect && (PROFILE.perfect || 0) < sk.perfect) { pendingBuy = null; msg.textContent = 'Finish ' + sk.perfect + ' rounds without getting hit to unlock ' + sk.name + '. You have ' + (PROFILE.perfect || 0) + '.'; renderLocker(); return; }
+      if (!sk.price) pendingBuy = sk.id;
       if (PROFILE.coins < sk.price) { pendingBuy = null; msg.textContent = 'You need ' + (sk.price - PROFILE.coins) + ' more coins for ' + sk.name + '.'; renderLocker(); return; }
       if (pendingBuy !== sk.id) { pendingBuy = sk.id; msg.textContent = 'Tap ' + sk.name + ' again to buy it for ' + sk.price + ' coins.'; renderLocker(); return; }
       PROFILE.coins -= sk.price; PROFILE.owned.push(sk.id);
@@ -3639,17 +3748,18 @@ h1 .rush { color: var(--you); }
     $('boardSub').textContent = 'Everyone playing with your link';
     $('boardHint').textContent = 'Loading scores…';
     if (!$('boardList').children.length) boardRows([]);
-    var order = boardTab === 'survival' ? 'survival_best.desc,updated_at.asc' : boardTab === 'party' ? 'party_wins.desc,best_place.asc.nullslast,party_rounds.desc' : 'solo_stars.desc,updated_at.asc';
-    var filt = boardTab === 'survival' ? '&survival_best=gt.0' : boardTab === 'party' ? '&party_rounds=gt.0' : '&solo_stars=gt.0';
+    var order = boardTab === 'survival' ? 'survival_best.desc,updated_at.asc' : boardTab === 'party' ? 'party_wins.desc,best_place.asc.nullslast,party_rounds.desc' : boardTab === 'combo' ? 'best_combo.desc,updated_at.asc' : 'solo_stars.desc,updated_at.asc';
+    var filt = boardTab === 'survival' ? '&survival_best=gt.0' : boardTab === 'party' ? '&party_rounds=gt.0' : boardTab === 'combo' ? '&best_combo=gt.0' : '&solo_stars=gt.0';
     var pre = PROFILE.unsynced ? syncPlayer() : Promise.resolve();
     pre.then(function () {
-      return sbFetch('/rest/v1/players?select=id,name,survival_best,survival_arena,party_wins,party_rounds,best_place,solo_stars,level&order=' + order + filt + '&limit=50');
+      return sbFetch('/rest/v1/players?select=id,name,survival_best,survival_arena,party_wins,party_rounds,best_place,solo_stars,level,best_combo,perfect_rounds&order=' + order + filt + '&limit=50');
     }).then(function (data) {
       if (req !== boardReq) return;
       var rows = (data || []).map(function (d) {
         var label, note;
         if (boardTab === 'survival') { label = clockUp(Number(d.survival_best)); note = (ARENAS[d.survival_arena] ? ARENAS[d.survival_arena].name : 'Survival') + ' · Lv ' + d.level; }
         else if (boardTab === 'party') { label = d.party_wins + (d.party_wins === 1 ? ' win' : ' wins'); note = d.party_rounds + ' rounds · best ' + ordinal(d.best_place || 8); }
+        else if (boardTab === 'combo') { label = d.best_combo + ' in a row'; note = 'x' + comboMult(d.best_combo) + ' combo · ' + (d.perfect_rounds || 0) + ' perfect · Lv ' + d.level; }
         else { label = d.solo_stars + ' ★'; note = 'of ' + LEVELS.length * 3 + ' stars · Lv ' + d.level; }
         return { name: d.name, label: label, note: note, me: myIds[d.id] === 'me' };
       });
@@ -3680,6 +3790,8 @@ h1 .rush { color: var(--you); }
         v = p.wins * 1000 + (p.bestPlace ? 9 - p.bestPlace : 0);
         label = p.wins + (p.wins === 1 ? ' win' : ' wins');
         note = p.partyRounds ? p.partyRounds + ' rounds · best ' + ordinal(p.bestPlace || 8) : 'No rounds yet';
+      } else if (boardTab === 'combo') {
+        v = p.bestCombo || 0; label = v + ' in a row'; note = (p.perfect || 0) + ' perfect rounds';
       } else {
         for (var i = 0; i < LEVELS.length; i++) v += p.solo[i] || 0;
         label = v + ' ★'; note = 'of ' + LEVELS.length * 3 + ' stars';
@@ -3695,7 +3807,7 @@ h1 .rush { color: var(--you); }
   $('boardDone').addEventListener('click', function () { $('boardScreen').hidden = true; $('startScreen').hidden = false; });
 
   /* ---------- Party Rooms: live multiplayer over Supabase Realtime ---------- */
-  var ROOM = null, sbClient = null, sbLoading = null, GAME_VERSION = 10;
+  var ROOM = null, sbClient = null, sbLoading = null, GAME_VERSION = 11;
   var ROOM_COLORS = [
     { name: 'Sunny', hex: '#ffd23f' }, { name: 'Coral', hex: '#ff6b6b' }, { name: 'Mint', hex: '#5ee0a0' }, { name: 'Violet', hex: '#b48cff' },
     { name: 'Bubblegum', hex: '#ff8fd8' }, { name: 'Snow', hex: '#f4f2ff' }, { name: 'Lime', hex: '#c6f06a' }, { name: 'Peach', hex: '#f6b8a0' }
