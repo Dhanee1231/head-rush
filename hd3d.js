@@ -1571,23 +1571,35 @@ function makeHole(o, V) {
   if (!holeFx) { holeFx = makePuffs(60, softTex()); scene.add(holeFx); }
   return { root: m, crack, pit, acc: 0 };
 }
+/* Pickup: a toy power-up. Glossy core in the power-up colour inside a fresnel glass shell, a white icon with a dark
+   outline, a turning gold ring, a light pool on the floor and a soft beacon beam. */
 function makeOrb() {
   const root = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.1, transparent: true });
-  const ball = new THREE.Mesh(GEO.orb, mat); root.add(ball);
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.8, roughness: 0.15, transparent: true });
+  const ball = new THREE.Mesh(GEO.orb, mat); ball.scale.setScalar(0.95); root.add(ball);
+  const shell = new THREE.Mesh(GEO.orb, haloMat(0xffffff, 1.6)); shell.scale.setScalar(1.25); shell.material.uniforms.uIn.value = 0.0; shell.renderOrder = 3; root.add(shell);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.022, 8, 48).rotateX(Math.PI / 2), MAT.gold); ring.rotation.z = 0.4; root.add(ring);
   const icons = {};
   ['shield', 'slow', 'heart'].forEach(k => {
     const tex = canvasTex(128, 128, (x, w) => {
-      x.fillStyle = 'rgba(20,14,40,0.85)'; x.strokeStyle = 'rgba(20,14,40,0.85)'; x.lineCap = 'round'; const c = w / 2, R = w * 0.3;
-      if (k === 'shield') { x.beginPath(); x.moveTo(c, c - R); x.lineTo(c + R * 0.85, c - R * 0.65); x.lineTo(c + R * 0.7, c + R * 0.3); x.lineTo(c, c + R); x.lineTo(c - R * 0.7, c + R * 0.3); x.lineTo(c - R * 0.85, c - R * 0.65); x.closePath(); x.fill(); }
-      else if (k === 'slow') { x.lineWidth = w * 0.07; x.beginPath(); x.arc(c, c, R, 0, TAU); x.stroke(); x.beginPath(); x.moveTo(c, c); x.lineTo(c, c - R * 0.7); x.moveTo(c, c); x.lineTo(c + R * 0.5, c); x.stroke(); }
-      else { x.beginPath(); x.arc(c - R * 0.42, c - R * 0.2, R * 0.48, 0, TAU); x.arc(c + R * 0.42, c - R * 0.2, R * 0.48, 0, TAU); x.fill(); x.beginPath(); x.moveTo(c - R * 0.88, c - R * 0.05); x.lineTo(c + R * 0.88, c - R * 0.05); x.lineTo(c, c + R * 0.95); x.closePath(); x.fill(); }
+      const c = w / 2, R = w * 0.27; x.lineCap = 'round'; x.lineJoin = 'round';
+      const path = () => {
+        x.beginPath();
+        if (k === 'shield') { x.moveTo(c, c - R); x.lineTo(c + R * 0.85, c - R * 0.65); x.lineTo(c + R * 0.7, c + R * 0.3); x.lineTo(c, c + R); x.lineTo(c - R * 0.7, c + R * 0.3); x.lineTo(c - R * 0.85, c - R * 0.65); x.closePath(); }
+        else if (k === 'slow') { x.arc(c, c, R, 0, TAU); x.moveTo(c, c); x.lineTo(c, c - R * 0.7); x.moveTo(c, c); x.lineTo(c + R * 0.5, c); }
+        else { x.moveTo(c, c + R * 0.95); x.bezierCurveTo(c - R * 1.6, c - R * 0.1, c - R * 0.6, c - R * 1.2, c, c - R * 0.45); x.bezierCurveTo(c + R * 0.6, c - R * 1.2, c + R * 1.6, c - R * 0.1, c, c + R * 0.95); x.closePath(); }
+      };
+      path(); x.strokeStyle = 'rgba(16,10,36,0.9)'; x.lineWidth = w * 0.07; x.stroke();
+      path(); if (k === 'slow') { x.strokeStyle = '#fff'; x.lineWidth = w * 0.06; x.stroke(); } else { x.fillStyle = '#fff'; x.fill(); }
     });
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false })); sp.scale.set(0.42, 0.42, 1); sp.renderOrder = 5; sp.visible = false; root.add(sp); icons[k] = sp;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false })); sp.scale.set(0.3, 0.3, 1); sp.renderOrder = 7; sp.visible = false; root.add(sp); icons[k] = sp;
   });
-  const glow = new THREE.Mesh(new THREE.CircleGeometry(0.55, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const glow = new THREE.Mesh(new THREE.CircleGeometry(0.6, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, map: softTex(), transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const beamT = canvasTex(32, 128, (x, w, h) => { const gg = x.createLinearGradient(0, 0, 0, h); gg.addColorStop(0, 'rgba(255,255,255,0)'); gg.addColorStop(1, 'rgba(255,255,255,0.5)'); x.fillStyle = gg; x.fillRect(0, 0, w, h); }, false);
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.42, 1.6, 20, 1, true).translate(0, 0.8, 0), new THREE.MeshBasicMaterial({ map: beamT, color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+  glow.add(beam);
   scene.add(root); scene.add(glow);
-  return { root, ball, mat, icons, glow };
+  return { root, ball, mat, icons, glow, shell, ring, beam, cur: -1 };
 }
 function makeParticles() {
   const m = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff }), 220);
@@ -1717,10 +1729,11 @@ HR3D.render = function (g, view) {
     const L = A.lanes, R = V.TR + ((L.length > 1 ? L[pu.lane] : L[0]) - V.mid) * V.SC, f = pu.a + g.rot, colr = pu.type === 'shield' ? G_API.COL.puShield : pu.type === 'slow' ? G_API.COL.puSlow : G_API.COL.heart;
     const life = 12 - (t - pu.born), blink = life < 2 && Math.floor(t * 10) % 2;
     orb.root.position.set(R * Math.cos(f), 0.62 + 0.08 * Math.sin(t * 4), R * Math.sin(f));
-    orb.root.rotation.y = t * 1.5;
-    orb.mat.color.set(colr); orb.mat.emissive.set(colr); orb.mat.opacity = blink ? 0.4 : 1;
-    Object.keys(orb.icons).forEach(k => { orb.icons[k].visible = k === pu.type; });
-    orb.glow.position.set(orb.root.position.x, 0.025, orb.root.position.z); orb.glow.material.color.set(colr);
+    orb.ring.rotation.y = t * 2.2; orb.ball.rotation.y = t * 1.5;
+    if (orb.cur !== colr) { orb.cur = colr; orb.mat.color.set(colr).multiplyScalar(0.55); orb.mat.emissive.set(colr); orb.shell.material.uniforms.uCol.value.set(colr); orb.glow.material.color.set(colr).multiplyScalar(0.7); orb.beam.material.color.set(colr).multiplyScalar(0.35); }
+    orb.mat.opacity = blink ? 0.4 : 1; orb.shell.material.uniforms.uA.value = blink ? 0.3 : 1;
+    Object.keys(orb.icons).forEach(k => { orb.icons[k].visible = k === pu.type && !blink; });
+    orb.glow.position.set(orb.root.position.x, 0.025, orb.root.position.z);
   }
   // particles
   if (!particleMesh) particleMesh = makeParticles();
