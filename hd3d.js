@@ -231,6 +231,19 @@ class GradePass extends Pass {
   }
 }
 
+/* Bar cores live on layer 1 and are drawn after the bloom, before the grade, into the same target (its depth is kept):
+   neighbouring glow cannot spill onto them, so they leave the grade as exactly the game's colours. */
+const CORE_LAYER = 1;
+class CorePass extends Pass {
+  constructor() { super(); this.needsSwap = false; }
+  render(renderer, writeBuffer, readBuffer) {
+    const bg = scene.background, ac = renderer.autoClear, su = renderer.shadowMap.autoUpdate;
+    scene.background = null; renderer.autoClear = false; renderer.shadowMap.autoUpdate = false;
+    camera.layers.set(CORE_LAYER); renderer.setRenderTarget(readBuffer); renderer.render(scene, camera); camera.layers.set(0);
+    scene.background = bg; renderer.autoClear = ac; renderer.shadowMap.autoUpdate = su;
+  }
+}
+
 /* ---------- renderer ---------- */
 function init() {
   glCanvas = document.createElement('canvas');
@@ -270,6 +283,7 @@ function init() {
   composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 }));
   renderPass = new RenderPass(scene, camera); composer.addPass(renderPass);
   bloomPass = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.55, 0.45, 0.82); composer.addPass(bloomPass);
+  composer.addPass(new CorePass());
   gradePass = new GradePass(); composer.addPass(gradePass);
   /* Low tier has no post pass: a CSS vignette on the compositor stands in for the graded one */
   vigEl = document.createElement('div'); vigEl.setAttribute('aria-hidden', 'true');
@@ -1490,7 +1504,7 @@ function makeBar(type, V) {
   const root = new THREE.Group();
   const mat = new THREE.MeshBasicMaterial({ color: exactColor(colr, renderer.toneMappingExposure), transparent: true, fog: false });
   const cyl = new THREE.Mesh(new THREE.CapsuleGeometry(r, L, lo() ? 3 : 6, lo() ? 10 : 20).rotateZ(Math.PI / 2).translate(r0 + L / 2, 0, 0), mat);
-  cyl.renderOrder = 6; /* drawn after every additive layer so nothing adds onto the exact core colour */
+  cyl.renderOrder = 6; cyl.layers.set(CORE_LAYER); /* drawn last (after bloom on High) so nothing adds onto the exact core colour */
   const HS = 2.5;
   const halo = new THREE.Mesh(new THREE.CapsuleGeometry(r * HS, L, lo() ? 3 : 6, lo() ? 10 : 20).rotateZ(Math.PI / 2).translate(r0 + L / 2, 0, 0), haloMat(colr, quality.bloom ? 1.6 : 2.4));
   halo.material.uniforms.uIn.value = 1 / HS; halo.renderOrder = 3;
@@ -1518,7 +1532,7 @@ function makeHammer(V) {
   const knob = new THREE.Mesh(GEO.barCap, MAT.gold); knob.scale.setScalar(0.19); knob.position.set(postR, 1.98, 0); root.add(knob);
   const cols = { low: exactColor(G_API.COL.low, ex), high: exactColor(G_API.COL.high, ex) };
   const core = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, L, lo() ? 3 : 6, lo() ? 10 : 18).rotateZ(Math.PI / 2).translate(r0 + L / 2, 0, 0), new THREE.MeshBasicMaterial({ color: cols.low, fog: false }));
-  core.castShadow = true; core.renderOrder = 6;
+  core.renderOrder = 6; core.layers.set(CORE_LAYER);
   const HS = 2.4, halo = new THREE.Mesh(new THREE.CapsuleGeometry(0.15 * HS, L, lo() ? 3 : 6, lo() ? 10 : 18).rotateZ(Math.PI / 2).translate(r0 + L / 2, 0, 0), haloMat(G_API.COL.low, quality.bloom ? 1.5 : 2.2));
   halo.material.uniforms.uIn.value = 1 / HS; halo.renderOrder = 3;
   const headMat = new THREE.MeshStandardMaterial({ color: G_API.COL.low, emissive: G_API.COL.low, emissiveIntensity: 1, roughness: 0.3, envMapIntensity: 1 });
@@ -1720,11 +1734,15 @@ HR3D.render = function (g, view) {
   const you = g.players[0];
   youRing.visible = !you.out;
   if (!you.out) { const R = V.TR + (G_API.runnerR(you) - V.mid) * V.SC, f = you.angle + g.rot; youRing.position.set(R * Math.cos(f), 0.02, R * Math.sin(f)); }
+  // slow-mo tint via exposure (set before the bars: their cores are compensated for the current exposure)
+  renderer.toneMappingExposure = (curArena.sc.exposure || 1) * 0.9 * (g.t < g.slowUntil ? 0.85 : 1);
+  const EX = renderer.toneMappingExposure;
   // bars
   syncPool(barPool, g.bars, b => makeBar(b.type, V), b => b.type + '|' + V.barOut + (lo() ? '|lo' : ''));
   g.bars.forEach((b, i) => {
     const o = barPool[i], vis = G_API.barVisible(b, t);
     o.root.rotation.y = -(b.angle + g.rot);
+    if (o.ex !== EX) { o.ex = EX; o.mat.color.copy(exactColor(b.type === 'high' ? G_API.COL.high : G_API.COL.low, EX)); }
     const al = vis ? 1 : 0.18; o.mat.opacity = al; o.capMat.opacity = al; o.halo.material.uniforms.uA.value = vis ? 1 : 0.15;
     o.pool.visible = o.trail.visible = vis; o.trail.scale.z = (g.dir || 1) < 0 ? -1 : 1;
     /* High tier: the bar tip sheds a few sparks behind its sweep */
@@ -1742,6 +1760,7 @@ HR3D.render = function (g, view) {
     o.holder.position.y = o.y;
     o.root.rotation.y = -(h.a + g.rot);
     /* warning before the swap: flash the other colour and shake, as before */
+    if (o.ex !== EX) { o.ex = EX; o.cols.low = exactColor(G_API.COL.low, EX); o.cols.high = exactColor(G_API.COL.high, EX); o.cur = ''; }
     const flash = k > 0.7 && Math.floor(t * 8) % 2;
     o.setCol(flash ? (high ? 'low' : 'high') : type);
     o.holder.position.x = k > 0.7 ? Math.sin(t * 60) * 0.02 : 0;
@@ -1808,9 +1827,8 @@ HR3D.render = function (g, view) {
     for (let i = 0; i < 40; i++) { const a = i / 40 * TAU + g.rot; tmpM.makeTranslation(R * Math.cos(a), 0.06, R * Math.sin(a)); m.setMatrixAt(i, tmpM); m.setColorAt(i, tmpC.set(i % 2 ? 0xffe08a : 0xff7ad9).multiplyScalar((i + step) % 2 ? 0.35 : 3)); }
     m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true;
   }
-  // slow-mo tint via exposure
-  renderer.toneMappingExposure = (curArena.sc.exposure || 1) * 0.9 * (g.t < g.slowUntil ? 0.85 : 1);
-  if (quality.bloom) composer.render(); else renderer.render(scene, camera);
+  if (quality.bloom) { camera.layers.set(0); composer.render(); }
+  else { camera.layers.set(0); camera.layers.enable(CORE_LAYER); renderer.render(scene, camera); }
   adapt(view.dt);
   return out;
 };
