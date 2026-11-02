@@ -1499,28 +1499,74 @@ const haloMat = (colr, k) => new THREE.ShaderMaterial({
       float g = smoothstep( uIn - 0.04, uIn + 0.06, d ) * pow( 1.0 - d, 1.6 ); gl_FragColor = vec4( uCol * g * uK * uA, 1.0 ); }`,
   transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
 });
+/* Lightning bars (HD): a jagged bolt along the bar's exact length, re-struck many times a second.
+   Each strand is a ribbon cross (vertical + horizontal quad strip) so it reads from any camera angle.
+   Buffers are built once per bar and rewritten in place: no per-frame allocation. Jitter is small (<= the old bar radius),
+   so the bolt covers the same band as the old capsule; the hit area is gameplay's and never reads these meshes. */
+/* the bolt's own random stream, so the visuals never draw from Math.random */
+let bseed = 0x9e3779b9;
+const brnd = () => { bseed = (bseed * 1664525 + 1013904223) >>> 0; return bseed / 4294967296; };
+function boltGeo(n, strands) {
+  const vpr = 4, pos = new Float32Array(strands * (n + 1) * vpr * 3), idx = [];
+  for (let s = 0; s < strands; s++) for (let i = 0; i < n; i++) {
+    const a = (s * (n + 1) + i) * vpr, b = a + vpr;
+    idx.push(a, b, a + 1, a + 1, b, b + 1, a + 2, b + 2, a + 3, a + 3, b + 2, b + 3);
+  }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage)); geo.setIndex(idx);
+  return { geo, pos, n, strands };
+}
+/* rewrite one strand: nodes along x from x0 to x1, offsets oy/oz (length n+1), half-width w (array or number) */
+function boltStrand(B, s, x0, x1, oy, oz, w) {
+  const p = B.pos, n = B.n; let k = s * (n + 1) * 12;
+  for (let i = 0; i <= n; i++) {
+    const x = x0 + (x1 - x0) * i / n, y = oy[i], z = oz[i], hw = typeof w === 'number' ? w : w[i];
+    p[k++] = x; p[k++] = y + hw; p[k++] = z; p[k++] = x; p[k++] = y - hw; p[k++] = z;
+    p[k++] = x; p[k++] = y; p[k++] = z + hw; p[k++] = x; p[k++] = y; p[k++] = z - hw;
+  }
+}
+function strikeBolt(o) {
+  const n = o.core.n, A = o.amp, y = o.oy, z = o.oz, fy = o.fy, fz = o.fz, fw = o.fw;
+  for (let i = 0; i <= n; i++) { const u = i / n, env = Math.sqrt(Math.sin(Math.PI * u)); y[i] = (brnd() * 2 - 1) * A * env; z[i] = (brnd() * 2 - 1) * A * env; }
+  boltStrand(o.core, 0, o.x0, o.x1, y, z, o.cw);
+  o.core.geo.attributes.position.needsUpdate = true;
+  for (let s = 0; s < 2; s++) {
+    for (let i = 0; i <= n; i++) { const u = i / n, env = Math.sin(Math.PI * u); fy[i] = y[i] + (brnd() * 2 - 1) * A * 2.2 * env; fz[i] = z[i] + (brnd() * 2 - 1) * A * 2.2 * env; }
+    for (let i = 0; i <= n; i++) { const d = (i / n - o.pulse) / 0.09; fw[i] = o.fwid * (1 + 1.8 * Math.exp(-d * d)); }
+    boltStrand(o.fil, s, o.x0, o.x1, fy, fz, fw);
+  }
+  o.fil.geo.attributes.position.needsUpdate = true;
+}
+function updateBolt(o, dt, al) {
+  o.pulse += dt * 1.6; if (o.pulse > 1.15) o.pulse = -0.15;
+  o.clock -= dt; if (o.clock <= 0) { o.clock = 1 / 22 + brnd() * 0.02; strikeBolt(o); }
+  o.filMat.opacity = al * (0.55 + brnd() * 0.45);
+}
 function makeBar(type, V) {
   const high = type === 'high', colr = high ? G_API.COL.high : G_API.COL.low, r = high ? 0.14 : 0.13, r0 = 0.75, r1 = V.barOut, L = r1 - r0;
   const root = new THREE.Group();
   const mat = new THREE.MeshBasicMaterial({ color: exactColor(colr, renderer.toneMappingExposure), transparent: true, fog: false });
-  const cyl = new THREE.Mesh(new THREE.CapsuleGeometry(r, L, lo() ? 3 : 6, lo() ? 10 : 20).rotateZ(Math.PI / 2).translate(r0 + L / 2, 0, 0), mat);
+  mat.side = THREE.DoubleSide;
+  const N = lo() ? 9 : 14, core = boltGeo(N, 1), fil = boltGeo(N, 2);
+  const cyl = new THREE.Mesh(core.geo, mat);
   cyl.renderOrder = 6; cyl.layers.set(CORE_LAYER); /* drawn last (after bloom on High) so nothing adds onto the exact core colour */
+  const filMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(colr).lerp(new THREE.Color(1, 1, 1), 0.5), transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false });
+  const filaments = new THREE.Mesh(fil.geo, filMat); filaments.renderOrder = 4;
   const HS = 1.5;
   const halo = new THREE.Mesh(new THREE.CapsuleGeometry(r * HS, L, lo() ? 3 : 6, lo() ? 10 : 20).rotateZ(Math.PI / 2).translate(r0 + L / 2, 0, 0), haloMat(colr, quality.bloom ? 0.35 : 0.5));
   halo.material.uniforms.uIn.value = 1 / HS; halo.renderOrder = 3;
   const capMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(colr).multiplyScalar(1.3), transparent: true });
   const cap = new THREE.Mesh(GEO.barCap, capMat); cap.scale.setScalar(r * 1.15); cap.position.x = r1 + r * 0.5;
   const collar = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.7, r * 1.7, 0.16, 20).rotateZ(Math.PI / 2), MAT.gunmetal); collar.position.x = r0 + 0.1;
-  const holder = new THREE.Group(); holder.position.y = high ? 1.17 : 0.3; holder.add(cyl); holder.add(halo); holder.add(cap); holder.add(collar); root.add(holder);
-  if (!poolTex) poolTex = canvasTex(64, 64, (x, w, h) => { const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, w, h); }, false);
-  /* light pool: wider and softer for the high bar (further from the floor) */
-  const pw = high ? 1.5 : 0.95, poolMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(colr).multiplyScalar(high ? 0.06 : 0.08), map: poolTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-  const pool = new THREE.Mesh(new THREE.PlaneGeometry(L + 0.4, pw).rotateX(-Math.PI / 2).translate(r0 + L / 2 + 0.1, 0.018, 0), poolMat); pool.renderOrder = 1;
-  root.add(pool);
-  const trail = new THREE.Mesh(sectorGeo(0.75, r1, 0, 0.6, 16, 0.02, u => { const k = 0.05 * Math.pow(1 - u, 1.8); const c = new THREE.Color(colr); return [c.r * k, c.g * k, c.b * k]; }), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-  root.add(trail);
+  const holder = new THREE.Group(); holder.position.y = high ? 1.17 : 0.3; holder.add(cyl); holder.add(filaments); holder.add(halo); holder.add(cap); holder.add(collar); root.add(holder);
+  /* no floor light pool or sweep trail any more (Dhawal: no floor reflection); detached stand-ins keep the per-frame code unchanged */
+  const pool = new THREE.Object3D(), trail = new THREE.Object3D();
   scene.add(root);
-  return { root, holder, mat, capMat, halo, pool, trail, type };
+  const o = { root, holder, mat, capMat, halo, pool, trail, type, core, fil, filMat, x0: r0 + 0.12, x1: r1, amp: high ? 0.05 : 0.048, cw: r * 0.95, fwid: 0.03,
+    oy: new Float32Array(N + 1), oz: new Float32Array(N + 1), fy: new Float32Array(N + 1), fz: new Float32Array(N + 1), fw: new Float32Array(N + 1), pulse: brnd(), clock: 0 };
+  /* fixed bounds that cover the whole jitter envelope, so culling still works without recomputing per strike */
+  const bs = new THREE.Sphere(new THREE.Vector3((r0 + r1) / 2, 0, 0), (r1 - r0) / 2 + 0.3); core.geo.boundingSphere = bs; fil.geo.boundingSphere = bs.clone();
+  strikeBolt(o);
+  return o;
 }
 /* Hammers: the handle is lit like a bar (exact low/high colour core, halo, floor pool) so its height reads the same way;
    a chunky toy mallet head with gunmetal caps, on a striped carnival post. */
@@ -1745,7 +1791,12 @@ HR3D.render = function (g, view) {
     if (o.ex !== EX) { o.ex = EX; o.mat.color.copy(exactColor(b.type === 'high' ? G_API.COL.high : G_API.COL.low, EX)); }
     const al = vis ? 1 : 0.18; o.mat.opacity = al; o.capMat.opacity = al; o.halo.material.uniforms.uA.value = vis ? 1 : 0.15;
     o.pool.visible = o.trail.visible = vis; o.trail.scale.z = (g.dir || 1) < 0 ? -1 : 1;
-    /* High tier: the bar tip sheds a few sparks behind its sweep */
+    updateBolt(o, Math.min(0.05, view.dt || 0.016), al);
+    /* High tier: sparks crackle off the bar tip and, less often, the pivot */
+    if (quality.bloom && vis && brnd() < (view.dt || 0.016) * 6) {
+      const f = b.angle + g.rot, R = 0.9, y = b.type === 'high' ? 1.17 : 0.3, a = brnd() * 6.283;
+      puff(fxPuffs, { x: R * Math.cos(f), y, z: R * Math.sin(f), vx: Math.cos(a) * 1.4, vz: Math.sin(a) * 1.4, vy: 0.4 + brnd() * 0.8, g: 4, life: 0.18 + brnd() * 0.12, size: 0.045, grow: -0.5, col: o.sparkCol || (o.sparkCol = new THREE.Color(b.type === 'high' ? G_API.COL.high : G_API.COL.low).lerp(new THREE.Color(1, 1, 1), 0.4)) });
+    }
     if (quality.bloom && vis && Math.random() < (view.dt || 0.016) * 9) {
       const f = b.angle + g.rot, d = (g.dir || 1) < 0 ? -1 : 1, R = V.barOut + 0.1, y = b.type === 'high' ? 1.17 : 0.3;
       puff(fxPuffs, { x: R * Math.cos(f), y, z: R * Math.sin(f), vx: Math.sin(f) * d * 1.2 + Math.cos(f) * 0.8, vz: -Math.cos(f) * d * 1.2 + Math.sin(f) * 0.8, vy: 0.6 + Math.random(), g: 5, life: 0.35 + Math.random() * 0.2, size: 0.06, grow: -0.4, col: o.sparkCol || (o.sparkCol = new THREE.Color(b.type === 'high' ? G_API.COL.high : G_API.COL.low).lerp(new THREE.Color(1, 1, 1), 0.4)) });

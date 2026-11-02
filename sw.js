@@ -1,5 +1,5 @@
 /* Head Rush service worker: offline shell, faster loads on a weak signal, and streak reminder notifications. */
-const CACHE = 'headrush-a6b12e46f4';
+const CACHE = 'headrush-a6b12e46f5';
 const CORE = ['./', 'index.html', 'hd3d.js', 'privacy.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/favicon-32.png',
   'vendor/three.module.min.js', 'vendor/addons/environments/RoomEnvironment.js', 'vendor/addons/geometries/RoundedBoxGeometry.js',
   'vendor/addons/postprocessing/EffectComposer.js', 'vendor/addons/postprocessing/MaskPass.js', 'vendor/addons/postprocessing/OutputPass.js',
