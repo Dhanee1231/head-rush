@@ -333,6 +333,7 @@ const BOARD = {
   neon: { kind: 'hex', base: ['#16183c', '#0d0e26'], line: 'rgba(110,200,255,0.22)', glow: 'rgba(63,208,255,0.35)', rough: [0.18, 0.5], metal: 0.35, side: 'panel', sideCol: ['#1a1c42', '#07081a'], depth: 0.6, lip: 0x3fd0ff, lipLow: 0xff4fa3, emis: 1 },
   lava: { kind: 'slab', base: ['#2c2220', '#1b1413'], gap: '#120a08', gapGlow: 'rgba(255,64,10,0.55)', rings: [0.75, 1.3, 1.85, 2.4, 2.95, 3.5, 4.05, 4.6], slab: [0.55, 0.6], gapW: 0.028, tones: [[42, 33, 30], [52, 40, 35], [36, 28, 26], [58, 45, 38]], rough: [0.75, 0.95], metal: 0.05, side: 'stone', sideCol: ['#2a201d', '#0d0807'], hub: ['#4a3a34', '#140c0a'], depth: 9, lip: 0x3a2a24, lipGlow: 0xff5a14, emis: 0.32, cracks: 'rgba(255,110,30,0.75)' },
   gear: { kind: 'tread', base: ['#2b2a2e', '#17161a'], inlay: '#a87c46', seams: [0.85, 1.6, 2.45, 3.95], rough: [0.3, 0.75], metal: 0.7, side: 'steel', sideCol: ['#2a241e', '#0b0907'], hub: ['#7a5c3a', '#24190f'], depth: 1.1, lip: 0xa87c46, lipGlow: 0xffa040, emis: 0.7 },
+  orbit: { kind: 'slab', base: ['#1a1f3c', '#0e1128'], gap: '#05060f', gapGlow: '#1a4a78', rings: [0.75, 1.6, 2.5, 3.9], slab: [0.95, 0], jit: 0, gapW: 0.03, tones: [[30, 35, 64], [35, 41, 74], [27, 31, 57], [39, 45, 82]], rough: [0.28, 0.5], metal: 0.55, side: 'panel', sideCol: ['#1c2246', '#05061a'], hub: ['#4a5296', '#141838'], depth: 0.9, lip: 0x8ee8ff, lipLow: 0x9b7bff, emis: 0.6, bolts: true },
   frost: { kind: 'slab', base: ['#203f62', '#132a46'], gap: '#0b1a33', gapGlow: 'rgba(150,230,255,0.16)', rings: [0.75, 1.65, 2.5, 3.25, 4.1], slab: [1.1, 0.9], gapW: 0.03, tones: [[34, 66, 104], [40, 76, 118], [30, 58, 94], [46, 86, 128]], rough: [0.08, 0.3], metal: 0.15, side: 'ice', sideCol: ['#3d6a96', '#0c1a30'], hub: ['#6a90bc', '#14284a'], depth: 1.4, lip: 0xcfe9ff, lipGlow: 0x9fe3ff, emis: 0.8, cracks: 'rgba(230,248,255,0.55)' }
 };
 function boardBase(B, V, x, size, s, c, emissive, rough) {
@@ -389,7 +390,7 @@ function boardBase(B, V, x, size, s, c, emissive, rough) {
   const rings = B.rings.concat([E + 0.1]), gap = B.gapW;
   for (let i = 0; i < rings.length - 1; i++) {
     const r0 = rings[i] + gap, r1 = rings[i + 1] - gap, n = Math.max(5, Math.round(TAU * (r0 + r1) / 2 / (B.slab[0] + r() * B.slab[1]))), off = r() * TAU;
-    const cut = []; for (let j = 0; j <= n; j++) cut.push(off + (j + (j % n ? (r() - 0.5) * 0.55 : 0)) / n * TAU);
+    const cut = []; const jit = B.jit !== undefined ? B.jit : 0.55; for (let j = 0; j <= n; j++) cut.push(off + (j + (j % n ? (r() - 0.5) * jit : 0)) / n * TAU);
     for (let j = 0; j < n; j++) {
       const a0 = cut[j] + gap / r0, a1 = cut[j + 1] - gap / r0;
       x.beginPath(); x.arc(c, c, r1 * s, a0, a1); x.arc(c, c, r0 * s, a1, a0, true); x.closePath();
@@ -399,6 +400,12 @@ function boardBase(B, V, x, size, s, c, emissive, rough) {
       else { const gg = x.createRadialGradient(c, c, r0 * s, c, c, r1 * s); gg.addColorStop(0, `rgb(${Math.round(t[0] * j2 * 1.12)},${Math.round(t[1] * j2 * 1.12)},${Math.round(t[2] * j2 * 1.12)})`); gg.addColorStop(1, `rgb(${Math.round(t[0] * j2 * 0.85)},${Math.round(t[1] * j2 * 0.85)},${Math.round(t[2] * j2 * 0.85)})`); x.fillStyle = gg; }
       x.fill();
       /* surface detail: speckle (map) and hairline cracks (map + faint glow) */
+      if (B.bolts && !rough && !emissive) {
+        /* deck panel: inner bevel line and four corner bolts */
+        const ri = r0 + 0.07, ro = r1 - 0.07, b0 = a0 + 0.07 / r0, b1 = a1 - 0.07 / r0;
+        x.strokeStyle = 'rgba(150,170,255,0.09)'; x.lineWidth = s * 0.012; x.beginPath(); x.arc(c, c, ro * s, b0, b1); x.arc(c, c, ri * s, b1, b0, true); x.closePath(); x.stroke();
+        [[ri + 0.03, b0 + 0.03 / ri], [ri + 0.03, b1 - 0.03 / ri], [ro - 0.03, b0 + 0.03 / ro], [ro - 0.03, b1 - 0.03 / ro]].forEach(q => { const p = P(q[0], q[1]); x.fillStyle = 'rgba(0,0,0,0.5)'; x.beginPath(); x.arc(p[0], p[1] + s * 0.006, s * 0.018, 0, TAU); x.fill(); x.fillStyle = 'rgba(170,185,240,0.35)'; x.beginPath(); x.arc(p[0], p[1], s * 0.014, 0, TAU); x.fill(); });
+      }
       if (!rough && !emissive) { for (let k = 0; k < 10; k++) { const a = a0 + (a1 - a0) * r(), rr = r0 + (r1 - r0) * r(), p = P(rr, a); x.fillStyle = `rgba(${r() < 0.5 ? '255,255,255' : '0,0,0'},0.05)`; x.beginPath(); x.arc(p[0], p[1], s * (0.02 + r() * 0.05), 0, TAU); x.fill(); } }
       if (B.cracks && r() < 0.28) {
         let a = a0 + (a1 - a0) * (0.2 + r() * 0.6), rr = r0 + (r1 - r0) * 0.1, p = P(rr, a);
@@ -876,34 +883,66 @@ function sceneryFrost(V) {
 
 function sceneryOrbit(V) {
   const g = new THREE.Group(), r = rnd(73);
-  const sky = canvasTex(1024, 1024, (x, w, h) => {
-    const bg = x.createRadialGradient(w * 0.5, h * 0.35, 10, w * 0.5, h * 0.4, w); bg.addColorStop(0, '#141838'); bg.addColorStop(0.6, '#080a1e'); bg.addColorStop(1, '#030409'); x.fillStyle = bg; x.fillRect(0, 0, w, h);
+  /* deep space: dark nebula and stars on a portrait card (scene background) */
+  const sky = canvasTex(512, 1024, (x, w, h) => {
+    const bg = x.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, '#020309'); bg.addColorStop(0.3, '#070a1c'); bg.addColorStop(0.55, '#0a0c24'); bg.addColorStop(1, '#03040b'); x.fillStyle = bg; x.fillRect(0, 0, w, h);
     x.globalCompositeOperation = 'lighter';
-    [[0.75, 0.22, '122,60,255', 0.3, 0.5], [0.2, 0.45, '31,182,201', 0.2, 0.45], [0.6, 0.7, '255,60,154', 0.14, 0.4]].forEach(n => { const gg = x.createRadialGradient(w * n[0], h * n[1], 0, w * n[0], h * n[1], w * n[4]); gg.addColorStop(0, `rgba(${n[2]},${n[3]})`); gg.addColorStop(1, `rgba(${n[2]},0)`); x.fillStyle = gg; x.fillRect(0, 0, w, h); });
-    x.globalCompositeOperation = 'source-over'; starsOn(x, w, h, 700, 1, 4);
+    [[0.78, 0.18, '110,60,220', 0.22, 0.45], [0.15, 0.3, '30,120,170', 0.14, 0.4], [0.6, 0.08, '200,60,150', 0.08, 0.3]].forEach(n => { const gg = x.createRadialGradient(w * n[0], h * n[1], 0, w * n[0], h * n[1], w * n[4]); gg.addColorStop(0, `rgba(${n[2]},${n[3]})`); gg.addColorStop(1, `rgba(${n[2]},0)`); x.fillStyle = gg; x.fillRect(0, 0, w, h); });
+    x.globalCompositeOperation = 'source-over';
+    const pr = rnd(4); for (let i = 0; i < 520; i++) { x.fillStyle = `rgba(${pr() < 0.2 ? '200,210,255' : '255,255,255'},${0.15 + pr() * 0.6})`; const z = 0.6 + pr() * 1.3; x.fillRect(pr() * w, pr() * h, z, z * 0.5); }
   });
-  const planetTex = canvasTex(512, 256, (x, w, h) => { const gg = x.createLinearGradient(0, 0, 0, h); ['#ffd7a8', '#e8946a', '#d9775a', '#b05a50', '#e8a070', '#c06a5a', '#8a3a40'].forEach((c, i, a) => gg.addColorStop(i / (a.length - 1), c)); x.fillStyle = gg; x.fillRect(0, 0, w, h); x.globalAlpha = 0.25; for (let i = 0; i < 30; i++) { x.fillStyle = i % 2 ? '#5a1e28' : '#ffe0b0'; x.fillRect(0, Math.random() * h, w, 2 + Math.random() * 6); } });
-  const planet = new THREE.Mesh(new THREE.SphereGeometry(14, 48, 32), new THREE.MeshStandardMaterial({ map: planetTex, roughness: 0.9 })); planet.position.set(-15, 12.5, -58); planet.scale.setScalar(0.55); planet.rotation.z = 0.35; g.add(planet);
-  const ringTex = canvasTex(256, 4, (x, w, h) => { for (let i = 0; i < w; i++) { const a = 0.15 + 0.5 * Math.abs(Math.sin(i * 0.15)) * (i > 30 && i < 230 ? 1 : 0); x.fillStyle = `rgba(255,220,170,${a})`; x.fillRect(i, 0, 1, h); } });
-  const ringGeo = new THREE.RingGeometry(18, 30, 96, 1); const pos = ringGeo.attributes.position, uv = ringGeo.attributes.uv; for (let i = 0; i < pos.count; i++) { const d = Math.hypot(pos.getX(i), pos.getY(i)); uv.setXY(i, (d - 18) / 12, 0.5); }
-  const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ map: ringTex, transparent: true, side: THREE.DoubleSide, depthWrite: false })); ring.position.copy(planet.position); ring.scale.setScalar(0.55); ring.rotation.x = -Math.PI / 2 + 0.35; ring.rotation.y = 0.35; g.add(ring);
-  const moon = new THREE.Mesh(new THREE.SphereGeometry(3, 32, 20), new THREE.MeshStandardMaterial({ color: 0xc8cdf0, roughness: 1 })); moon.position.set(38, 26, -90); g.add(moon);
-  const station = new THREE.Group();
-  const stMat = new THREE.MeshStandardMaterial({ color: 0x6a74b8, metalness: 0.8, roughness: 0.35 });
-  station.add(new THREE.Mesh(new THREE.TorusGeometry(13, 0.5, 12, 96), stMat));
-  for (let i = 0; i < 6; i++) { const s = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 13, 6), stMat); s.rotation.z = i / 6 * Math.PI; s.position.set(0, 0, 0); s.geometry.translate(0, 0, 0); station.add(s); }
-  station.add(new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 2.2, 24).rotateX(Math.PI / 2), stMat));
-  const lightGeo = new THREE.SphereGeometry(0.22, 8, 6), lights = new THREE.InstancedMesh(lightGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }), 24);
-  for (let i = 0; i < 24; i++) { const a = i / 24 * TAU; tmpM.makeTranslation(Math.cos(a) * 13, Math.sin(a) * 13, 0.55); lights.setMatrixAt(i, tmpM); lights.setColorAt(i, tmpC.set(i % 2 ? 0x8ee8ff : 0xffb478).multiplyScalar(3)); }
-  station.add(lights);
-  station.position.set(12, 10, -40); station.rotation.x = -1.2; station.rotation.y = -0.25; g.add(station);
-  const astMat = new THREE.MeshStandardMaterial({ color: 0x6a6688, roughness: 0.95, flatShading: true });
-  const asts = [];
-  for (let i = 0; i < 18; i++) {
-    const geo = new THREE.IcosahedronGeometry(0.5 + r() * 1.4, 1); const p = geo.attributes.position; for (let k = 0; k < p.count; k++) { tmpV.fromBufferAttribute(p, k).multiplyScalar(0.75 + r() * 0.45); p.setXYZ(k, tmpV.x, tmpV.y, tmpV.z); } geo.computeVertexNormals();
-    const m = new THREE.Mesh(geo, astMat); m.position.set((r() < 0.5 ? -1 : 1) * (6 + r() * 18), -4 + r() * 12, -8 - r() * 24); g.add(m); asts.push({ m, s: (r() - 0.5) * 0.4, b: r() * 6 });
-  }
-  return { group: g, sky, fog: null, hemi: [0xa8b0ff, 0x100c28, 0.6], key: [0xe8e8ff, 2.0], rim: [0xb18cff, 2.4], bloom: [0.7, 0.5, 0.8], exposure: 1.05, fillGlow: 0x8c6eff, update(t) { station.rotation.z = t * 0.05; asts.forEach(a => { a.m.rotation.x = t * a.s; a.m.rotation.y = t * a.s * 0.7; a.m.position.y += Math.sin(t * 0.5 + a.b) * 0.002; }); planet.rotation.y = t * 0.02; } };
+  /* the ringed planet sits low in the camera's sky band (25 deg down, 8 deg left, 10 deg across) */
+  const D = 64, dep = 25 * Math.PI / 180, az = -9 * Math.PI / 180, PR = D * Math.sin(10.5 * Math.PI / 180);
+  const pc = new THREE.Vector3(RIG.cam.x + D * Math.cos(dep) * Math.sin(az), RIG.cam.y - D * Math.sin(dep), RIG.cam.z - D * Math.cos(dep) * Math.cos(az));
+  const planetTex = canvasTex(512, 256, (x, w, h) => {
+    const gg = x.createLinearGradient(0, 0, 0, h); ['#2a2f5a', '#4a4f86', '#3a3a6e', '#6a5e96', '#4c4a80', '#2e3466', '#5a5890', '#383a70', '#22264a'].forEach((c, i, a) => gg.addColorStop(i / (a.length - 1), c)); x.fillStyle = gg; x.fillRect(0, 0, w, h);
+    const pr = rnd(8); for (let i = 0; i < 46; i++) { x.fillStyle = `rgba(${pr() < 0.5 ? '20,18,50' : '170,160,220'},${0.05 + pr() * 0.1})`; const y = pr() * h; x.fillRect(0, y, w, 1 + pr() * 5); }
+    x.fillStyle = 'rgba(190,150,200,0.25)'; x.beginPath(); x.ellipse(w * 0.62, h * 0.6, 26, 10, 0, 0, TAU); x.fill();
+  });
+  const planet = new THREE.Mesh(new THREE.SphereGeometry(PR, 48, 32), new THREE.MeshStandardMaterial({ map: planetTex, color: 0xb8b8c8, roughness: 0.95, envMapIntensity: 0.2 }));
+  planet.position.copy(pc); planet.rotation.z = 0.32; g.add(planet);
+  /* thin atmosphere halo behind the planet */
+  const atmT = canvasTex(128, 128, (x, w) => { const gg = x.createRadialGradient(w / 2, w / 2, w * 0.36, w / 2, w / 2, w / 2); gg.addColorStop(0, 'rgba(255,255,255,0)'); gg.addColorStop(0.08, 'rgba(255,255,255,0.8)'); gg.addColorStop(0.35, 'rgba(255,255,255,0.18)'); gg.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gg; x.fillRect(0, 0, w, w); }, false);
+  const atm = new THREE.Sprite(new THREE.SpriteMaterial({ map: atmT, color: new THREE.Color(0x7a8cff).multiplyScalar(0.55), blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+  atm.scale.setScalar(PR * 2.78); atm.position.copy(pc).addScaledVector(tmpV.copy(pc).sub(RIG.cam).normalize(), PR * 1.2); atm.renderOrder = -8; g.add(atm);
+  const ringTex = canvasTex(256, 4, (x, w, h) => { const pr = rnd(3); for (let i = 0; i < w; i++) { const u = i / w, a = (u > 0.06 && u < 0.94 ? 0.16 + 0.34 * Math.abs(Math.sin(i * 0.11)) * (0.6 + pr() * 0.4) : 0) * (u > 0.55 && u < 0.6 ? 0.15 : 1); x.fillStyle = `rgba(200,190,230,${a})`; x.fillRect(i, 0, 1, h); } });
+  const ringGeo = new THREE.RingGeometry(PR * 1.3, PR * 2.2, 128, 1); const rp = ringGeo.attributes.position, ruv = ringGeo.attributes.uv; for (let i = 0; i < rp.count; i++) { const d = Math.hypot(rp.getX(i), rp.getY(i)); ruv.setXY(i, (d - PR * 1.3) / (PR * 0.9), 0.5); }
+  const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ map: ringTex, color: 0x8a86b0, transparent: true, side: THREE.DoubleSide, depthWrite: false, fog: false }));
+  ring.position.copy(pc); ring.rotation.set(-Math.PI / 2 + 0.42, 0.28, 0); g.add(ring);
+  /* the station: a far ring with spokes and lights, merged, turning slowly */
+  const station = new THREE.Group(), stMat = new THREE.MeshStandardMaterial({ color: 0x4a5288, metalness: 0.8, roughness: 0.4 });
+  const sp = [new THREE.TorusGeometry(6, 0.32, 10, 72), new THREE.CylinderGeometry(0.9, 0.9, 1.4, 20).rotateX(Math.PI / 2)];
+  for (let i = 0; i < 4; i++) sp.push(new THREE.CylinderGeometry(0.1, 0.1, 12, 6).rotateZ(i / 4 * Math.PI));
+  station.add(new THREE.Mesh(mergeGeos(sp), stMat));
+  const stl = new THREE.InstancedMesh(new THREE.SphereGeometry(0.16, 6, 4), new THREE.MeshBasicMaterial({ color: 0xffffff }), 16);
+  for (let i = 0; i < 16; i++) { const a = i / 16 * TAU; tmpM.makeTranslation(Math.cos(a) * 6, Math.sin(a) * 6, 0.35); stl.setMatrixAt(i, tmpM); stl.setColorAt(i, tmpC.set(i % 2 ? 0x8ee8ff : 0xffc890).multiplyScalar(1.4)); }
+  station.add(stl); station.scale.setScalar(0.75);
+  const sd = 95, sdep = 12 * Math.PI / 180, saz = 7 * Math.PI / 180;
+  station.position.set(RIG.cam.x + sd * Math.cos(sdep) * Math.sin(saz), RIG.cam.y - sd * Math.sin(sdep), RIG.cam.z - sd * Math.cos(sdep) * Math.cos(saz));
+  station.rotation.set(-0.9, -0.35, 0); g.add(station);
+  /* docking pylons flanking the deck: trusses rising out of the void, nav lights on top (merged + instanced) */
+  const py = [];
+  [[-6.6, -7.2], [6.8, -7.8], [-3.8, -12.5], [4.2, -13]].forEach((q, k) => {
+    const H = k < 2 ? 12 : 10, top = k < 2 ? 1.6 : 2.6;
+    [[-0.32, -0.32], [0.32, -0.32], [-0.32, 0.32], [0.32, 0.32]].forEach(o => py.push(new THREE.BoxGeometry(0.1, H, 0.1).translate(q[0] + o[0], top - H / 2, q[1] + o[1])));
+    for (let y = top - H; y < top; y += 1.1) { py.push(new THREE.BoxGeometry(0.74, 0.06, 0.06).translate(q[0], y, q[1] - 0.32)); py.push(new THREE.BoxGeometry(0.06, 0.06, 0.74).translate(q[0] - 0.32, y, q[1])); py.push(new THREE.BoxGeometry(0.06, 0.06, 0.74).translate(q[0] + 0.32, y, q[1])); }
+    py.push(new THREE.CylinderGeometry(0.5, 0.42, 0.24, 12).translate(q[0], top + 0.12, q[1]));
+  });
+  const pyl = new THREE.Mesh(mergeGeos(py), new THREE.MeshStandardMaterial({ color: 0x2c3260, metalness: 0.75, roughness: 0.4 })); g.add(pyl);
+  const nav = new THREE.InstancedMesh(new THREE.SphereGeometry(0.13, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }), 4);
+  [[-6.6, 1.88, -7.2], [6.8, 1.88, -7.8], [-3.8, 2.88, -12.5], [4.2, 2.88, -13]].forEach((q, i) => { tmpM.makeTranslation(q[0], q[1], q[2]); nav.setMatrixAt(i, tmpM); nav.setColorAt(i, tmpC.set(0)); });
+  g.add(nav);
+  const navCol = [0xff3a5a, 0x3aff9a, 0xff3a5a, 0x3aff9a];
+  /* a soft engine glow under the floating deck */
+  const glow = new THREE.Mesh(new THREE.CircleGeometry(V.edge * 0.9, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x5a46c8, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false }));
+  glow.position.y = -1.05; g.add(glow);
+  const dust = motes(120, [-10, 10], [-2, 6], [-16, 2], 0x9ab8ff, 0.06, 77); g.add(dust);
+  return { group: g, sky, fog: null, hemi: [0xa8b0ff, 0x0c0a24, 0.6], key: [0xe8e8ff, 2.2], rim: [0x9a8cff, 2.6], bloom: [0.8, 0.35, 1], exposure: 1.1, tint: 0x03041a, vig: 0.5, fillGlow: 0x6a50ff,
+    update(t) {
+      station.rotation.z = t * 0.06; planet.rotation.y = t * 0.01;
+      for (let i = 0; i < 4; i++) nav.setColorAt(i, tmpC.set(navCol[i]).multiplyScalar(((t * 0.8 + i * 0.27) % 1) < 0.18 ? 3 : 0.25));
+      nav.instanceColor.needsUpdate = true; stepMotes(dust, t);
+    } };
 }
 
 function sceneryCarnival(V) {
