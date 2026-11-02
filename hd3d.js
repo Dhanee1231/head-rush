@@ -679,7 +679,8 @@ function sceneryNeon(V) {
     m.position.set(q[0], -0.585, q[1] + q[4] / 2 - 0.2); g.add(m); refl.push(m);
   });
   [[-6, -5, 0xff4fa3], [6.5, -5.5, 0x3fd0ff]].forEach(l => { const pl = new THREE.PointLight(l[2], 5, 10, 2); pl.position.set(l[0], 1.2, l[1]); g.add(pl); });
-  return { group: g, sky, fog: [0x0c0a24, 22, 70], hemi: [0x6a70d8, 0x0a0614, 0.9], key: [0xd8d4ff, 2.3], rim: [0x9a7bff, 2.4], bloom: [0.85, 0.35, 1], exposure: 1.12, tint: 0x06041a, vig: 0.5 };
+  const neonMotes = motes(70, [-9, 9], [0, 6], [-14, -2], 0xd08aff, 0.06, 13); g.add(neonMotes);
+  return { update(t) { stepMotes(neonMotes, t); }, group: g, sky, fog: [0x0c0a24, 22, 70], hemi: [0x6a70d8, 0x0a0614, 0.9], key: [0xd8d4ff, 2.3], rim: [0x9a7bff, 2.4], bloom: [0.85, 0.35, 1], exposure: 1.12, tint: 0x06041a, vig: 0.5 };
 }
 
 function crag(r, x, y, z, w, h, mat) {
@@ -1066,7 +1067,7 @@ function setArena(g) {
   gradePass.uniforms.uTint.value.set(sc.tint || 0x000000); gradePass.uniforms.uVig.value = sc.vig !== undefined ? sc.vig : 0.45;
   renderer.toneMappingExposure = (sc.exposure || 1) * 0.9;
   runnerPool.forEach(rn => { scene.remove(rn.root); }); runnerPool = [];
-  RIM.color.value.set(V.T.rimLight);
+  RIM.color.value.set(V.T.rimLight); FX.dust.set(DUST[A.id] || 0xdfe4ff);
   [barPool, hammerPool, wallPool, beltPool, holePool].forEach(pl => { pl.forEach(o => scene.remove(o.root || o)); pl.length = 0; });
 }
 
@@ -1233,14 +1234,14 @@ function updateRunner(rn, p, i, g, V, now, dt) {
   if (p.out && !rn.st.out) {
     const out = new THREE.Vector3(x, 0, z).normalize();
     rn.fly = { t0: now, x, z, vx: out.x * 3.2, vz: out.z * 3.2, vy: 6.5, spin: (Math.random() < 0.5 ? -1 : 1) * 9 };
-    emitDust(x, 0.5, z, 10, p.color, 0.35, 2.4); ringAt(x, z, p.color);
+    emitDust(x, 0.5, z, 10, p.color, 0.35, 2.4); ringAt(x, z, p.color, 1.6); knockoutFx(x, z, p.color);
   }
   if (!p.out && p.stun > rn.st.stun && t < p.stun) {
-    rn.sqv -= 7; rn.tiltv += 10; rn.hopv += 3.2; ringAt(x, z, p.you ? 0xffffff : p.color);
+    rn.sqv -= 7; rn.tiltv += 10; rn.hopv += 3.2; ringAt(x, z, p.you ? 0xffffff : p.color); hitFx(x, 0.75, z, p.you);
     if (p.you) punch(0.045);
   }
-  if (!p.out && p.air > rn.st.air && t < p.air) { rn.sqv += 7; if (p.you || i < 3) emitDust(x, 0.05, z, 4, 0xdfe4ff, 0.22, 0.8); }
-  if (!p.out && rn.st.air > 0 && t >= rn.st.air && t - rn.st.air < 0.1 && rn.st.airLanded !== rn.st.air) { rn.st.airLanded = rn.st.air; rn.sqv -= 8; emitDust(x, 0.05, z, 6, 0xdfe4ff, 0.26, 1.1); }
+  if (!p.out && p.air > rn.st.air && t < p.air) { rn.sqv += 7; if (p.you || i < 3) emitDust(x, 0.05, z, 4, FX.dust, 0.22, 0.8); }
+  if (!p.out && rn.st.air > 0 && t >= rn.st.air && t - rn.st.air < 0.1 && rn.st.airLanded !== rn.st.air) { rn.st.airLanded = rn.st.air; rn.sqv -= 8; emitDust(x, 0.05, z, 6, FX.dust, 0.26, 1.1); }
   if (!p.out && p.duck > rn.st.duck && t < p.duck) { rn.sqv -= 4; }
   rn.st.stun = p.stun; rn.st.air = p.air; rn.st.out = p.out; rn.st.duck = p.duck;
 
@@ -1331,7 +1332,7 @@ function updateRunner(rn, p, i, g, V, now, dt) {
   const bs = 1.05 * S * sx * (1 - Math.min(0.55, (jump + rn.hop) * 0.4));
   tmpM.compose(tmpV.set(x, 0.008, z), tmpQ.identity(), tmpS.set(bs, 1, bs)); partPush('blob', tmpM);
   // running dust for your runner
-  if (p.you && running && now - rn.lastStep > 0.22) { rn.lastStep = now; emitDust(x, 0.04, z, 1, 0xdfe4ff, 0.16, 0.5); }
+  if (p.you && running && now - rn.lastStep > 0.22) { rn.lastStep = now; emitDust(x, 0.04, z, 1, FX.dust, 0.16, 0.5); }
   return { x, z, top: LEG + rn.top * S * rn.sq + jump + bob + rn.hop + 0.1, out: false };
 }
 
@@ -1354,35 +1355,57 @@ function partsBegin() { if (!PARTS) makeParts(); PARTS.n = { arms: 0, up: 0, sol
 function partPush(k, m, c) { const im = PARTS[k], i = PARTS.n[k]; if (i >= im.instanceMatrix.count) return; im.setMatrixAt(i, m); if (c) im.setColorAt(i, c); PARTS.n[k] = i + 1; }
 function partsEnd() { ['arms', 'up', 'sole', 'blob'].forEach(k => { const im = PARTS[k]; im.count = PARTS.n[k]; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; }); }
 
-/* ---------- little effects: dust puffs, impact rings, camera punch ---------- */
-let dustPool = [], ringPool = [], zoomPunch = 0, dustTex;
+/* ---------- little effects: dust, hit sparks, knockout confetti, impact rings, camera punch ----------
+   Dust, sparks and flashes share one additive instanced puff system; confetti is one instanced mesh. */
+let ringPool = [], zoomPunch = 0, fxPuffs, confetti;
+const FX = { dust: new THREE.Color(0xdfe4ff) };
+/* landing dust per arena: ash in the temple, snow powder on the peak, brass dust in the works... */
+const DUST = { neon: 0x9aa0ff, lava: 0x9a6a58, frost: 0xe6f6ff, gear: 0xc8a478, orbit: 0xa8b8ff, carnival: 0xd8b0c0 };
 function initFx() {
-  dustTex = canvasTex(64, 64, (x, w) => { const gg = x.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); gg.addColorStop(0, 'rgba(255,255,255,0.9)'); gg.addColorStop(0.5, 'rgba(255,255,255,0.35)'); gg.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gg; x.fillRect(0, 0, w, w); });
-  for (let i = 0; i < 40; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: dustTex, transparent: true, depthWrite: false, opacity: 0 })); s.visible = false; scene.add(s); dustPool.push({ s, life: 0, max: 1, vx: 0, vy: 0, vz: 0, size: 0.2 }); }
-  for (let i = 0; i < 6; i++) { const m = new THREE.Mesh(new THREE.RingGeometry(0.8, 1, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false, opacity: 0, side: THREE.DoubleSide, blending: THREE.AdditiveBlending })); m.visible = false; scene.add(m); ringPool.push({ m, life: 0 }); }
+  for (let i = 0; i < 6; i++) { const m = new THREE.Mesh(new THREE.RingGeometry(0.8, 1, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false, opacity: 0, side: THREE.DoubleSide, blending: THREE.AdditiveBlending })); m.visible = false; scene.add(m); ringPool.push({ m, life: 0, k: 1 }); }
+  fxPuffs = makePuffs(160, softTex()); fxPuffs.renderOrder = 5; scene.add(fxPuffs);
+  confetti = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.1, 0.06), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }), 120);
+  confetti.instanceMatrix.setUsage(THREE.DynamicDrawUsage); confetti.frustumCulled = false; confetti.count = 0; confetti.setColorAt(0, tmpC.set(0xffffff)); confetti.userData.ps = []; scene.add(confetti);
 }
 function emitDust(x, y, z, n, color, size, speed) {
+  const c = new THREE.Color(color).multiplyScalar(0.32);
   for (let k = 0; k < n; k++) {
-    const d = dustPool.find(o => o.life <= 0); if (!d) return;
     const a = Math.random() * TAU, sp = speed * (0.4 + Math.random() * 0.6);
-    d.life = d.max = 0.35 + Math.random() * 0.3; d.vx = Math.cos(a) * sp; d.vz = Math.sin(a) * sp; d.vy = 0.4 + Math.random() * 0.8; d.size = size * (0.7 + Math.random() * 0.6);
-    d.s.position.set(x, y, z); d.s.material.color.set(color); d.s.visible = true;
+    puff(fxPuffs, { x, y, z, vx: Math.cos(a) * sp, vz: Math.sin(a) * sp, vy: 0.4 + Math.random() * 0.8, drag: 4, life: 0.4 + Math.random() * 0.35, size: size * (0.8 + Math.random() * 0.6), grow: 0.8, col: c });
   }
 }
-function ringAt(x, z, color) { const r = ringPool.find(o => o.life <= 0); if (!r) return; r.life = 0.4; r.m.position.set(x, 0.03, z); r.m.material.color.set(color); r.m.visible = true; }
+/* a hit: a white flash and a spray of hot sparks that fall back */
+const SPARK = [new THREE.Color(1, 0.85, 0.5), new THREE.Color(1, 1, 1)];
+function hitFx(x, y, z, you) {
+  puff(fxPuffs, { x, y, z, life: 0.16, size: you ? 1.1 : 0.8, grow: 0.6, col: new THREE.Color(0.7, 0.7, 0.75) });
+  for (let k = 0; k < (you ? 12 : 8); k++) { const a = Math.random() * TAU, sp = 2 + Math.random() * 2.5; puff(fxPuffs, { x, y, z, vx: Math.cos(a) * sp, vz: Math.sin(a) * sp, vy: 1.5 + Math.random() * 2.5, g: 9, drag: 1.5, life: 0.35 + Math.random() * 0.25, size: 0.07, grow: -0.5, col: SPARK[k % 2] }); }
+}
+/* a knockout: flash, then confetti in the runner's colour with white and gold */
+function knockoutFx(x, z, color) {
+  puff(fxPuffs, { x, y: 0.6, z, life: 0.22, size: 1.6, grow: 0.8, col: new THREE.Color(color).multiplyScalar(0.8) });
+  const cols = [new THREE.Color(color), new THREE.Color(0xffffff), new THREE.Color(0xffd23f)], ps = confetti.userData.ps;
+  for (let k = 0; k < 26 && ps.length < 120; k++) { const a = Math.random() * TAU, sp = 1 + Math.random() * 2.2; ps.push({ x, y: 0.7, z, vx: Math.cos(a) * sp, vz: Math.sin(a) * sp, vy: 3 + Math.random() * 3, age: 0, life: 1.4 + Math.random() * 0.6, rx: Math.random() * TAU, ry: Math.random() * TAU, sx: (Math.random() - 0.5) * 16, sy: (Math.random() - 0.5) * 12, c: cols[k % 3] }); }
+}
+function stepConfetti(dt) {
+  const ps = confetti.userData.ps; let n = 0;
+  for (let i = 0; i < ps.length; i++) {
+    const p = ps[i]; p.age += dt; if (p.age >= p.life) { ps.splice(i--, 1); continue; }
+    p.vy -= 7 * dt; const dr = Math.max(0, 1 - 2.2 * dt); p.vx *= dr; p.vz *= dr; if (p.vy < -1.2) p.vy = -1.2;
+    p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; p.rx += p.sx * dt; p.ry += p.sy * dt;
+    const sc = Math.min(1, (p.life - p.age) * 3);
+    tmpQ.setFromEuler(new THREE.Euler(p.rx, p.ry, 0)); tmpM.compose(tmpV.set(p.x, Math.max(0.03, p.y), p.z), tmpQ, tmpS.setScalar(sc));
+    confetti.setMatrixAt(n, tmpM); confetti.setColorAt(n, p.c); n++;
+  }
+  confetti.count = n; confetti.instanceMatrix.needsUpdate = true; if (confetti.instanceColor) confetti.instanceColor.needsUpdate = true;
+}
+function ringAt(x, z, color, k = 1) { const r = ringPool.find(o => o.life <= 0); if (!r) return; r.life = 0.4; r.k = k; r.m.position.set(x, 0.03, z); r.m.material.color.set(color); r.m.visible = true; }
 function punch(a) { zoomPunch = Math.max(zoomPunch, a); }
 function stepFx(dt) {
-  dustPool.forEach(d => {
-    if (d.life <= 0) return;
-    d.life -= dt; if (d.life <= 0) { d.s.visible = false; return; }
-    const k = d.life / d.max;
-    d.s.position.x += d.vx * dt; d.s.position.y += d.vy * dt; d.s.position.z += d.vz * dt; d.vx *= 0.92; d.vz *= 0.92;
-    const sz = d.size * (1.6 - k * 0.6); d.s.scale.set(sz, sz, 1); d.s.material.opacity = k * 0.7;
-  });
+  stepPuffs(fxPuffs, dt); stepConfetti(dt);
   ringPool.forEach(r => {
     if (r.life <= 0) return;
     r.life -= dt; if (r.life <= 0) { r.m.visible = false; return; }
-    const k = 1 - r.life / 0.4; r.m.scale.setScalar(0.4 + k * 1.3); r.m.material.opacity = (1 - k) * 0.7;
+    const k = 1 - r.life / 0.4; r.m.scale.setScalar((0.4 + k * 1.3) * r.k); r.m.material.opacity = (1 - k) * 0.7;
   });
   zoomPunch *= Math.pow(0.0005, dt);
 }
@@ -1679,6 +1702,11 @@ HR3D.render = function (g, view) {
     o.root.rotation.y = -(b.angle + g.rot);
     const al = vis ? 1 : 0.18; o.mat.opacity = al; o.capMat.opacity = al; o.halo.material.uniforms.uA.value = vis ? 1 : 0.15;
     o.pool.visible = o.trail.visible = vis; o.trail.scale.z = (g.dir || 1) < 0 ? -1 : 1;
+    /* High tier: the bar tip sheds a few sparks behind its sweep */
+    if (quality.bloom && vis && Math.random() < (view.dt || 0.016) * 9) {
+      const f = b.angle + g.rot, d = (g.dir || 1) < 0 ? -1 : 1, R = V.barOut + 0.1, y = b.type === 'high' ? 1.17 : 0.3;
+      puff(fxPuffs, { x: R * Math.cos(f), y, z: R * Math.sin(f), vx: Math.sin(f) * d * 1.2 + Math.cos(f) * 0.8, vz: -Math.cos(f) * d * 1.2 + Math.sin(f) * 0.8, vy: 0.6 + Math.random(), g: 5, life: 0.35 + Math.random() * 0.2, size: 0.06, grow: -0.4, col: o.sparkCol || (o.sparkCol = new THREE.Color(b.type === 'high' ? G_API.COL.high : G_API.COL.low).lerp(new THREE.Color(1, 1, 1), 0.4)) });
+    }
   });
   // hammers
   syncPool(hammerPool, A.hammers, () => makeHammer(V));
