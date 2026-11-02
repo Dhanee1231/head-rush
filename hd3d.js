@@ -142,6 +142,7 @@ function buildShared() {
   MAT.limb = smat(addRim(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.32, envMapIntensity: 0.8 })));
   MAT.shoeUp = smat(new THREE.MeshStandardMaterial({ color: 0xf2f4fb, roughness: 0.5, envMapIntensity: 0.6 }));
   MAT.shoeSole = smat(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.45 }));
+  MAT.gunmetal = smat(new THREE.MeshStandardMaterial({ color: 0x2a2d3a, metalness: 0.85, roughness: 0.32 }));
   MAT.youHull = smat(new THREE.MeshBasicMaterial({ color: 0xffd23f, side: THREE.BackSide }));
   MAT.x = smat(new THREE.MeshBasicMaterial({ color: 0x1b1530 }));
   MAT.gold = smat(new THREE.MeshStandardMaterial({ color: 0xffc94a, metalness: 1, roughness: 0.22, emissive: 0x6a4a00, emissiveIntensity: 0.5 }));
@@ -673,7 +674,7 @@ function setArena(g) {
   keyLight.color.set(sc.key[0]); keyLight.intensity = sc.key[1] * 0.7;
   rimLight.color.set(sc.rim[0]); rimLight.intensity = sc.rim[1] * 0.9;
   fillLight.intensity = sc.fillGlow ? 8 : 0; if (sc.fillGlow) fillLight.color.set(sc.fillGlow);
-  bloomPass.strength = sc.bloom[0] * 0.75; bloomPass.radius = Math.min(0.4, sc.bloom[1]); bloomPass.threshold = Math.max(1.0, sc.bloom[2]);
+  bloomPass.strength = sc.bloom[0] * 0.75; bloomPass.radius = Math.min(0.4, sc.bloom[1]); bloomPass.threshold = 1.35; /* above the bar cores' own luminance: cores stay exact, halos and tips bloom */
   gradePass.uniforms.uTint.value.set(sc.tint || 0x000000); gradePass.uniforms.uVig.value = sc.vig !== undefined ? sc.vig : 0.45;
   renderer.toneMappingExposure = (sc.exposure || 1) * 0.9;
   runnerPool.forEach(rn => { scene.remove(rn.root); }); runnerPool = [];
@@ -999,24 +1000,40 @@ function stepFx(dt) {
 }
 
 /* ---------- bars, hammers, walls, belts, holes ---------- */
-let stripeTex;
-function barMaterial(colr) {
-  if (!stripeTex) { stripeTex = canvasTex(4, 64, (x, w, h) => { x.fillStyle = '#ffffff'; x.fillRect(0, 0, w, h); x.fillStyle = '#6a6a6a'; x.fillRect(0, 0, w, h * 0.35); }); stripeTex.wrapS = stripeTex.wrapT = THREE.RepeatWrapping; }
-  const t = stripeTex.clone(); t.needsUpdate = true; t.repeat.set(1, 9);
-  return new THREE.MeshStandardMaterial({ color: colr, map: t, emissive: colr, emissiveMap: t, emissiveIntensity: 0.75, roughness: 0.2, metalness: 0.1, transparent: true });
-}
+/* Bars are the scene's hero lights: an unlit core that comes out of the grade as exactly the game's colour,
+   a halo shell that only glows outside the core, a light pool on the floor, a gunmetal collar and a hot tip. */
+let poolTex;
+const haloMat = (colr, k) => new THREE.ShaderMaterial({
+  uniforms: { uCol: { value: new THREE.Color(colr) }, uK: { value: k }, uA: { value: 1 }, uIn: { value: 0.42 } },
+  vertexShader: `varying vec3 vN; varying vec3 vV;
+    void main() { vec4 mv = modelViewMatrix * vec4( position, 1.0 ); vN = normalize( normalMatrix * normal ); vV = normalize( -mv.xyz ); gl_Position = projectionMatrix * mv; }`,
+  fragmentShader: `uniform vec3 uCol; uniform float uK; uniform float uA; uniform float uIn; varying vec3 vN; varying vec3 vV;
+    void main() { float f = abs( dot( normalize( vN ), normalize( vV ) ) ); float d = sqrt( max( 0.0, 1.0 - f * f ) );
+      float g = smoothstep( uIn - 0.04, uIn + 0.06, d ) * pow( 1.0 - d, 1.6 ); gl_FragColor = vec4( uCol * g * uK * uA, 1.0 ); }`,
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+});
 function makeBar(type, V) {
   const high = type === 'high', colr = high ? G_API.COL.high : G_API.COL.low, r = high ? 0.14 : 0.13, r0 = 0.75, r1 = V.barOut, L = r1 - r0;
   const root = new THREE.Group();
-  const mat = barMaterial(colr);
-  const cyl = new THREE.Mesh(new THREE.CapsuleGeometry(r, L, 6, 20).rotateZ(Math.PI / 2).translate(r0 + L / 2, 0, 0), mat); cyl.castShadow = true;
-  const capMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: colr, emissiveIntensity: 3, transparent: true });
-  const cap = new THREE.Mesh(GEO.barCap, capMat); cap.scale.setScalar(r * 1.25); cap.position.x = r1 + r * 0.6;
-  const holder = new THREE.Group(); holder.position.y = high ? 1.17 : 0.3; holder.add(cyl); holder.add(cap); root.add(holder);
-  const trail = new THREE.Mesh(sectorGeo(0.75, r1, 0, 0.55, 16, 0.02, u => { const k = 0.32 * Math.pow(1 - u, 1.6); const c = new THREE.Color(colr); return [c.r * k, c.g * k, c.b * k]; }), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  const mat = new THREE.MeshBasicMaterial({ color: exactColor(colr, renderer.toneMappingExposure), transparent: true, fog: false });
+  const cyl = new THREE.Mesh(new THREE.CapsuleGeometry(r, L, 6, 20).rotateZ(Math.PI / 2).translate(r0 + L / 2, 0, 0), mat);
+  cyl.renderOrder = 6; /* drawn after every additive layer so nothing adds onto the exact core colour */
+  const HS = 2.5;
+  const halo = new THREE.Mesh(new THREE.CapsuleGeometry(r * HS, L, 6, 20).rotateZ(Math.PI / 2).translate(r0 + L / 2, 0, 0), haloMat(colr, quality.bloom ? 1.6 : 2.4));
+  halo.material.uniforms.uIn.value = 1 / HS; halo.renderOrder = 3;
+  const capMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(colr).multiplyScalar(4), transparent: true });
+  const cap = new THREE.Mesh(GEO.barCap, capMat); cap.scale.setScalar(r * 1.15); cap.position.x = r1 + r * 0.5;
+  const collar = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.7, r * 1.7, 0.16, 20).rotateZ(Math.PI / 2), MAT.gunmetal); collar.position.x = r0 + 0.1;
+  const holder = new THREE.Group(); holder.position.y = high ? 1.17 : 0.3; holder.add(cyl); holder.add(halo); holder.add(cap); holder.add(collar); root.add(holder);
+  if (!poolTex) poolTex = canvasTex(64, 64, (x, w, h) => { const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, w, h); }, false);
+  /* light pool: wider and softer for the high bar (further from the floor) */
+  const pw = high ? 1.5 : 0.95, poolMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(colr).multiplyScalar(high ? 0.5 : 0.8), map: poolTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  const pool = new THREE.Mesh(new THREE.PlaneGeometry(L + 0.4, pw).rotateX(-Math.PI / 2).translate(r0 + L / 2 + 0.1, 0.018, 0), poolMat); pool.renderOrder = 1;
+  root.add(pool);
+  const trail = new THREE.Mesh(sectorGeo(0.75, r1, 0, 0.6, 16, 0.02, u => { const k = 0.4 * Math.pow(1 - u, 1.8); const c = new THREE.Color(colr); return [c.r * k, c.g * k, c.b * k]; }), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
   root.add(trail);
   scene.add(root);
-  return { root, holder, mat, capMat, trail, type };
+  return { root, holder, mat, capMat, halo, pool, trail, type };
 }
 function makeHammer(V) {
   const root = new THREE.Group(), r0 = V.e0 - 0.2, r1 = V.e1 + 0.55, L = r1 - r0, postR = V.e1 + 0.62;
@@ -1133,9 +1150,8 @@ HR3D.render = function (g, view) {
   g.bars.forEach((b, i) => {
     const o = barPool[i], vis = G_API.barVisible(b, t);
     o.root.rotation.y = -(b.angle + g.rot);
-    const al = vis ? 1 : 0.18; o.mat.opacity = al; o.capMat.opacity = al;
-    o.trail.visible = vis; o.trail.scale.z = (g.dir || 1) < 0 ? -1 : 1;
-    o.mat.map.offset.y = 0;
+    const al = vis ? 1 : 0.18; o.mat.opacity = al; o.capMat.opacity = al; o.halo.material.uniforms.uA.value = vis ? 1 : 0.15;
+    o.pool.visible = o.trail.visible = vis; o.trail.scale.z = (g.dir || 1) < 0 ? -1 : 1;
   });
   // hammers
   syncPool(hammerPool, A.hammers, () => makeHammer(V));
