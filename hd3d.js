@@ -1505,19 +1505,19 @@ function makeBar(type, V) {
   const mat = new THREE.MeshBasicMaterial({ color: exactColor(colr, renderer.toneMappingExposure), transparent: true, fog: false });
   const cyl = new THREE.Mesh(new THREE.CapsuleGeometry(r, L, lo() ? 3 : 6, lo() ? 10 : 20).rotateZ(Math.PI / 2).translate(r0 + L / 2, 0, 0), mat);
   cyl.renderOrder = 6; cyl.layers.set(CORE_LAYER); /* drawn last (after bloom on High) so nothing adds onto the exact core colour */
-  const HS = 1.9;
-  const halo = new THREE.Mesh(new THREE.CapsuleGeometry(r * HS, L, lo() ? 3 : 6, lo() ? 10 : 20).rotateZ(Math.PI / 2).translate(r0 + L / 2, 0, 0), haloMat(colr, quality.bloom ? 0.8 : 1.2));
+  const HS = 1.5;
+  const halo = new THREE.Mesh(new THREE.CapsuleGeometry(r * HS, L, lo() ? 3 : 6, lo() ? 10 : 20).rotateZ(Math.PI / 2).translate(r0 + L / 2, 0, 0), haloMat(colr, quality.bloom ? 0.35 : 0.5));
   halo.material.uniforms.uIn.value = 1 / HS; halo.renderOrder = 3;
-  const capMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(colr).multiplyScalar(2), transparent: true });
+  const capMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(colr).multiplyScalar(1.3), transparent: true });
   const cap = new THREE.Mesh(GEO.barCap, capMat); cap.scale.setScalar(r * 1.15); cap.position.x = r1 + r * 0.5;
   const collar = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.7, r * 1.7, 0.16, 20).rotateZ(Math.PI / 2), MAT.gunmetal); collar.position.x = r0 + 0.1;
   const holder = new THREE.Group(); holder.position.y = high ? 1.17 : 0.3; holder.add(cyl); holder.add(halo); holder.add(cap); holder.add(collar); root.add(holder);
   if (!poolTex) poolTex = canvasTex(64, 64, (x, w, h) => { const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, w, h); }, false);
   /* light pool: wider and softer for the high bar (further from the floor) */
-  const pw = high ? 1.5 : 0.95, poolMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(colr).multiplyScalar(high ? 0.18 : 0.28), map: poolTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  const pw = high ? 1.5 : 0.95, poolMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(colr).multiplyScalar(high ? 0.06 : 0.08), map: poolTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
   const pool = new THREE.Mesh(new THREE.PlaneGeometry(L + 0.4, pw).rotateX(-Math.PI / 2).translate(r0 + L / 2 + 0.1, 0.018, 0), poolMat); pool.renderOrder = 1;
   root.add(pool);
-  const trail = new THREE.Mesh(sectorGeo(0.75, r1, 0, 0.6, 16, 0.02, u => { const k = 0.15 * Math.pow(1 - u, 1.8); const c = new THREE.Color(colr); return [c.r * k, c.g * k, c.b * k]; }), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  const trail = new THREE.Mesh(sectorGeo(0.75, r1, 0, 0.6, 16, 0.02, u => { const k = 0.05 * Math.pow(1 - u, 1.8); const c = new THREE.Color(colr); return [c.r * k, c.g * k, c.b * k]; }), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
   root.add(trail);
   scene.add(root);
   return { root, holder, mat, capMat, halo, pool, trail, type };
