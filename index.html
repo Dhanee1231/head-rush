@@ -854,12 +854,33 @@ h1 .rush { color: var(--you); }
   /* Players on this phone: each has a name and their own profile. */
   var LEGACY_KEY = 'headrush.profile.v1', PLAYERS_KEY = 'headrush.players.v1';
   function profKey(id) { return 'headrush.profile.v1.' + id; }
+  /* Unreadable saves are never written over silently: the raw string is copied to <key>.bad once, before the first write to that key.
+     If the copy fails (storage full or blocked), the key is left alone and the game keeps playing from memory. */
+  var BROKEN = {};
+  function rawGet(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+  function markBroken(key, raw) { if (raw != null && raw !== 'null') BROKEN[key] = raw; }
+  function keepBad(key) {
+    if (!(key in BROKEN)) return true;
+    var raw = BROKEN[key], bk = key + '.bad';
+    try { var had = localStorage.getItem(bk); if (had != null && had !== raw) bk = key + '.bad.' + Date.now(); if (had !== raw) localStorage.setItem(bk, raw); } catch (e) { return false; }
+    delete BROKEN[key]; return true;
+  }
+  function safeSet(key, val) { if (!keepBad(key)) return false; try { localStorage.setItem(key, val); return true; } catch (e) { return false; } }
   function loadPlayers() {
-    try { var s = JSON.parse(localStorage.getItem(PLAYERS_KEY)); if (s && Array.isArray(s.list)) return s; } catch (e) {}
+    var raw = rawGet(PLAYERS_KEY);
+    try {
+      var s = JSON.parse(raw);
+      if (s && Array.isArray(s.list)) {
+        var ok = s.list.filter(function (x) { return x && typeof x === 'object' && typeof x.id === 'string'; });
+        if (ok.length !== s.list.length) { markBroken(PLAYERS_KEY, raw); s.list = ok; }
+        return s;
+      }
+    } catch (e) {}
+    markBroken(PLAYERS_KEY, raw);
     return { current: null, list: [] };
   }
   var PLAYERS = loadPlayers();
-  function savePlayers() { try { localStorage.setItem(PLAYERS_KEY, JSON.stringify(PLAYERS)); } catch (e) {} }
+  function savePlayers() { safeSet(PLAYERS_KEY, JSON.stringify(PLAYERS)); }
   function currentPlayer() { for (var i = 0; i < PLAYERS.list.length; i++) if (PLAYERS.list[i].id === PLAYERS.current) return PLAYERS.list[i]; return null; }
   function fixProfile(p) {
     if (!p || typeof p.coins !== 'number' || typeof p.xp !== 'number') return null;
@@ -872,12 +893,14 @@ h1 .rush { color: var(--you); }
   }
   function blankProfile() { return fixProfile({ coins: 0, xp: 0, owned: ['sunny'], skin: 'sunny', daily: null, rounds: 0, solo: {}, surv: {} }); }
   function readProfile(id) {
-    try { var p = fixProfile(JSON.parse(localStorage.getItem(profKey(id)))); if (p) return p; } catch (e) {}
+    var raw = rawGet(profKey(id));
+    try { var p = fixProfile(JSON.parse(raw)); if (p) return p; } catch (e) {}
+    markBroken(profKey(id), raw);
     return blankProfile();
   }
   function loadProfile() { return PLAYERS.current ? readProfile(PLAYERS.current) : blankProfile(); }
   var PROFILE = loadProfile();
-  function saveProfile() { if (!PLAYERS.current) return; try { localStorage.setItem(profKey(PLAYERS.current), JSON.stringify(PROFILE)); } catch (e) {} }
+  function saveProfile() { if (!PLAYERS.current) return; safeSet(profKey(PLAYERS.current), JSON.stringify(PROFILE)); }
   function addPlayer(name) {
     var id = 'p' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
     var first = PLAYERS.list.length === 0;
