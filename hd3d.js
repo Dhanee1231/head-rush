@@ -326,26 +326,77 @@ function rig(V, W, H) {
 }
 
 /* ---------- arena: floor, hub, scenery ---------- */
-function floorTextures(V, A, size) {
+/* ---------- board styles: what each arena's floor is made of ----------
+   base: drawn under the track markings. slabs: polar flagstones (ring radii, gap colour, tones).
+   Gaps can glow through the emissive map (lava seams, ice cracks). */
+const BOARD = {
+  neon: { kind: 'hex', base: ['#16183c', '#0d0e26'], line: 'rgba(110,200,255,0.22)', glow: 'rgba(63,208,255,0.35)', rough: [0.18, 0.5], metal: 0.35, side: 'panel', sideCol: ['#1a1c42', '#07081a'], depth: 0.6, lip: 0x3fd0ff, lipLow: 0xff4fa3, emis: 1 },
+  lava: { kind: 'slab', base: ['#2c2220', '#1b1413'], gap: '#120a08', gapGlow: 'rgba(255,70,12,0.75)', rings: [0.75, 1.3, 1.85, 2.4, 2.95, 3.5, 4.05, 4.6], slab: [0.55, 0.6], gapW: 0.028, tones: [[42, 33, 30], [52, 40, 35], [36, 28, 26], [58, 45, 38]], rough: [0.75, 0.95], metal: 0.05, side: 'stone', sideCol: ['#2a201d', '#0d0807'], depth: 9, lip: 0x3a2a24, lipGlow: 0xff5a14, emis: 0.45, cracks: 'rgba(255,110,30,0.75)' },
+  frost: { kind: 'slab', base: ['#203f62', '#132a46'], gap: '#0b1a33', gapGlow: 'rgba(150,230,255,0.16)', rings: [0.75, 1.65, 2.5, 3.25, 4.1], slab: [1.1, 0.9], gapW: 0.03, tones: [[34, 66, 104], [40, 76, 118], [30, 58, 94], [46, 86, 128]], rough: [0.08, 0.3], metal: 0.15, side: 'ice', sideCol: ['#3d6a96', '#0c1a30'], depth: 1.4, lip: 0xcfe9ff, lipGlow: 0x9fe3ff, emis: 0.8, cracks: 'rgba(230,248,255,0.55)' }
+};
+function boardBase(B, V, x, size, s, c, emissive, rough) {
+  const E = V.edge, r = rnd(17);
+  const P = (rr, a) => [c + Math.cos(a) * rr * s, c + Math.sin(a) * rr * s];
+  const shade = (k, tone) => rough ? `rgb(${k},${k},${k})` : emissive ? '#000' : tone;
+  if (B.kind === 'hex') {
+    const g = x.createRadialGradient(c, c, 0, c, c, E * s); g.addColorStop(0, B.base[0]); g.addColorStop(1, B.base[1]);
+    x.fillStyle = rough ? '#444' : emissive ? '#000' : g; x.fillRect(0, 0, size, size);
+    const hr = 0.34 * s, hw = Math.sqrt(3) * hr;
+    for (let row = -2; row * hr * 1.5 < size + hr * 2; row++) for (let col = -2; col * hw < size + hw; col++) {
+      const cx = col * hw + (row % 2 ? hw / 2 : 0), cy = row * hr * 1.5, v = r();
+      x.beginPath(); for (let k = 0; k < 6; k++) { const a = Math.PI / 6 + k * TAU / 6, px = cx + Math.cos(a) * hr * 0.94, py = cy + Math.sin(a) * hr * 0.94; k ? x.lineTo(px, py) : x.moveTo(px, py); } x.closePath();
+      if (rough) { const k = Math.round(30 + v * 60); x.fillStyle = shade(k); x.fill(); }
+      else if (emissive) { if (v < 0.06) { x.fillStyle = 'rgba(63,208,255,0.12)'; x.fill(); } x.strokeStyle = B.glow; x.lineWidth = s * 0.012; x.globalAlpha = 0.35; x.stroke(); x.globalAlpha = 1; }
+      else { x.fillStyle = `rgba(${v < 0.5 ? '255,255,255' : '0,0,0'},${0.02 + (v % 0.5) * 0.06})`; x.fill(); x.strokeStyle = B.line; x.lineWidth = s * 0.014; x.stroke(); }
+    }
+    return;
+  }
+  /* polar flagstones */
+  x.fillStyle = rough ? '#fff' : emissive ? B.gapGlow : B.gap; x.fillRect(0, 0, size, size);
+  if (emissive) { x.globalCompositeOperation = 'source-over'; }
+  const rings = B.rings.concat([E + 0.1]), gap = B.gapW;
+  for (let i = 0; i < rings.length - 1; i++) {
+    const r0 = rings[i] + gap, r1 = rings[i + 1] - gap, n = Math.max(5, Math.round(TAU * (r0 + r1) / 2 / (B.slab[0] + r() * B.slab[1]))), off = r() * TAU;
+    const cut = []; for (let j = 0; j <= n; j++) cut.push(off + (j + (j % n ? (r() - 0.5) * 0.55 : 0)) / n * TAU);
+    for (let j = 0; j < n; j++) {
+      const a0 = cut[j] + gap / r0, a1 = cut[j + 1] - gap / r0;
+      x.beginPath(); x.arc(c, c, r1 * s, a0, a1); x.arc(c, c, r0 * s, a1, a0, true); x.closePath();
+      const t = B.tones[Math.floor(r() * B.tones.length)], j2 = 0.88 + r() * 0.24;
+      if (rough) { const k = Math.round(255 * (B.rough[0] + (B.rough[1] - B.rough[0]) * r())); x.fillStyle = shade(k); }
+      else if (emissive) x.fillStyle = '#000';
+      else { const gg = x.createRadialGradient(c, c, r0 * s, c, c, r1 * s); gg.addColorStop(0, `rgb(${Math.round(t[0] * j2 * 1.12)},${Math.round(t[1] * j2 * 1.12)},${Math.round(t[2] * j2 * 1.12)})`); gg.addColorStop(1, `rgb(${Math.round(t[0] * j2 * 0.85)},${Math.round(t[1] * j2 * 0.85)},${Math.round(t[2] * j2 * 0.85)})`); x.fillStyle = gg; }
+      x.fill();
+      /* surface detail: speckle (map) and hairline cracks (map + faint glow) */
+      if (!rough && !emissive) { for (let k = 0; k < 10; k++) { const a = a0 + (a1 - a0) * r(), rr = r0 + (r1 - r0) * r(), p = P(rr, a); x.fillStyle = `rgba(${r() < 0.5 ? '255,255,255' : '0,0,0'},0.05)`; x.beginPath(); x.arc(p[0], p[1], s * (0.02 + r() * 0.05), 0, TAU); x.fill(); } }
+      if (B.cracks && r() < 0.28) {
+        let a = a0 + (a1 - a0) * (0.2 + r() * 0.6), rr = r0 + (r1 - r0) * 0.1, p = P(rr, a);
+        x.beginPath(); x.moveTo(p[0], p[1]);
+        for (let k = 0; k < 4; k++) { rr += (r1 - r0) * 0.22; a += (r() - 0.5) * 0.12 / Math.max(1, rr * 0.5); p = P(rr, a); x.lineTo(p[0], p[1]); }
+        x.strokeStyle = rough ? '#fff' : emissive ? B.cracks.replace(/[\d.]+\)$/, '0.35)') : B.cracks; x.lineWidth = s * 0.012; x.stroke();
+      }
+    }
+  }
+}
+function floorTextures(V, A, size, B) {
   const T = V.T, E = V.edge, s = size / (2 * E), c = size / 2;
   const P = (r, a) => [c + Math.cos(a) * r * s, c + Math.sin(a) * r * s];
   const mapT = canvasTex(size, size, (x) => {
-    const g = x.createRadialGradient(c, c, 0, c, c, E * s);
-    g.addColorStop(0, T.floorIn); g.addColorStop(1, T.floorOut); x.fillStyle = g; x.fillRect(0, 0, size, size);
-    x.strokeStyle = rgbaHex(T.panel, 0.22); x.lineWidth = s * 0.02;
-    for (let i = 0; i < 24; i++) { const a = i / 24 * TAU; let p = P(0.85, a), q = P(1.55, a); x.beginPath(); x.moveTo(p[0], p[1]); x.lineTo(q[0], q[1]); x.stroke(); p = P(1.65, a); q = P(V.e0 - 0.08, a); x.beginPath(); x.moveTo(p[0], p[1]); x.lineTo(q[0], q[1]); x.stroke(); p = P(V.e1 + 0.08, a); q = P(E - 0.06, a); x.beginPath(); x.moveTo(p[0], p[1]); x.lineTo(q[0], q[1]); x.stroke(); }
+    if (B) boardBase(B, V, x, size, s, c, false, false);
+    else { const g = x.createRadialGradient(c, c, 0, c, c, E * s); g.addColorStop(0, T.floorIn); g.addColorStop(1, T.floorOut); x.fillStyle = g; x.fillRect(0, 0, size, size); }
+    x.strokeStyle = rgbaHex(T.panel, B ? 0.1 : 0.22); x.lineWidth = s * 0.02;
+    if (!B) for (let i = 0; i < 24; i++) { const a = i / 24 * TAU; let p = P(0.85, a), q = P(1.55, a); x.beginPath(); x.moveTo(p[0], p[1]); x.lineTo(q[0], q[1]); x.stroke(); p = P(1.65, a); q = P(V.e0 - 0.08, a); x.beginPath(); x.moveTo(p[0], p[1]); x.lineTo(q[0], q[1]); x.stroke(); p = P(V.e1 + 0.08, a); q = P(E - 0.06, a); x.beginPath(); x.moveTo(p[0], p[1]); x.lineTo(q[0], q[1]); x.stroke(); }
     x.beginPath(); x.arc(c, c, 1.6 * s, 0, TAU); x.stroke();
     x.beginPath(); x.arc(c, c, V.e1 * s, 0, TAU); x.arc(c, c, V.e0 * s, 0, TAU, true);
     const tg = x.createRadialGradient(c, c, V.e0 * s, c, c, V.e1 * s); tg.addColorStop(0, T.trackFar); tg.addColorStop(0.5, T.trackNear); tg.addColorStop(1, T.trackFar);
-    x.fillStyle = tg; x.fill('evenodd');
+    x.globalAlpha = B ? 0.32 : 1; x.fillStyle = tg; x.fill('evenodd'); x.globalAlpha = 1;
     x.globalAlpha = 0.18; x.strokeStyle = T.tick; x.lineWidth = s * 0.035; x.lineJoin = 'round';
     const m = (V.e0 + V.e1) / 2, w = (V.e1 - V.e0) * 0.2;
     for (let i = 0; i < 12; i++) { const a = i / 12 * TAU + 0.12; const p0 = P(m - w, a - 0.09), p1 = P(m, a), p2 = P(m + w, a - 0.09); x.beginPath(); x.moveTo(p0[0], p0[1]); x.lineTo(p1[0], p1[1]); x.lineTo(p2[0], p2[1]); x.stroke(); }
     x.globalAlpha = 1;
-    for (let i = 0; i < 60; i++) { const a = Math.random() * TAU, r = 0.9 + Math.random() * (E - 1); const p = P(r, a); x.fillStyle = 'rgba(255,255,255,0.025)'; x.beginPath(); x.arc(p[0], p[1], s * (0.1 + Math.random() * 0.3), 0, TAU); x.fill(); }
+    if (!B) for (let i = 0; i < 60; i++) { const a = Math.random() * TAU, r = 0.9 + Math.random() * (E - 1); const p = P(r, a); x.fillStyle = 'rgba(255,255,255,0.025)'; x.beginPath(); x.arc(p[0], p[1], s * (0.1 + Math.random() * 0.3), 0, TAU); x.fill(); }
   });
   const emT = canvasTex(size, size, (x) => {
-    x.fillStyle = '#000'; x.fillRect(0, 0, size, size);
+    if (B) boardBase(B, V, x, size, s, c, true, false); else { x.fillStyle = '#000'; x.fillRect(0, 0, size, size); }
     x.strokeStyle = rgbaHex(T.edge, 0.85); x.lineWidth = s * 0.03;
     x.beginPath(); x.arc(c, c, V.e1 * s, 0, TAU); x.stroke(); x.beginPath(); x.arc(c, c, V.e0 * s, 0, TAU); x.stroke();
     if (A.lanes.length > 1) { x.globalAlpha = 0.5; x.lineWidth = s * 0.02; x.setLineDash([s * 0.18, s * 0.14]); x.beginPath(); x.arc(c, c, (V.e0 + V.e1) / 2 * s, 0, TAU); x.stroke(); x.setLineDash([]); x.globalAlpha = 1; }
@@ -353,17 +404,42 @@ function floorTextures(V, A, size) {
     for (let i = 0; i < 72; i++) { const a = i / 72 * TAU; let p = P(V.e0 + 0.08, a), q = P(V.e0 + 0.2, a); x.beginPath(); x.moveTo(p[0], p[1]); x.lineTo(q[0], q[1]); x.stroke(); p = P(V.e1 - 0.2, a); q = P(V.e1 - 0.08, a); x.beginPath(); x.moveTo(p[0], p[1]); x.lineTo(q[0], q[1]); x.stroke(); }
     x.strokeStyle = T.rim; x.lineWidth = s * 0.05; x.beginPath(); x.arc(c, c, (E - 0.03) * s, 0, TAU); x.stroke();
   });
-  return { mapT, emT };
+  const roughT = B ? canvasTex(size / 2, size / 2, (x, w) => boardBase(B, V, x, w, w / (2 * E), w / 2, false, true), false) : null;
+  return { mapT, emT, roughT };
 }
 function rgbaHex(h, a) { const c = new THREE.Color(h); return `rgba(${Math.round(c.r * 255)},${Math.round(c.g * 255)},${Math.round(c.b * 255)},${a})`; }
+function sideTexture(B) {
+  const t = canvasTex(512, 256, (x, w, h) => {
+    const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, B.sideCol[0]); g.addColorStop(1, B.sideCol[1]); x.fillStyle = g; x.fillRect(0, 0, w, h);
+    const r = rnd(23);
+    if (B.side === 'panel') { x.fillStyle = 'rgba(63,208,255,0.5)'; x.fillRect(0, 18, w, 4); x.fillStyle = 'rgba(0,0,0,0.35)'; for (let i = 0; i < 8; i++) x.fillRect(i * 64, 0, 3, h); }
+    else {
+      const rows = B.side === 'stone' ? 6 : 3, rh = h / rows;
+      for (let j = 0; j < rows; j++) { const o = r() * 60; for (let i = -1; i < 6; i++) { const bx = o + i * (w / 5) + (j % 2) * 40; x.fillStyle = `rgba(${B.side === 'ice' ? '200,235,255' : '255,240,230'},${0.03 + r() * 0.06})`; x.fillRect(bx + 3, j * rh + 3, w / 5 - 6, rh - 6); x.strokeStyle = 'rgba(0,0,0,0.45)'; x.lineWidth = 4; x.strokeRect(bx + 2, j * rh + 2, w / 5 - 4, rh - 4); } }
+    }
+  });
+  t.wrapS = THREE.RepeatWrapping; t.repeat.set(10, 1); return t;
+}
 
 function buildArenaCore(V, A) {
-  const T = V.T, E = V.edge, grp = new THREE.Group();
+  const T = V.T, E = V.edge, grp = new THREE.Group(), B = BOARD[A.id];
   const size = quality.level >= 3 ? 2048 : 1024;
-  const ft = floorTextures(V, A, size);
-  const floorMat = new THREE.MeshStandardMaterial({ map: ft.mapT, emissiveMap: ft.emT, emissive: 0xffffff, emissiveIntensity: 1.0, roughness: 0.6, metalness: 0.2 });
+  const ft = floorTextures(V, A, size, B);
+  const floorMat = new THREE.MeshStandardMaterial({ map: ft.mapT, emissiveMap: ft.emT, emissive: 0xffffff, emissiveIntensity: B ? B.emis : 1.0, roughness: B ? 1 : 0.6, roughnessMap: ft.roughT, metalness: B ? B.metal : 0.2 });
   const floor = new THREE.Mesh(new THREE.CircleGeometry(E, 128).rotateX(-Math.PI / 2), floorMat);
   floor.receiveShadow = true; grp.add(floor);
+  if (B) {
+    /* platform with mass: textured side wall, a lip ring on top, a glow line where it meets the world */
+    const depth = B.depth;
+    const side = new THREE.Mesh(new THREE.CylinderGeometry(E, E * (depth > 3 ? 0.86 : 0.98), depth, 96, 1, true).translate(0, -depth / 2, 0), new THREE.MeshStandardMaterial({ map: sideTexture(B), roughness: 0.8, metalness: B.side === 'panel' ? 0.5 : 0.05 }));
+    side.receiveShadow = true; grp.add(side);
+    const lipMat = B.side === 'panel' ? new THREE.MeshStandardMaterial({ color: B.lip, emissive: B.lip, emissiveIntensity: 1.6 }) : new THREE.MeshStandardMaterial({ color: B.lip, roughness: B.side === 'ice' ? 0.2 : 0.85, metalness: 0.05 });
+    const lip = new THREE.Mesh(new THREE.TorusGeometry(E, B.side === 'panel' ? 0.045 : 0.11, 10, 160).rotateX(Math.PI / 2).scale(1, B.side === 'panel' ? 1 : 0.6, 1), lipMat);
+    lip.position.y = 0.0; lip.castShadow = false; grp.add(lip);
+    const lowC = B.lipLow || B.lipGlow;
+    const low = new THREE.Mesh(new THREE.TorusGeometry(E * (depth > 3 ? 0.99 : 0.985), 0.03, 8, 160).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(lowC).multiplyScalar(B.side === 'panel' ? 2 : 1.2) }));
+    low.position.y = depth > 3 ? -0.18 : -depth + 0.06; grp.add(low);
+  } else {
   const depth = A.id === 'orbit' ? 1.2 : 0.6;
   const sideTex = canvasTex(8, 128, (x, w, h) => { const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, T.sideTop); g.addColorStop(1, T.sideBot); x.fillStyle = g; x.fillRect(0, 0, w, h); });
   const side = new THREE.Mesh(new THREE.CylinderGeometry(E, E * 0.97, depth, 128, 1, true).translate(0, -depth / 2, 0), new THREE.MeshStandardMaterial({ map: sideTex, roughness: 0.5, metalness: 0.4 }));
@@ -375,6 +451,7 @@ function buildArenaCore(V, A) {
   if (A.id === 'orbit') {
     const glow = new THREE.Mesh(new THREE.CircleGeometry(E * 0.8, 64).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x8c6eff, transparent: true, opacity: 0.35 }));
     glow.position.y = -depth - 0.02; grp.add(glow);
+  }
   }
   const hub = new THREE.Group();
   const hubTex = canvasTex(8, 128, (x, w, h) => { const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, T.hubTop); g.addColorStop(1, T.hubBot); x.fillStyle = g; x.fillRect(0, 0, w, h); });
