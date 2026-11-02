@@ -331,7 +331,7 @@ function rig(V, W, H) {
    Gaps can glow through the emissive map (lava seams, ice cracks). */
 const BOARD = {
   neon: { kind: 'hex', base: ['#16183c', '#0d0e26'], line: 'rgba(110,200,255,0.22)', glow: 'rgba(63,208,255,0.35)', rough: [0.18, 0.5], metal: 0.35, side: 'panel', sideCol: ['#1a1c42', '#07081a'], depth: 0.6, lip: 0x3fd0ff, lipLow: 0xff4fa3, emis: 1 },
-  lava: { kind: 'slab', base: ['#2c2220', '#1b1413'], gap: '#120a08', gapGlow: 'rgba(255,70,12,0.75)', rings: [0.75, 1.3, 1.85, 2.4, 2.95, 3.5, 4.05, 4.6], slab: [0.55, 0.6], gapW: 0.028, tones: [[42, 33, 30], [52, 40, 35], [36, 28, 26], [58, 45, 38]], rough: [0.75, 0.95], metal: 0.05, side: 'stone', sideCol: ['#2a201d', '#0d0807'], depth: 9, lip: 0x3a2a24, lipGlow: 0xff5a14, emis: 0.45, cracks: 'rgba(255,110,30,0.75)' },
+  lava: { kind: 'slab', base: ['#2c2220', '#1b1413'], gap: '#120a08', gapGlow: 'rgba(255,64,10,0.55)', rings: [0.75, 1.3, 1.85, 2.4, 2.95, 3.5, 4.05, 4.6], slab: [0.55, 0.6], gapW: 0.028, tones: [[42, 33, 30], [52, 40, 35], [36, 28, 26], [58, 45, 38]], rough: [0.75, 0.95], metal: 0.05, side: 'stone', sideCol: ['#2a201d', '#0d0807'], depth: 9, lip: 0x3a2a24, lipGlow: 0xff5a14, emis: 0.32, cracks: 'rgba(255,110,30,0.75)' },
   frost: { kind: 'slab', base: ['#203f62', '#132a46'], gap: '#0b1a33', gapGlow: 'rgba(150,230,255,0.16)', rings: [0.75, 1.65, 2.5, 3.25, 4.1], slab: [1.1, 0.9], gapW: 0.03, tones: [[34, 66, 104], [40, 76, 118], [30, 58, 94], [46, 86, 128]], rough: [0.08, 0.3], metal: 0.15, side: 'ice', sideCol: ['#3d6a96', '#0c1a30'], depth: 1.4, lip: 0xcfe9ff, lipGlow: 0x9fe3ff, emis: 0.8, cracks: 'rgba(230,248,255,0.55)' }
 };
 function boardBase(B, V, x, size, s, c, emissive, rough) {
@@ -622,29 +622,66 @@ function sceneryNeon(V) {
   return { group: g, sky, fog: [0x0c0a24, 22, 70], hemi: [0x6a70d8, 0x0a0614, 0.9], key: [0xd8d4ff, 2.3], rim: [0x9a7bff, 2.4], bloom: [0.85, 0.35, 1], exposure: 1.12, tint: 0x06041a, vig: 0.5 };
 }
 
+function crag(r, x, y, z, w, h, mat) {
+  /* jagged basalt spire: a tapered prism with jittered vertices, flat shaded */
+  const geo = new THREE.CylinderGeometry(w * (0.3 + r() * 0.25), w, h, 7, 5);
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) { const k = 1 + (r() - 0.5) * 0.35; p.setXYZ(i, p.getX(i) * k, p.getY(i) + (r() - 0.5) * h * 0.04, p.getZ(i) * k); }
+  geo.translate(x, y + h / 2, z); geo.rotateY(0); return geo.toNonIndexed();
+}
 function sceneryLava(V) {
   const g = new THREE.Group(), r = rnd(99);
-  const sky = skyTexture([[0, '#0b0405'], [0.3, '#2a0d09'], [0.5, '#6b1d0b'], [0.62, '#a8360f'], [1, '#3a0c05']]);
+  const sky = new THREE.Color(0x070203);
+  g.add(backdrop((x, w, h, hz) => {
+    const pr = rnd(100);
+    const sg = x.createLinearGradient(0, 0, 0, hz); sg.addColorStop(0, '#060203'); sg.addColorStop(0.6, '#1c0706'); sg.addColorStop(1, '#4a1208');
+    x.fillStyle = sg; x.fillRect(0, 0, w, hz);
+    /* smoke bands */
+    for (let i = 0; i < 40; i++) { const cx = pr() * w, cy = hz * (0.2 + pr() * 0.7), rr = 60 + pr() * 160; const gg = x.createRadialGradient(cx, cy, 0, cx, cy, rr); gg.addColorStop(0, `rgba(${pr() < 0.5 ? '70,20,14' : '20,8,8'},0.35)`); gg.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = gg; x.fillRect(cx - rr, cy - rr, rr * 2, rr * 2); }
+    const glow = x.createLinearGradient(0, hz - 140, 0, hz + 40); glow.addColorStop(0, 'rgba(255,80,20,0)'); glow.addColorStop(1, 'rgba(255,80,20,0.35)'); x.fillStyle = glow; x.fillRect(0, hz - 140, w, 180);
+    /* far ridge with temple towers, then nearer cliffs with orange rim light and lava falls */
+    const ridge = (base, minH, maxH, step, col, rim, falls, towers) => {
+      x.beginPath(); x.moveTo(0, h); let px = 0; const pts = [];
+      while (px <= w + step) { const yy = base - minH - pr() * (maxH - minH); pts.push([px, yy]); px += step * (0.5 + pr()); }
+      pts.forEach(q => x.lineTo(q[0], q[1])); x.lineTo(w, h); x.closePath(); x.fillStyle = col; x.fill();
+      if (towers) for (let i = 0; i < towers; i++) { const tx = pr() * w, tw = 18 + pr() * 30, th = 60 + pr() * 110, ty = base - maxH * 0.7; x.fillStyle = col; x.fillRect(tx, ty - th, tw, th + 60); for (let k = 0; k < 3; k++) x.fillRect(tx - 6 + k * 2, ty - th + k * th * 0.3, tw + 12 - k * 4, 6); x.beginPath(); x.moveTo(tx - 4, ty - th); x.lineTo(tx + tw / 2, ty - th - 30); x.lineTo(tx + tw + 4, ty - th); x.fill(); }
+      if (rim) { x.save(); x.strokeStyle = rim; x.lineWidth = 2.5; x.shadowColor = rim; x.shadowBlur = 10; x.beginPath(); pts.forEach((q, i) => i ? x.lineTo(q[0], q[1]) : x.moveTo(q[0], q[1])); x.stroke(); x.restore(); }
+      for (let i = 0; i < falls; i++) { const q = pts[Math.floor(pr() * pts.length)], fw = 3 + pr() * 5; const fg = x.createLinearGradient(0, q[1], 0, h); fg.addColorStop(0, 'rgba(255,170,60,0.95)'); fg.addColorStop(0.5, 'rgba(255,90,20,0.7)'); fg.addColorStop(1, 'rgba(120,20,5,0)'); x.fillStyle = fg; x.fillRect(q[0] - fw / 2, q[1] + 4, fw, h - q[1]); x.save(); x.shadowColor = '#ff5a14'; x.shadowBlur = 16; x.fillRect(q[0] - 1, q[1] + 4, 2, (h - q[1]) * 0.5); x.restore(); }
+    };
+    ridge(hz + 10, 40, 150, 70, '#2a0f0b', 'rgba(255,90,30,0.45)', 3, 6);
+    const mid = x.createLinearGradient(0, hz - 60, 0, hz + 60); mid.addColorStop(0, 'rgba(90,20,10,0)'); mid.addColorStop(1, 'rgba(90,20,10,0.4)'); x.fillStyle = mid; x.fillRect(0, hz - 60, w, 120);
+    ridge(hz + 90, 20, 170, 55, '#0e0605', 'rgba(255,110,40,0.6)', 6, 0);
+    const deep = x.createLinearGradient(0, hz + 120, 0, h); deep.addColorStop(0, 'rgba(6,2,2,0)'); deep.addColorStop(1, 'rgba(80,16,6,0.8)'); x.fillStyle = deep; x.fillRect(0, hz + 120, w, h - hz - 120);
+  }));
+  /* magma far below the column: dim, slow, fogged */
   const lavaTex = canvasTex(512, 512, (x, w, h) => {
-    x.fillStyle = '#5a1206'; x.fillRect(0, 0, w, h);
+    x.fillStyle = '#2a0703'; x.fillRect(0, 0, w, h);
     const rr = rnd(7);
-    for (let i = 0; i < 160; i++) { const cx = rr() * w, cy = rr() * h, s = 10 + rr() * 50, c = rr() < 0.3 ? '255,210,63' : '255,106,26'; const gg = x.createRadialGradient(cx, cy, 0, cx, cy, s); gg.addColorStop(0, `rgba(${c},0.75)`); gg.addColorStop(1, `rgba(${c},0)`); x.fillStyle = gg; x.fillRect(cx - s, cy - s, s * 2, s * 2); }
-    x.strokeStyle = 'rgba(30,6,3,0.55)'; x.lineWidth = 4; for (let i = 0; i < 40; i++) { x.beginPath(); let px = rr() * w, py = rr() * h; x.moveTo(px, py); for (let j = 0; j < 4; j++) { px += (rr() - 0.5) * 80; py += (rr() - 0.5) * 80; x.lineTo(px, py); } x.stroke(); }
+    for (let i = 0; i < 140; i++) { const cx = rr() * w, cy = rr() * h, s = 10 + rr() * 50, c = rr() < 0.25 ? '255,170,50' : '230,70,15'; const gg = x.createRadialGradient(cx, cy, 0, cx, cy, s); gg.addColorStop(0, `rgba(${c},0.6)`); gg.addColorStop(1, `rgba(${c},0)`); x.fillStyle = gg; x.fillRect(cx - s, cy - s, s * 2, s * 2); }
+    x.strokeStyle = 'rgba(15,3,2,0.7)'; x.lineWidth = 6; for (let i = 0; i < 50; i++) { x.beginPath(); let px = rr() * w, py = rr() * h; x.moveTo(px, py); for (let j = 0; j < 4; j++) { px += (rr() - 0.5) * 90; py += (rr() - 0.5) * 90; x.lineTo(px, py); } x.stroke(); }
   });
-  lavaTex.wrapS = lavaTex.wrapT = THREE.RepeatWrapping; lavaTex.repeat.set(12, 12);
-  const lava = new THREE.Mesh(new THREE.PlaneGeometry(240, 240).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: lavaTex, emissiveMap: lavaTex, emissive: 0xffffff, emissiveIntensity: 1.5, roughness: 0.6 }));
-  lava.position.y = -3; g.add(lava);
-  const stone = new THREE.MeshStandardMaterial({ color: 0x5a4038, roughness: 0.85, metalness: 0.05 });
-  for (let i = 0; i < 12; i++) {
-    const a = (196 + i * 14 + r() * 6) * Math.PI / 180, rad = 9 + r() * 5, top = 1.5 + r() * 6;
-    const c = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.62, top + 3, 16), stone); c.position.set(rad * Math.cos(a), -3 + (top + 3) / 2, rad * Math.sin(a)); c.castShadow = true; g.add(c);
-    if (r() > 0.35) { const cap = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.45, 1.6), stone); cap.position.set(c.position.x, top + 0.22, c.position.z); g.add(cap); }
-  }
-  [[2.6, 2.6], [-2.6, 2.6], [2.6, -2.6], [-2.6, -2.6]].forEach(p => { const s = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.7, 2.4, 20), stone); s.position.set(p[0], -1.8, p[1]); g.add(s); });
-  const volc = new THREE.Mesh(new THREE.ConeGeometry(40, 26, 32, 1, true), new THREE.MeshStandardMaterial({ color: 0x2a0d0a, roughness: 1 })); volc.position.set(-30, 8, -110); g.add(volc);
-  const crater = new THREE.Mesh(new THREE.CircleGeometry(7, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff8a3a })); crater.position.set(-30, 19.5, -110); g.add(crater);
-  const pl = new THREE.PointLight(0xff6a20, 30, 18, 1.6); pl.position.set(0, -2.4, 2); g.add(pl);
-  return { group: g, sky, fog: [0x5a1c0e, 20, 110], hemi: [0xffb080, 0x400a04, 0.5], key: [0xffd0b0, 1.8], rim: [0xff8a3a, 2.4], bloom: [0.7, 0.5, 0.78], exposure: 1.0, update(t) { lavaTex.offset.set(t * 0.004, t * 0.0025); }, embers: true };
+  lavaTex.wrapS = lavaTex.wrapT = THREE.RepeatWrapping; lavaTex.repeat.set(3, 3);
+  const fadeT = canvasTex(128, 128, (x, w) => { const gg = x.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); gg.addColorStop(0, '#fff'); gg.addColorStop(0.55, '#aaa'); gg.addColorStop(1, '#000'); x.fillStyle = gg; x.fillRect(0, 0, w, w); }, false);
+  const lava = new THREE.Mesh(new THREE.CircleGeometry(34, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: lavaTex, alphaMap: fadeT, transparent: true, depthWrite: false, color: 0x8a8a8a, fog: false }));
+  lava.position.set(0, -16, -8); lava.renderOrder = -9; g.add(lava);
+  /* basalt spires rising from the chasm, merged into one mesh */
+  const spires = [];
+  [[-4.4, -10.5, 1.3, 14.4], [-8.5, -4, 1.3, 13], [5, -11.5, 1.5, 15.2], [9, -4, 1.2, 12.5], [-2.2, -15, 1.6, 11.5], [3.4, -17, 2.0, 12.8], [-9.5, -16, 2.2, 14], [10.5, -16.5, 2.4, 15]].forEach(c => spires.push(crag(r, c[0], -16, c[1], c[2], c[3])));
+  const sg = new THREE.BufferGeometry(); const all = spires.map(q => q.attributes.position.array); const n = all.reduce((a, b) => a + b.length, 0), arr = new Float32Array(n); let o = 0; all.forEach(a => { arr.set(a, o); o += a.length; });
+  sg.setAttribute('position', new THREE.BufferAttribute(arr, 3)); sg.computeVertexNormals();
+  const basalt = new THREE.MeshStandardMaterial({ color: 0x2a1d1a, roughness: 0.9, flatShading: true, emissive: 0x3a0a02, emissiveIntensity: 0.25 });
+  const sp = new THREE.Mesh(sg, basalt); sp.castShadow = false; sp.receiveShadow = true; g.add(sp);
+  /* braziers on the two nearest spires: stone bowl + flame card + warm light */
+  const flameTex = canvasTex(64, 128, (x, w, h) => { const gg = x.createRadialGradient(w / 2, h * 0.75, 2, w / 2, h * 0.6, h * 0.55); gg.addColorStop(0, 'rgba(255,240,180,1)'); gg.addColorStop(0.3, 'rgba(255,150,40,0.9)'); gg.addColorStop(0.7, 'rgba(220,50,10,0.35)'); gg.addColorStop(1, 'rgba(120,20,5,0)'); x.fillStyle = gg; x.beginPath(); x.moveTo(w / 2, 0); x.quadraticCurveTo(w, h * 0.6, w / 2, h); x.quadraticCurveTo(0, h * 0.6, w / 2, 0); x.fill(); }, false);
+  const flames = [];
+  [[-4.4, -10.5, 14.4 - 16], [5, -11.5, 15.2 - 16]].forEach(b => {
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.45, 0.5, 10), basalt); bowl.position.set(b[0], b[2] + 0.25, b[1]); g.add(bowl);
+    const f = new THREE.Sprite(new THREE.SpriteMaterial({ map: flameTex, color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false })); f.scale.set(0.9, 1.5, 1); f.position.set(b[0], b[2] + 1.0, b[1]); g.add(f); flames.push(f);
+  });
+  const pl = new THREE.PointLight(0xff5a1a, 18, 14, 1.6); pl.position.set(0, -4, 4); g.add(pl);
+  const fl = new THREE.PointLight(0xff8a3a, 6, 12, 2); fl.position.set(0, 1.5, -7.5); g.add(fl);
+  return { group: g, sky, fog: [0x120403, 14, 52], hemi: [0xffb080, 0x400a04, 0.75], key: [0xffd6b8, 2.4], rim: [0xff6a2a, 2.6], bloom: [0.9, 0.35, 1], exposure: 1.1, tint: 0x0a0202, vig: 0.55, embers: true,
+    update(t) { lavaTex.offset.set(t * 0.003, t * 0.002); flames.forEach((f, i) => { const k = 1 + 0.12 * Math.sin(t * 13 + i * 2) + 0.06 * Math.sin(t * 29 + i); f.scale.set(0.9 * (2 - k), 1.5 * k, 1); }); fl.intensity = 6 + Math.sin(t * 11) * 0.8; } };
 }
 
 function sceneryGear(V) {
