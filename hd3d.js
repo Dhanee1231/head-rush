@@ -716,33 +716,75 @@ function sceneryGear(V) {
   return { group: g, sky, fog: [0x1d1712, 24, 80], hemi: [0xffd8a8, 0x2a1d10, 0.55], key: [0xffe0b8, 2.0], rim: [0xffc477, 2.0], bloom: [0.55, 0.45, 0.82], exposure: 1.05, update(t) { gears.forEach(o => { o.m.rotation.z = t * o.sp; }); } };
 }
 
+function crystalGeo(r, x, z, n, size) {
+  /* a cluster of elongated octahedral crystals leaning outwards, merged */
+  const parts = [];
+  for (let i = 0; i < n; i++) {
+    const h = size * (0.6 + r() * 0.9), w = h * (0.16 + r() * 0.08);
+    const c = new THREE.OctahedronGeometry(1, 0); c.scale(w, h, w);
+    c.rotateZ((r() - 0.5) * 0.9); c.rotateX((r() - 0.5) * 0.7); c.rotateY(r() * TAU);
+    c.translate(x + (r() - 0.5) * size * 0.7, -0.6 + h * 0.35, z + (r() - 0.5) * size * 0.7);
+    parts.push(c.toNonIndexed());
+  }
+  return parts;
+}
+function mergeNonIndexed(list) {
+  const n = list.reduce((a, g) => a + g.attributes.position.count * 3, 0), arr = new Float32Array(n); let o = 0;
+  list.forEach(g => { arr.set(g.attributes.position.array, o); o += g.attributes.position.count * 3; g.dispose(); });
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(arr, 3)); geo.computeVertexNormals(); return geo;
+}
 function sceneryFrost(V) {
   const g = new THREE.Group(), r = rnd(57);
-  const sky = skyTexture([[0, '#040a18'], [0.35, '#0d2140'], [0.55, '#1b4064'], [0.62, '#2d6185'], [1, '#cfe6f6']], (x, w, h) => { starsOn(x, w, h, 200, 0.45, 8); });
-  const auroraTex = canvasTex(512, 128, (x, w, h) => { const gg = x.createLinearGradient(0, 0, 0, h); gg.addColorStop(0, 'rgba(120,255,200,0)'); gg.addColorStop(0.55, 'rgba(80,255,190,0.6)'); gg.addColorStop(0.8, 'rgba(90,200,255,0.25)'); gg.addColorStop(1, 'rgba(90,200,255,0)'); x.fillStyle = gg; x.fillRect(0, 0, w, h); for (let i = 0; i < 40; i++) { x.fillStyle = 'rgba(0,0,0,0.15)'; x.fillRect(i * 13 + (i % 3) * 4, 0, 4, h); } });
-  auroraTex.wrapS = THREE.RepeatWrapping;
-  const auroras = [];
-  [[-60, 34, -120, 0], [10, 40, -130, 1], [60, 30, -115, 2]].forEach(a => { const m = new THREE.Mesh(new THREE.PlaneGeometry(90, 26, 24, 1), new THREE.MeshBasicMaterial({ map: auroraTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false })); m.position.set(a[0], a[1], a[2]); m.rotation.y = (a[3] - 1) * 0.3; g.add(m); auroras.push(m); });
-  const snowMat = new THREE.MeshStandardMaterial({ color: 0xe6f3ff, roughness: 0.9 });
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(260, 160).rotateX(-Math.PI / 2), snowMat); ground.position.set(0, -0.6, -40); ground.receiveShadow = true; g.add(ground);
-  const rock = new THREE.MeshStandardMaterial({ color: 0x2a4664, roughness: 0.95, flatShading: true });
-  const capMat = new THREE.MeshStandardMaterial({ color: 0xf4fbff, roughness: 0.8, flatShading: true });
-  for (let i = 0; i < 22; i++) {
-    const z = -55 - r() * 70, x = -120 + r() * 240, h = 16 + r() * 30, rad = h * (0.7 + r() * 0.4);
-    const m = new THREE.Mesh(new THREE.ConeGeometry(rad, h, 7, 1), rock); m.position.set(x, -0.6 + h / 2, z); m.rotation.y = r() * TAU; g.add(m);
-    const c = new THREE.Mesh(new THREE.ConeGeometry(rad * 0.36, h * 0.36, 7, 1), capMat); c.position.set(x, -0.6 + h - h * 0.18 + 0.05, z); c.rotation.y = m.rotation.y; g.add(c);
-  }
-  const treeCone = new THREE.ConeGeometry(1, 1.4, 9), treeMat = new THREE.MeshStandardMaterial({ color: 0x1d4a46, roughness: 0.8, flatShading: true });
-  const tipMat = new THREE.MeshStandardMaterial({ color: 0xf4fbff, roughness: 0.7, flatShading: true });
-  const trees = new THREE.InstancedMesh(treeCone, treeMat, 70 * 3), tips = new THREE.InstancedMesh(new THREE.ConeGeometry(0.42, 0.5, 9), tipMat, 70);
-  let ti = 0;
-  for (let i = 0; i < 70; i++) {
-    const side = r() < 0.5 ? -1 : 1, z = -8 - r() * 34, x = side * (Math.abs(z) < 12 ? 8.5 + r() * 18 : 2 + r() * 34), h = 2.4 + r() * 3;
-    for (let k = 0; k < 3; k++) { const s = h * (0.42 - k * 0.1); tmpM.compose(tmpV.set(x, -0.6 + h * (0.28 + k * 0.24), z), tmpQ.identity(), tmpS.set(s, h * 0.32, s)); trees.setMatrixAt(ti++, tmpM); }
-    tmpM.compose(tmpV.set(x, -0.6 + h * 0.98, z), tmpQ.identity(), tmpS.set(h * 0.3, h * 0.3, h * 0.3)); tips.setMatrixAt(i, tmpM);
-  }
-  trees.castShadow = true; g.add(trees); g.add(tips);
-  return { group: g, sky, fog: [0xa9cbe2, 30, 150], hemi: [0xd8ecff, 0x6f8fb0, 0.9], key: [0xeaf6ff, 2.1], rim: [0xbfe9ff, 1.8], bloom: [0.45, 0.4, 0.88], exposure: 0.95, snow: true, update(t) { auroraTex.offset.x = t * 0.01; auroras.forEach((m, i) => { m.material.opacity = 0.7 + 0.3 * Math.sin(t * 0.5 + i); }); } };
+  const sky = new THREE.Color(0x030614);
+  g.add(backdrop((x, w, h, hz) => {
+    const pr = rnd(58);
+    const sg = x.createLinearGradient(0, 0, 0, hz); sg.addColorStop(0, '#02040e'); sg.addColorStop(0.5, '#0a1430'); sg.addColorStop(1, '#1d2a5a');
+    x.fillStyle = sg; x.fillRect(0, 0, w, hz);
+    for (let i = 0; i < 500; i++) { x.fillStyle = `rgba(230,240,255,${0.15 + pr() * 0.6})`; const z = 0.8 + pr() * 1.5; x.fillRect(pr() * w, pr() * hz * 0.9, z, z); }
+    /* aurora curtains: vertical streaks along a wavy band, green fading to violet */
+    x.globalCompositeOperation = 'lighter';
+    [[0.2, 0.78, 0.4], [0.52, 0.7, 0.38], [0.85, 0.8, 0.34]].forEach(cu => {
+      const cx = cu[0] * w, cw = cu[2] * w, cy = cu[1] * hz;
+      for (let k = 0; k < 220; k++) {
+        const u = k / 220, px = cx - cw / 2 + u * cw, py = cy + Math.sin(u * 7 + cu[0] * 9) * 30 + Math.sin(u * 19) * 8, ln = 110 + pr() * 90;
+        const ag = x.createLinearGradient(0, py - ln, 0, py + 30); ag.addColorStop(0, 'rgba(150,90,255,0)'); ag.addColorStop(0.5, `rgba(130,100,255,${0.07 + pr() * 0.06})`); ag.addColorStop(0.88, `rgba(80,255,180,${0.16 + pr() * 0.14})`); ag.addColorStop(1, 'rgba(80,255,180,0)');
+        x.fillStyle = ag; x.fillRect(px, py - ln, cw / 220 + 2, ln + 30);
+      }
+    });
+    x.globalCompositeOperation = 'source-over';
+    const peaks = (base, minH, maxH, step, col, snow) => {
+      const pts = []; let px = -step;
+      while (px <= w + step) { pts.push([px, base - minH - pr() * (maxH - minH)]); px += step * (0.6 + pr() * 0.8); pts.push([px, base - minH * 0.3 - pr() * minH]); px += step * (0.4 + pr() * 0.5); }
+      x.beginPath(); x.moveTo(-step, h); pts.forEach(q => x.lineTo(q[0], q[1])); x.lineTo(w + step, h); x.closePath(); x.fillStyle = col; x.fill();
+      /* snow caps: light the left faces of each summit */
+      x.fillStyle = snow;
+      for (let i = 0; i < pts.length - 1; i += 2) { const a = pts[i], b = pts[i - 1] || [a[0] - step, a[1] + 60]; x.beginPath(); x.moveTo(a[0], a[1]); x.lineTo(b[0] + (a[0] - b[0]) * 0.55, a[1] + (b[1] - a[1]) * 0.45); x.lineTo(a[0] + 6, a[1] + (b[1] - a[1]) * 0.35); x.closePath(); x.fill(); }
+    };
+    peaks(hz + 20, 70, 230, 110, '#121c3a', 'rgba(150,175,230,0.45)');
+    const haze = x.createLinearGradient(0, hz - 80, 0, hz + 40); haze.addColorStop(0, 'rgba(40,60,120,0)'); haze.addColorStop(1, 'rgba(40,60,120,0.5)'); x.fillStyle = haze; x.fillRect(0, hz - 80, w, 120);
+    peaks(hz + 70, 30, 140, 80, '#0a1128', 'rgba(170,190,240,0.5)');
+    const ice = x.createLinearGradient(0, hz + 60, 0, h); ice.addColorStop(0, '#0b1530'); ice.addColorStop(1, '#101e40'); x.fillStyle = ice; x.fillRect(0, hz + 75, w, h - hz - 75);
+  }));
+  /* ice shelf around the board: dark blue, glossy, with frost cracks */
+  const shelfTex = canvasTex(512, 512, (x, w, h) => {
+    x.fillStyle = '#16294a'; x.fillRect(0, 0, w, h); const rr = rnd(9);
+    for (let i = 0; i < 60; i++) { const cx = rr() * w, cy = rr() * h, s = 30 + rr() * 90, gg = x.createRadialGradient(cx, cy, 0, cx, cy, s); gg.addColorStop(0, `rgba(${rr() < 0.5 ? '60,100,150' : '10,20,40'},0.35)`); gg.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = gg; x.fillRect(cx - s, cy - s, s * 2, s * 2); }
+    x.strokeStyle = 'rgba(200,230,255,0.22)'; x.lineWidth = 1.5; for (let i = 0; i < 40; i++) { x.beginPath(); let px = rr() * w, py = rr() * h; x.moveTo(px, py); for (let j = 0; j < 5; j++) { px += (rr() - 0.5) * 70; py += (rr() - 0.5) * 70; x.lineTo(px, py); } x.stroke(); }
+  });
+  shelfTex.wrapS = shelfTex.wrapT = THREE.RepeatWrapping; shelfTex.repeat.set(4, 4);
+  const fadeT = canvasTex(128, 128, (x, w) => { const gg = x.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); gg.addColorStop(0, '#fff'); gg.addColorStop(0.6, '#fff'); gg.addColorStop(1, '#000'); x.fillStyle = gg; x.fillRect(0, 0, w, w); }, false);
+  /* the shelf fades out before the painted horizon so the peaks and aurora stay in view */
+  const shelf = new THREE.Mesh(new THREE.CircleGeometry(19, 64).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: shelfTex, alphaMap: fadeT, transparent: true, depthWrite: false, roughness: 0.15, metalness: 0.2, envMapIntensity: 0.7 }));
+  shelf.renderOrder = -5; shelf.position.set(0, -1.4, -3); shelf.receiveShadow = true; g.add(shelf);
+  /* violet crystal clusters framing the board and the far shelf */
+  let cr = [];
+  [[-5.4, -8, 7, 1.8], [5.6, -8.5, 8, 2.1], [-2.6, -12.5, 4, 1.2], [3.4, -14, 5, 1.6], [-8, -13, 6, 2.4], [8.6, -14, 6, 2.6], [-7.5, -3, 5, 1.6], [7.8, -3.5, 5, 1.7]].forEach(c => { cr = cr.concat(crystalGeo(r, c[0], c[1], c[2], c[3])); });
+  const crys = new THREE.Mesh(mergeNonIndexed(cr), new THREE.MeshPhysicalMaterial({ color: 0x5e5aa8, emissive: 0x2a1a70, emissiveIntensity: 0.35, roughness: 0.12, metalness: 0.1, clearcoat: 1, flatShading: true, envMapIntensity: 1.3 }));
+  crys.position.y = -0.8; crys.castShadow = false; g.add(crys);
+  const glints = [];
+  [[-5.6, -8.5], [5.8, -9], [-8.5, -14], [9.5, -15]].forEach(p2 => { const pl = new THREE.PointLight(0x9a7bff, 3.5, 6, 2); pl.position.set(p2[0], 0.6, p2[1] + 1); if (glints.length < 2) g.add(pl); glints.push(pl); });
+  return { group: g, sky, fog: [0x0a1530, 20, 75], hemi: [0x8fb0ff, 0x0b1430, 1.0], key: [0xdcebff, 2.4], rim: [0x7fffd0, 1.8], bloom: [0.8, 0.35, 1], exposure: 1.12, tint: 0x02061a, vig: 0.5, snow: true,
+    update(t) { glints.forEach((l, i) => { l.intensity = 3.5 + Math.sin(t * 1.3 + i * 2) * 0.8; }); } };
 }
 
 function sceneryOrbit(V) {
