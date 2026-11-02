@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
@@ -13,7 +13,7 @@ HR3D.ok = false;
 const TAU = Math.PI * 2;
 
 let G_API = null;
-let renderer, scene, camera, composer, renderPass, bloomPass, outputPass, envTex, glCanvas;
+let renderer, scene, camera, composer, renderPass, bloomPass, gradePass, envTex, glCanvas, vigEl;
 let quality = { level: 3, pr: 2, bloom: true, shadows: true };
 let curArena = null, arenaCache = {};
 let keyLight, rimLight, hemi, fillLight;
@@ -132,6 +132,63 @@ function buildShared() {
   MAT.star = smat(new THREE.MeshStandardMaterial({ color: 0xffe08a, emissive: 0xffd050, emissiveIntensity: 2.5 }));
 }
 
+/* ---------- grade: one tone curve shared by the High (post pass) and Low (in-material) paths ----------
+   Per-channel filmic curve (Narkowicz fit) + a little saturation. It is invertible, so the bar cores can be
+   pre-compensated to come out of the whole pipeline as exactly the game's bar colours. */
+const TONE = { pre: 0.8, sat: 1.1 };
+const TONE_GLSL = `vec3 CustomToneMapping( vec3 color ) {
+  vec3 x = max( vec3( 0.0 ), color * toneMappingExposure * ${TONE.pre.toFixed(3)} );
+  vec3 c = clamp( ( x * ( 2.51 * x + 0.03 ) ) / ( x * ( 2.43 * x + 0.59 ) + 0.14 ), 0.0, 1.0 );
+  float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
+  return clamp( mix( vec3( l ), c, ${TONE.sat.toFixed(3)} ), 0.0, 1.0 );
+}`;
+THREE.ShaderChunk.tonemapping_pars_fragment = THREE.ShaderChunk.tonemapping_pars_fragment.replace('vec3 CustomToneMapping( vec3 color ) { return color; }', TONE_GLSL);
+function toneCh(x) { x = Math.max(0, x); return Math.min(1, (x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14)); }
+/* linear-space input that the pipeline turns into this exact sRGB colour (unlit, untextured surfaces only) */
+function exactColor(hex, exposure) {
+  const c = new THREE.Color(hex), l = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+  return new THREE.Color(...[c.r, c.g, c.b].map(v => {
+    const y = Math.min(0.9995, Math.max(0, l + (v - l) / TONE.sat));
+    let lo = 0, hi = 64;
+    for (let k = 0; k < 40; k++) { const m = (lo + hi) / 2; if (toneCh(m) < y) lo = m; else hi = m; }
+    return (lo + hi) / 2 / (TONE.pre * exposure);
+  }));
+}
+const GradeShader = {
+  uniforms: { tDiffuse: { value: null }, toneMappingExposure: { value: 1 }, uVig: { value: 0.45 }, uTint: { value: new THREE.Color(0, 0, 0) }, uRes: { value: new THREE.Vector2(1, 1) } },
+  vertexShader: `precision highp float; uniform mat4 modelViewMatrix; uniform mat4 projectionMatrix; attribute vec3 position; attribute vec2 uv; varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 ); }`,
+  fragmentShader: `precision highp float;
+    uniform sampler2D tDiffuse; uniform float uVig; uniform vec3 uTint; uniform vec2 uRes; varying vec2 vUv;
+    #include <tonemapping_pars_fragment>
+    #include <colorspace_pars_fragment>
+    void main() {
+      vec4 c = texture2D( tDiffuse, vUv );
+      c.rgb = CustomToneMapping( c.rgb );
+      c = sRGBTransferOETF( c );
+      float l = dot( c.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
+      c.rgb += uTint * pow( 1.0 - l, 6.0 );
+      vec2 d = ( vUv - 0.5 ) * vec2( uRes.x / uRes.y, 1.0 ) * 1.6;
+      c.rgb *= 1.0 - uVig * smoothstep( 0.45, 1.25, dot( d, d ) );
+      c.rgb += ( fract( sin( dot( gl_FragCoord.xy, vec2( 12.9898, 78.233 ) ) ) * 43758.5453 ) - 0.5 ) / 255.0;
+      gl_FragColor = c;
+    }`
+};
+class GradePass extends Pass {
+  constructor() {
+    super();
+    this.uniforms = THREE.UniformsUtils.clone(GradeShader.uniforms);
+    this.material = new THREE.RawShaderMaterial({ uniforms: this.uniforms, vertexShader: GradeShader.vertexShader, fragmentShader: GradeShader.fragmentShader, defines: { SRGB_TRANSFER: '' } });
+    this.fsQuad = new FullScreenQuad(this.material);
+  }
+  render(renderer, writeBuffer, readBuffer) {
+    this.uniforms.tDiffuse.value = readBuffer.texture;
+    this.uniforms.toneMappingExposure.value = renderer.toneMappingExposure;
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
+    this.fsQuad.render(renderer);
+  }
+}
+
 /* ---------- renderer ---------- */
 function init() {
   glCanvas = document.createElement('canvas');
@@ -142,7 +199,7 @@ function init() {
   stage.insertBefore(glCanvas, stage.firstChild);
   renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true, powerPreference: 'high-performance' });
   if (!renderer.capabilities.isWebGL2) throw new Error('webgl2');
-  renderer.toneMapping = THREE.NeutralToneMapping;
+  renderer.toneMapping = THREE.CustomToneMapping;
   renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -168,7 +225,11 @@ function init() {
   composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 }));
   renderPass = new RenderPass(scene, camera); composer.addPass(renderPass);
   bloomPass = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.55, 0.45, 0.82); composer.addPass(bloomPass);
-  outputPass = new OutputPass(); composer.addPass(outputPass);
+  gradePass = new GradePass(); composer.addPass(gradePass);
+  /* Low tier has no post pass: a CSS vignette on the compositor stands in for the graded one */
+  vigEl = document.createElement('div'); vigEl.setAttribute('aria-hidden', 'true');
+  vigEl.style.cssText = 'position:fixed;inset:0;z-index:-1;pointer-events:none;display:none;background:radial-gradient(ellipse 80% 70% at 50% 52%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.42) 100%);';
+  stage.insertBefore(vigEl, glCanvas.nextSibling);
   const mobile = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
   setQuality(mobile ? 2 : 3);
   try { const saved = +localStorage.getItem('headrush.hdq'); if (saved >= 0 && saved <= 3 && localStorage.getItem('headrush.hdq') !== null) setQuality(saved); } catch (e) {}
@@ -204,6 +265,34 @@ function resize(W, H) {
   if (samples !== lastSamples) { lastSamples = samples; composer.reset(new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples })); }
   composer.setPixelRatio(pr);
   composer.setSize(W, H);
+}
+
+/* ---------- camera rig (HD only) ----------
+   Steeper than the Lite 3D camera so the board fills the portrait screen and the backdrop frames it.
+   Fitted to the stage exactly like v3Camera() in index.html; the overlays use the positions render() returns. */
+const RIG = { key: '', pitch: 43, dist: 14.2, cam: new THREE.Vector3(), tgt: new THREE.Vector3(), F: 1, cx: 0, cy: 0 };
+function rig(V, W, H) {
+  const sr = V.sr || { left: 0, top: 0, width: W, height: H }, pitch = HR3D.pitch || RIG.pitch;
+  const key = [W, H, sr.left, sr.top, sr.width, sr.height, pitch].join('|');
+  if (key === RIG.key) return RIG;
+  RIG.key = key;
+  const p = pitch * Math.PI / 180;
+  RIG.tgt.set(0, 0.3, -0.4); RIG.cam.set(0, 0.3 + RIG.dist * Math.sin(p), -0.4 + RIG.dist * Math.cos(p));
+  const c = new THREE.PerspectiveCamera(); c.position.copy(RIG.cam); c.lookAt(RIG.tgt); c.updateMatrixWorld();
+  let mnx = 1e9, mxx = -1e9, mny = 1e9, mxy = -1e9;
+  for (let i = 0; i < 24; i++) {
+    const a = i / 24 * TAU;
+    [[3.75, 0], [3.6, 1.45]].forEach(([r, y]) => {
+      tmpV.set(r * Math.cos(a), y, r * Math.sin(a)).applyMatrix4(c.matrixWorldInverse);
+      const x = tmpV.x / -tmpV.z, yy = -tmpV.y / -tmpV.z;
+      mnx = Math.min(mnx, x); mxx = Math.max(mxx, x); mny = Math.min(mny, yy); mxy = Math.max(mxy, yy);
+    });
+  }
+  const sw = Math.max(60, sr.width), sh = Math.max(60, sr.height);
+  RIG.F = Math.min(sw * 1.15 / (mxx - mnx), sh * 0.94 / (mxy - mny));
+  RIG.cx = sr.left + sw / 2 - RIG.F * (mnx + mxx) / 2;
+  RIG.cy = sr.top + sh * 0.95 - RIG.F * mxy;
+  return RIG;
 }
 
 /* ---------- arena: floor, hub, scenery ---------- */
@@ -552,7 +641,8 @@ function setArena(g) {
   keyLight.color.set(sc.key[0]); keyLight.intensity = sc.key[1] * 0.7;
   rimLight.color.set(sc.rim[0]); rimLight.intensity = sc.rim[1] * 0.9;
   fillLight.intensity = sc.fillGlow ? 8 : 0; if (sc.fillGlow) fillLight.color.set(sc.fillGlow);
-  bloomPass.strength = sc.bloom[0] * 0.75; bloomPass.radius = sc.bloom[1]; bloomPass.threshold = Math.max(0.9, sc.bloom[2]);
+  bloomPass.strength = sc.bloom[0] * 0.75; bloomPass.radius = Math.min(0.4, sc.bloom[1]); bloomPass.threshold = Math.max(1.0, sc.bloom[2]);
+  gradePass.uniforms.uTint.value.set(sc.tint || 0x000000); gradePass.uniforms.uVig.value = sc.vig !== undefined ? sc.vig : 0.45;
   renderer.toneMappingExposure = (sc.exposure || 1) * 0.9;
   runnerPool.forEach(rn => { scene.remove(rn.root); scene.remove(rn.blob); }); runnerPool = [];
   RIM.color.value.set(V.T.rimLight);
@@ -752,7 +842,7 @@ function updateRunner(rn, p, i, g, V, now, dt) {
   const bob = running ? Math.abs(Math.cos(ph)) * 0.05 : 0;
   rn.root.position.set(x, 0, z);
   const hd = Math.atan2(-Math.sin(f), Math.cos(f));
-  const cyaw = Math.atan2(V.CAM[0] - x, V.CAM[2] - z);
+  const cyaw = Math.atan2(RIG.cam.x - x, RIG.cam.z - z);
   let d = hd - cyaw; d = Math.atan2(Math.sin(d), Math.cos(d));
   const yaw = cyaw + d * (HR3D.faceBlend !== undefined ? HR3D.faceBlend : 0.22);
   rn.root.rotation.y = yaw;
@@ -912,23 +1002,24 @@ function syncPool(pool, list, make, keyFn) {
 HR3D.attach = function (api) { G_API = api; };
 HR3D.setQuality = function (lv) { setQuality(lv); try { localStorage.setItem('headrush.hdq', String(lv)); } catch (e) {} };
 HR3D.quality = () => quality.level;
-HR3D.show = function (on) { if (glCanvas) glCanvas.style.display = on ? 'block' : 'none'; };
+HR3D.show = function (on) { if (glCanvas) glCanvas.style.display = on ? 'block' : 'none'; if (vigEl) vigEl.style.display = on && !quality.bloom ? 'block' : 'none'; };
 
 HR3D.render = function (g, view) {
   const V = G_API.V3, W = view.W, H = view.H, now = view.now;
   HR3D.show(true);
   resize(W, H);
   setArena(g);
-  camera.position.set(V.CAM[0], V.CAM[1], V.CAM[2]);
+  const RG = rig(V, W, H);
+  camera.position.copy(RG.cam);
   camera.up.set(0, 1, 0);
-  camera.lookAt(V.tgt[0], V.tgt[1], V.tgt[2]);
-  camera.fov = 2 * Math.atan(H / (2 * V.F)) * 180 / Math.PI;
+  camera.lookAt(RG.tgt);
+  camera.fov = 2 * Math.atan(H / (2 * RG.F)) * 180 / Math.PI;
   camera.aspect = W / H;
   if (g.close > (HR3D._close || 0) && runnerPool[0]) { runnerPool[0].happyUntil = now + 0.7; punch(0.02); }
   HR3D._close = g.close;
   stepFx(Math.min(0.05, view.dt || 0.016));
   camera.zoom = 1 + zoomPunch;
-  camera.setViewOffset(W, H, W / 2 - V.cx - (view.sx || 0), H / 2 - V.cy - (view.sy || 0), W, H);
+  camera.setViewOffset(W, H, W / 2 - RG.cx - (view.sx || 0), H / 2 - RG.cy - (view.sy || 0), W, H);
   camera.updateProjectionMatrix();
   const t = g.t, A = g.arena;
   curArena.core.floor.rotation.y = -g.rot;
