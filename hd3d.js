@@ -331,8 +331,8 @@ function rig(V, W, H) {
    Gaps can glow through the emissive map (lava seams, ice cracks). */
 const BOARD = {
   neon: { kind: 'hex', base: ['#16183c', '#0d0e26'], line: 'rgba(110,200,255,0.22)', glow: 'rgba(63,208,255,0.35)', rough: [0.18, 0.5], metal: 0.35, side: 'panel', sideCol: ['#1a1c42', '#07081a'], depth: 0.6, lip: 0x3fd0ff, lipLow: 0xff4fa3, emis: 1 },
-  lava: { kind: 'slab', base: ['#2c2220', '#1b1413'], gap: '#120a08', gapGlow: 'rgba(255,64,10,0.55)', rings: [0.75, 1.3, 1.85, 2.4, 2.95, 3.5, 4.05, 4.6], slab: [0.55, 0.6], gapW: 0.028, tones: [[42, 33, 30], [52, 40, 35], [36, 28, 26], [58, 45, 38]], rough: [0.75, 0.95], metal: 0.05, side: 'stone', sideCol: ['#2a201d', '#0d0807'], depth: 9, lip: 0x3a2a24, lipGlow: 0xff5a14, emis: 0.32, cracks: 'rgba(255,110,30,0.75)' },
-  frost: { kind: 'slab', base: ['#203f62', '#132a46'], gap: '#0b1a33', gapGlow: 'rgba(150,230,255,0.16)', rings: [0.75, 1.65, 2.5, 3.25, 4.1], slab: [1.1, 0.9], gapW: 0.03, tones: [[34, 66, 104], [40, 76, 118], [30, 58, 94], [46, 86, 128]], rough: [0.08, 0.3], metal: 0.15, side: 'ice', sideCol: ['#3d6a96', '#0c1a30'], depth: 1.4, lip: 0xcfe9ff, lipGlow: 0x9fe3ff, emis: 0.8, cracks: 'rgba(230,248,255,0.55)' }
+  lava: { kind: 'slab', base: ['#2c2220', '#1b1413'], gap: '#120a08', gapGlow: 'rgba(255,64,10,0.55)', rings: [0.75, 1.3, 1.85, 2.4, 2.95, 3.5, 4.05, 4.6], slab: [0.55, 0.6], gapW: 0.028, tones: [[42, 33, 30], [52, 40, 35], [36, 28, 26], [58, 45, 38]], rough: [0.75, 0.95], metal: 0.05, side: 'stone', sideCol: ['#2a201d', '#0d0807'], hub: ['#4a3a34', '#140c0a'], depth: 9, lip: 0x3a2a24, lipGlow: 0xff5a14, emis: 0.32, cracks: 'rgba(255,110,30,0.75)' },
+  frost: { kind: 'slab', base: ['#203f62', '#132a46'], gap: '#0b1a33', gapGlow: 'rgba(150,230,255,0.16)', rings: [0.75, 1.65, 2.5, 3.25, 4.1], slab: [1.1, 0.9], gapW: 0.03, tones: [[34, 66, 104], [40, 76, 118], [30, 58, 94], [46, 86, 128]], rough: [0.08, 0.3], metal: 0.15, side: 'ice', sideCol: ['#3d6a96', '#0c1a30'], hub: ['#6a90bc', '#14284a'], depth: 1.4, lip: 0xcfe9ff, lipGlow: 0x9fe3ff, emis: 0.8, cracks: 'rgba(230,248,255,0.55)' }
 };
 function boardBase(B, V, x, size, s, c, emissive, rough) {
   const E = V.edge, r = rnd(17);
@@ -454,8 +454,9 @@ function buildArenaCore(V, A) {
   }
   }
   const hub = new THREE.Group();
-  const hubTex = canvasTex(8, 128, (x, w, h) => { const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, T.hubTop); g.addColorStop(1, T.hubBot); x.fillStyle = g; x.fillRect(0, 0, w, h); });
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.76, 1.65, 48).translate(0, 0.825, 0), new THREE.MeshStandardMaterial({ map: hubTex, metalness: 0.55, roughness: 0.3 }));
+  const hc = B && B.hub ? B.hub : [T.hubTop, T.hubBot];
+  const hubTex = canvasTex(8, 128, (x, w, h) => { const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, hc[0]); g.addColorStop(1, hc[1]); x.fillStyle = g; x.fillRect(0, 0, w, h); });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.76, 1.65, 48).translate(0, 0.825, 0), new THREE.MeshStandardMaterial({ map: hubTex, metalness: B && B.side !== 'panel' ? 0.1 : 0.55, roughness: B && B.side === 'stone' ? 0.8 : 0.3 }));
   body.castShadow = true; body.receiveShadow = true; hub.add(body);
   [[0.3, G_API.COL.low], [1.17, G_API.COL.high]].forEach(([y, c]) => {
     const r = new THREE.Mesh(new THREE.TorusGeometry(0.75, 0.035, 10, 64).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 2.6 }));
@@ -465,9 +466,9 @@ function buildArenaCore(V, A) {
   cap.position.y = 1.67; hub.add(cap);
   const capRing = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.015, 6, 64).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: T.tick, emissive: T.tick, emissiveIntensity: 1.2 }));
   capRing.position.y = 1.7; hub.add(capRing);
-  const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.04, 40), new THREE.MeshStandardMaterial({ color: 0xffd23f, emissive: 0xffc030, emissiveIntensity: 2.6 }));
+  const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.04, 40), new THREE.MeshStandardMaterial({ color: 0xffd23f, emissive: 0xffc030, emissiveIntensity: 1.5 }));
   lamp.position.y = 1.71; hub.add(lamp);
-  const lamp2 = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.05, 32), new THREE.MeshStandardMaterial({ color: 0xfff3b0, emissive: 0xfff0c0, emissiveIntensity: 3 }));
+  const lamp2 = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.05, 32), new THREE.MeshStandardMaterial({ color: 0xfff3b0, emissive: 0xfff0c0, emissiveIntensity: 1.8 }));
   lamp2.position.y = 1.72; hub.add(lamp2);
   grp.add(hub);
   return { grp, floor, hub };
