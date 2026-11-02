@@ -1538,18 +1538,39 @@ function makeBelt(bt, V) {
   scene.add(m);
   return { root: m, tex: t, tex2: t2, dir: fast ? 1 : -1 };
 }
-let crackTex, lavaPitTex;
-function makeHole(o, V) {
-  if (!crackTex) {
-    crackTex = canvasTex(256, 128, (x, w, h) => { x.fillStyle = '#000'; x.fillRect(0, 0, w, h); x.strokeStyle = '#ffb04a'; x.lineWidth = 6; x.lineJoin = 'round'; x.beginPath(); x.moveTo(30, 0); x.lineTo(90, 40); x.lineTo(130, 70); x.lineTo(180, 60); x.lineTo(230, 128); x.moveTo(130, 70); x.lineTo(110, 128); x.moveTo(90, 40); x.lineTo(150, 10); x.stroke(); });
-    lavaPitTex = canvasTex(256, 128, (x, w, h) => { const gg = x.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); gg.addColorStop(0, '#fff2a0'); gg.addColorStop(0.35, '#ffb02a'); gg.addColorStop(0.75, '#ff4a10'); gg.addColorStop(1, '#3a0804'); x.fillStyle = gg; x.fillRect(0, 0, w, h); });
-  }
-  const geo = sectorGeo(V.e0 + 0.06, V.e1 - 0.06, -o.w / 2, o.w / 2, 10, 0.014);
-  const mat = new THREE.MeshStandardMaterial({ color: 0x1a0604, emissive: 0xffffff, emissiveMap: crackTex, emissiveIntensity: 1, roughness: 0.6, transparent: true });
-  const m = new THREE.Mesh(geo, mat); scene.add(m);
-  return { root: m, mat };
+/* Lava holes: the crack stage keeps the board visible and lights branching fractures that pulse faster as the tile goes;
+   the open pit is molten lava with dark crust plates, a ragged broken rim and an inner shadow for depth, with embers rising.
+   Textures are drawn at the sector's real proportions (u = across the track, v = along the radius). */
+let crackTex, crackMap, lavaPitTex, holeFx;
+function holeTextures() {
+  const r = rnd(61), W = 128, H = 256;
+  const cracks = [];
+  const branch = (x, y, a, len, d) => { const pts = [[x, y]]; for (let k = 0; k < 6; k++) { a += (r() - 0.5) * 0.9; x += Math.cos(a) * len / 6; y += Math.sin(a) * len / 6; pts.push([x, y]); if (d < 2 && r() < 0.3) branch(x, y, a + (r() < 0.5 ? 1 : -1) * (0.6 + r() * 0.5), len * 0.5, d + 1); } cracks.push([pts, d]); };
+  branch(W * 0.5, H * 0.05, Math.PI / 2, H * 0.95, 0); branch(W * 0.1, H * 0.35, 0.3, W * 1.1, 1); branch(W * 0.95, H * 0.7, Math.PI - 0.2, W * 1.0, 1);
+  const stroke = (x, wdt, col) => cracks.forEach(([pts, d]) => { x.strokeStyle = col; x.lineWidth = wdt / (1 + d * 0.6); x.beginPath(); pts.forEach((q, i) => i ? x.lineTo(q[0], q[1]) : x.moveTo(q[0], q[1])); x.stroke(); });
+  crackTex = canvasTex(W, H, (x) => { x.fillStyle = '#000'; x.fillRect(0, 0, W, H); x.lineJoin = 'round'; x.lineCap = 'round'; x.shadowColor = '#ff5a10'; x.shadowBlur = 10; stroke(x, 7, '#ff6a14'); x.shadowBlur = 0; stroke(x, 2.5, '#ffe0a0'); });
+  crackMap = canvasTex(W, H, (x) => { x.clearRect(0, 0, W, H); x.fillStyle = 'rgba(10,4,2,0.25)'; x.fillRect(0, 0, W, H); x.lineJoin = 'round'; stroke(x, 9, 'rgba(8,3,2,0.85)'); });
+  lavaPitTex = canvasTex(W, H, (x) => {
+    const gg = x.createLinearGradient(0, 0, W, 0); gg.addColorStop(0, '#c83a08'); gg.addColorStop(0.5, '#ffb030'); gg.addColorStop(1, '#c83a08'); x.fillStyle = gg; x.fillRect(0, 0, W, H);
+    for (let i = 0; i < 26; i++) { const cx = r() * W, cy = r() * H, s = 6 + r() * 16; x.fillStyle = `rgba(${r() < 0.5 ? '255,240,170' : '255,120,30'},0.5)`; x.beginPath(); x.arc(cx, cy, s, 0, TAU); x.fill(); }
+    /* crust plates */
+    for (let i = 0; i < 14; i++) { const cx = r() * W, cy = r() * H, s = 8 + r() * 14; x.fillStyle = 'rgba(40,10,4,0.85)'; x.beginPath(); for (let k = 0; k < 6; k++) { const a = k / 6 * TAU + r() * 0.5, rr = s * (0.6 + r() * 0.5); k ? x.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr) : x.moveTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); } x.closePath(); x.fill(); }
+    /* inner shadow (depth) and a ragged broken rim */
+    const sh = x.createLinearGradient(0, 0, W * 0.3, 0); sh.addColorStop(0, 'rgba(0,0,0,0.85)'); sh.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = sh; x.fillRect(0, 0, W * 0.3, H);
+    const sh2 = x.createLinearGradient(W, 0, W * 0.75, 0); sh2.addColorStop(0, 'rgba(0,0,0,0.75)'); sh2.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = sh2; x.fillRect(W * 0.7, 0, W * 0.3, H);
+    [0, H].forEach(y0 => { const g2 = x.createLinearGradient(0, y0, 0, y0 ? H - 26 : 26); g2.addColorStop(0, 'rgba(0,0,0,0.8)'); g2.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g2; x.fillRect(0, y0 ? H - 26 : 0, W, 26); });
+    x.fillStyle = '#0c0403'; [[0, 1], [W, -1]].forEach(([x0, sg]) => { x.beginPath(); x.moveTo(x0, 0); for (let y = 0; y <= H; y += 12) x.lineTo(x0 + sg * (3 + r() * 9), y); x.lineTo(x0, H); x.closePath(); x.fill(); });
+  });
 }
-
+function makeHole(o, V) {
+  if (!crackTex) holeTextures();
+  const geo = sectorGeo(V.e0 + 0.06, V.e1 - 0.06, -o.w / 2, o.w / 2, 10, 0.014);
+  const crack = new THREE.MeshStandardMaterial({ map: crackMap, emissive: 0xffffff, emissiveMap: crackTex, emissiveIntensity: 1, roughness: 0.8, transparent: true, depthWrite: false });
+  const pit = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffffff, emissiveMap: lavaPitTex, emissiveIntensity: 1, roughness: 1 });
+  const m = new THREE.Mesh(geo, crack); m.renderOrder = 1; scene.add(m);
+  if (!holeFx) { holeFx = makePuffs(60, softTex()); scene.add(holeFx); }
+  return { root: m, crack, pit, acc: 0 };
+}
 function makeOrb() {
   const root = new THREE.Group();
   const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.1, transparent: true });
@@ -1674,9 +1695,20 @@ HR3D.render = function (g, view) {
     h.root.rotation.y = -(o.a + g.rot);
     if (o.state === 'idle') { h.root.visible = false; return; }
     h.root.visible = true;
-    if (o.state === 'crack') { const left = Math.max(0, o.until - t), pulse = 0.5 + 0.5 * Math.sin(t * (10 + (1.3 - left) * 16)); h.mat.emissiveMap = crackTex; h.mat.color.set(0x3a1208); h.mat.emissiveIntensity = 0.6 + 1.6 * pulse; }
-    else { h.mat.emissiveMap = lavaPitTex; h.mat.color.set(0x1a0604); h.mat.emissiveIntensity = 2.2 + 0.4 * Math.sin(t * 6 + i); }
+    if (o.state === 'crack') { const left = Math.max(0, o.until - t), pulse = 0.5 + 0.5 * Math.sin(t * (10 + (1.3 - left) * 16)); h.root.material = h.crack; h.crack.emissiveIntensity = 0.5 + 1.5 * pulse; }
+    else {
+      h.root.material = h.pit; h.pit.emissiveIntensity = 1.15 + 0.25 * Math.sin(t * 6 + i);
+      /* embers and heat rising from the open pit */
+      h.acc += view.dt || 0;
+      while (h.acc > 0.09) {
+        h.acc -= 0.09;
+        const A2 = o.a + g.rot + (Math.random() - 0.5) * o.w * 0.8, R2 = V.e0 + 0.2 + Math.random() * (V.e1 - V.e0 - 0.4), ex = R2 * Math.cos(A2), ez = R2 * Math.sin(A2);
+        puff(holeFx, { x: ex, y: 0.05, z: ez, vx: (Math.random() - 0.5) * 0.3, vy: 1.2 + Math.random() * 1.2, vz: (Math.random() - 0.5) * 0.3, life: 0.7 + Math.random() * 0.6, size: 0.09, grow: -0.4, col: tmpC.setRGB(1, 0.5, 0.12).clone() });
+        if (Math.random() < 0.35) puff(holeFx, { x: ex, y: 0.2, z: ez, vy: 0.6, life: 1.0, size: 0.5, grow: 1.4, col: tmpC.setRGB(0.22, 0.06, 0.01).clone() });
+      }
+    }
   });
+  if (holeFx) stepPuffs(holeFx, Math.min(0.05, view.dt || 0.016));
   // pickup orb
   if (!orb) orb = makeOrb();
   const pu = g.pickup;
