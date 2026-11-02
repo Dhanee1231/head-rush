@@ -1097,7 +1097,7 @@ function addRim(mat) {
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uRimColor = RIM.color; sh.uniforms.uRimStrength = RIM.strength;
     sh.fragmentShader = 'uniform vec3 uRimColor;\nuniform float uRimStrength;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>',
-      '#include <emissivemap_fragment>\n{ float rimF = 1.0 - saturate( dot( normal, normalize( vViewPosition ) ) ); totalEmissiveRadiance += uRimColor * pow( rimF, 2.6 ) * uRimStrength;\n' +
+      '#include <emissivemap_fragment>\n{ float rimF = 1.0 - saturate( abs( dot( normal, normalize( vViewPosition ) ) ) ); totalEmissiveRadiance += uRimColor * pow( rimF, 2.6 ) * uRimStrength;\n' +
       '  float upF = dot( normal, normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz ) ); diffuseColor.rgb *= mix( 0.42, 1.0, smoothstep( -0.75, 0.3, upF ) ); }');
   };
   mat.customProgramCacheKey = () => 'rim';
@@ -1492,9 +1492,31 @@ function makeHammer(V) {
   o.setCol('low');
   return o;
 }
+/* Ice walls: a faceted, flat-shaded block with a snow cap, a cold inner glow and a frost pool on the floor (all shared) */
+function wallParts() {
+  if (GEO.wall) return;
+  const r = rnd(5), g = new THREE.BoxGeometry(0.92, 1.05, 0.42, 3, 3, 2).translate(0, 0.525, 0), p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i), k = (Math.abs(x) > 0.45 || Math.abs(z) > 0.2 || y > 1.04) ? 1 : 0; const h = Math.sin(x * 31.7 + y * 17.3 + z * 41.1) * 43758.5; const n = h - Math.floor(h); p.setXYZ(i, x * (1 + (n - 0.5) * 0.1 * k), y > 0.01 ? y + (n - 0.5) * 0.08 * k : y, z * (1 + (n - 0.5) * 0.25 * k)); }
+  const ng = g.toNonIndexed(); ng.computeVertexNormals();
+  const np = ng.attributes.position, nn = ng.attributes.normal, colr = [];
+  for (let i = 0; i < np.count; i++) { const y = np.getY(i), up = nn.getY(i); const snow = up > 0.6 ? 1 : 0, k = 0.55 + 0.45 * Math.min(1, y / 1.05); /* linear albedo, kept dark: the arena lights are strong and pale ice would tone-map to white */
+    if (snow) colr.push(0.1, 0.22, 0.38); else { const f = 0.7 + 0.6 * Math.abs(nn.getX(i)); colr.push(0.03 * k * f, 0.12 * k * f, 0.3 * k * f); } }
+  ng.setAttribute('color', new THREE.Float32BufferAttribute(colr, 3)); g.dispose();
+  GEO.wall = shared(ng);
+  MAT.wall = smat(addRim(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.12, metalness: 0, transparent: true, opacity: 0.94, emissive: 0x2a74c0, emissiveIntensity: 0.6, envMapIntensity: 0.9 })));
+  GEO.wallCore = shared(new THREE.BoxGeometry(0.6, 0.7, 0.16).translate(0, 0.45, 0));
+  MAT.wallCore = smat(new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6fd0ff).multiplyScalar(0.5), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  const ft = canvasTex(128, 64, (x, w, h) => { const gg = x.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); gg.addColorStop(0, 'rgba(255,255,255,0.9)'); gg.addColorStop(0.5, 'rgba(255,255,255,0.35)'); gg.addColorStop(1, 'rgba(255,255,255,0)'); x.save(); x.scale(1, 0.5); x.translate(0, h / 2); x.restore(); x.fillStyle = gg; x.fillRect(0, 0, w, h); }, false);
+  GEO.wallPool = shared(new THREE.PlaneGeometry(1.7, 1.0).rotateX(-Math.PI / 2).translate(0, 0.016, 0));
+  MAT.wallPool = smat(new THREE.MeshBasicMaterial({ map: ft, color: new THREE.Color(0x8fdcff).multiplyScalar(0.55), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+}
 function makeWall(V) {
-  const m = new THREE.Mesh(new RoundedBoxGeometry(0.92, 1.05, 0.42, 3, 0.08).translate(0, 0.525, 0), addRim(new THREE.MeshStandardMaterial({ color: 0xbfe9ff, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.82, emissive: 0x4aa8d8, emissiveIntensity: 0.25, envMapIntensity: 1.4 })));
-  m.castShadow = true; scene.add(m); return m;
+  wallParts();
+  const root = new THREE.Group();
+  const m = new THREE.Mesh(GEO.wall, MAT.wall); m.castShadow = true; m.renderOrder = 2; root.add(m);
+  const core = new THREE.Mesh(GEO.wallCore, MAT.wallCore); core.renderOrder = 3; root.add(core);
+  const pool = new THREE.Mesh(GEO.wallPool, MAT.wallPool); pool.renderOrder = 1; root.add(pool);
+  scene.add(root); return { root };
 }
 let chevTex;
 function makeBelt(bt, V) {
@@ -1631,7 +1653,7 @@ HR3D.render = function (g, view) {
   });
   // walls
   syncPool(wallPool, A.walls, () => makeWall(V));
-  A.walls.forEach((w, i) => { const m = wallPool[i], R = V.TR + (A.lanes[w.lane] - V.mid) * V.SC, f = w.a + g.rot; m.position.set(R * Math.cos(f), 0, R * Math.sin(f)); m.rotation.y = -f; });
+  A.walls.forEach((w, i) => { const m = wallPool[i].root, R = V.TR + (A.lanes[w.lane] - V.mid) * V.SC, f = w.a + g.rot; m.position.set(R * Math.cos(f), 0, R * Math.sin(f)); m.rotation.y = -f; });
   // belts
   syncPool(beltPool, A.belts, bt => makeBelt(bt, V));
   A.belts.forEach((bt, i) => { const o = beltPool[i]; o.root.rotation.y = -(bt.a + g.rot); o.tex.offset.x = -(t * 0.45 * o.dir) / 0.11 % 1; });
