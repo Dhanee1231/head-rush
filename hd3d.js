@@ -1460,17 +1460,37 @@ function makeBar(type, V) {
   scene.add(root);
   return { root, holder, mat, capMat, halo, pool, trail, type };
 }
+/* Hammers: the handle is lit like a bar (exact low/high colour core, halo, floor pool) so its height reads the same way;
+   a chunky toy mallet head with gunmetal caps, on a striped carnival post. */
+let postTex;
 function makeHammer(V) {
-  const root = new THREE.Group(), r0 = V.e0 - 0.2, r1 = V.e1 + 0.55, L = r1 - r0, postR = V.e1 + 0.62;
-  const metal = new THREE.MeshStandardMaterial({ color: G_API.V3.T.hubTop, metalness: 0.7, roughness: 0.3 });
-  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 1.9, 16).translate(0, 0.95, 0), metal); post.position.x = postR; post.castShadow = true; root.add(post);
-  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 10), new THREE.MeshStandardMaterial({ color: 0xffe08a, emissive: 0xffc040, emissiveIntensity: 2 })); knob.position.set(postR, 1.95, 0); root.add(knob);
-  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.8, roughness: 0.25 });
-  const beam = new THREE.Mesh(new THREE.CapsuleGeometry(0.17, L, 6, 18).rotateZ(Math.PI / 2).translate(r0 + L / 2, 0, 0), mat); beam.castShadow = true;
-  const head = new THREE.Mesh(new RoundedBoxGeometry(0.55, 0.55, 0.62, 3, 0.1), mat); head.position.x = r0; head.castShadow = true;
-  const holder = new THREE.Group(); holder.add(beam); holder.add(head); root.add(holder);
+  const root = new THREE.Group(), r0 = V.e0 - 0.2, r1 = V.e1 + 0.55, L = r1 - r0, postR = V.e1 + 0.62, ex = renderer.toneMappingExposure;
+  if (!postTex) { postTex = canvasTex(64, 128, (x, w, h) => { x.fillStyle = '#d8c8b0'; x.fillRect(0, 0, w, h); x.fillStyle = '#7a2438'; for (let i = -2; i < 6; i++) { x.beginPath(); x.moveTo(0, i * 32); x.lineTo(w, i * 32 + 32); x.lineTo(w, i * 32 + 48); x.lineTo(0, i * 32 + 16); x.closePath(); x.fill(); } }); postTex.wrapT = THREE.RepeatWrapping; postTex.repeat.set(1, 4); }
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.17, 1.9, 16).translate(0, 0.95, 0), new THREE.MeshStandardMaterial({ map: postTex, roughness: 0.45, color: 0xb0a0a0 })); post.position.x = postR; post.castShadow = true; root.add(post);
+  const knob = new THREE.Mesh(GEO.barCap, MAT.gold); knob.scale.setScalar(0.19); knob.position.set(postR, 1.98, 0); root.add(knob);
+  const cols = { low: exactColor(G_API.COL.low, ex), high: exactColor(G_API.COL.high, ex) };
+  const core = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, L, 6, 18).rotateZ(Math.PI / 2).translate(r0 + L / 2, 0, 0), new THREE.MeshBasicMaterial({ color: cols.low, fog: false }));
+  core.castShadow = true; core.renderOrder = 6;
+  const HS = 2.4, halo = new THREE.Mesh(new THREE.CapsuleGeometry(0.15 * HS, L, 6, 18).rotateZ(Math.PI / 2).translate(r0 + L / 2, 0, 0), haloMat(G_API.COL.low, quality.bloom ? 1.5 : 2.2));
+  halo.material.uniforms.uIn.value = 1 / HS; halo.renderOrder = 3;
+  const headMat = new THREE.MeshStandardMaterial({ color: G_API.COL.low, emissive: G_API.COL.low, emissiveIntensity: 1, roughness: 0.3, envMapIntensity: 1 });
+  const head = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.66, 24).rotateX(Math.PI / 2), headMat); head.position.x = r0 - 0.05; head.castShadow = true;
+  const caps = new THREE.Mesh(mergeGeos([new THREE.CylinderGeometry(0.37, 0.37, 0.09, 24).rotateX(Math.PI / 2).translate(0, 0, 0.36), new THREE.CylinderGeometry(0.37, 0.37, 0.09, 24).rotateX(Math.PI / 2).translate(0, 0, -0.36), new THREE.CylinderGeometry(0.2, 0.2, 0.2, 16).rotateZ(Math.PI / 2).translate(0.38, 0, 0)]), MAT.gunmetal);
+  caps.position.x = r0 - 0.05;
+  const holder = new THREE.Group(); holder.add(core); holder.add(halo); holder.add(head); holder.add(caps); root.add(holder);
+  if (!poolTex) poolTex = canvasTex(64, 64, (x, w, h) => { const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, w, h); }, false);
+  const pool = new THREE.Mesh(new THREE.PlaneGeometry(L + 0.6, 1.2).rotateX(-Math.PI / 2).translate(r0 + L / 2, 0.018, 0), new THREE.MeshBasicMaterial({ color: 0xffffff, map: poolTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  pool.renderOrder = 1; root.add(pool);
   scene.add(root);
-  return { root, holder, mat, y: 0.3 };
+  const o = { root, holder, core, halo, headMat, pool, cols, y: 0.3, cur: '' };
+  o.setCol = (type) => {
+    if (o.cur === type) return; o.cur = type;
+    const c = type === 'high' ? G_API.COL.high : G_API.COL.low;
+    core.material.color.copy(cols[type]); halo.material.uniforms.uCol.value.set(c); headMat.color.set(c).multiplyScalar(0.35); headMat.emissive.copy(cols[type]).multiplyScalar(0.72);
+    pool.material.color.set(c).multiplyScalar(type === 'high' ? 0.45 : 0.75);
+  };
+  o.setCol('low');
+  return o;
 }
 function makeWall(V) {
   const m = new THREE.Mesh(new RoundedBoxGeometry(0.92, 1.05, 0.42, 3, 0.08).translate(0, 0.525, 0), addRim(new THREE.MeshStandardMaterial({ color: 0xbfe9ff, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.82, emissive: 0x4aa8d8, emissiveIntensity: 0.25, envMapIntensity: 1.4 })));
@@ -1603,8 +1623,11 @@ HR3D.render = function (g, view) {
     o.y += (target - o.y) * Math.min(1, view.dt * 18);
     o.holder.position.y = o.y;
     o.root.rotation.y = -(h.a + g.rot);
-    o.mat.color.set(colr);
-    if (k > 0.7) { o.mat.emissive.set(Math.floor(t * 8) % 2 ? (high ? G_API.COL.low : G_API.COL.high) : colr); o.holder.position.x = Math.sin(t * 60) * 0.02; } else { o.mat.emissive.set(colr); o.holder.position.x = 0; }
+    /* warning before the swap: flash the other colour and shake, as before */
+    const flash = k > 0.7 && Math.floor(t * 8) % 2;
+    o.setCol(flash ? (high ? 'low' : 'high') : type);
+    o.holder.position.x = k > 0.7 ? Math.sin(t * 60) * 0.02 : 0;
+    o.pool.scale.z = 0.8 + o.y * 0.5;
   });
   // walls
   syncPool(wallPool, A.walls, () => makeWall(V));
