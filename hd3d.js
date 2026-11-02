@@ -61,6 +61,24 @@ function gearShape(R, teeth) {
   for (let k = 0; k < 5; k++) { const a = k / 5 * TAU + 0.6, h = new THREE.Path(); h.absarc(Math.cos(a) * R * 0.5, Math.sin(a) * R * 0.5, R * 0.15, 0, TAU, true); s.holes.push(h); }
   return s;
 }
+/* jellybean body profile (radius, height): wide hips, soft egg top */
+const BEAN = [[0, 0], [0.2, 0.012], [0.33, 0.06], [0.405, 0.16], [0.43, 0.32], [0.42, 0.5], [0.39, 0.68], [0.34, 0.85], [0.26, 0.99], [0.15, 1.08], [0, 1.12]];
+function beanR(y) {
+  for (let i = 1; i < BEAN.length; i++) if (y <= BEAN[i][1]) { const a = BEAN[i - 1], b = BEAN[i], u = (y - a[1]) / (b[1] - a[1] || 1); return a[0] + (b[0] - a[0]) * u; }
+  return 0;
+}
+function mergeGeos(list) {
+  const pos = [], nor = [], uv = [], idx = []; let base = 0;
+  list.forEach(g => {
+    const P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv;
+    for (let i = 0; i < P.count; i++) { pos.push(P.getX(i), P.getY(i), P.getZ(i)); nor.push(N.getX(i), N.getY(i), N.getZ(i)); uv.push(U ? U.getX(i) : 0, U ? U.getY(i) : 0); }
+    if (g.index) for (let i = 0; i < g.index.count; i++) idx.push(base + g.index.getX(i)); else for (let i = 0; i < P.count; i++) idx.push(base + i);
+    base += P.count; g.dispose();
+  });
+  const m = new THREE.BufferGeometry();
+  m.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); m.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); m.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  m.setIndex(idx); return m;
+}
 function rnd(seed) { let s = seed; return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }; }
 function disposeTree(o) {
   o.traverse(n => {
@@ -74,7 +92,7 @@ const GEO = {}, MAT = {};
 function shared(g) { g.userData.shared = true; return g; }
 function smat(m) { m.userData.shared = true; return m; }
 function buildShared() {
-  GEO.round = shared(new THREE.CapsuleGeometry(0.36, 0.5, 10, 28).translate(0, 0.61, 0));
+  GEO.round = shared(new THREE.LatheGeometry(new THREE.SplineCurve(BEAN.map(p => new THREE.Vector2(p[0], p[1]))).getPoints(40), 40));
   GEO.square = shared(new RoundedBoxGeometry(0.74, 1.12, 0.74, 5, 0.2).translate(0, 0.56, 0));
   GEO.triangle = shared(new THREE.LatheGeometry([[0, 0], [0.44, 0], [0.51, 0.04], [0.52, 0.12], [0.5, 0.2], [0.14, 1.06], [0.08, 1.15], [0, 1.18]].map(p => new THREE.Vector2(p[0], p[1])), 40));
   const dia = new THREE.LatheGeometry([[0, 0], [0.06, 0.01], [0.5, 0.56], [0.5, 0.64], [0.06, 1.15], [0, 1.16]].map(p => new THREE.Vector2(p[0], p[1])), 4); dia.rotateY(Math.PI / 4);
@@ -86,7 +104,18 @@ function buildShared() {
   GEO.pupil = shared(new THREE.SphereGeometry(0.072, 16, 12));
   GEO.glint = shared(new THREE.SphereGeometry(0.022, 8, 6));
   GEO.cheek = shared(new THREE.SphereGeometry(0.07, 12, 8));
-  GEO.foot = shared(new THREE.SphereGeometry(0.12, 16, 10));
+  /* arm = short stub + mitten with a thumb, hanging from the shoulder (origin) along -y */
+  GEO.arm = shared(mergeGeos([
+    new THREE.CapsuleGeometry(0.06, 0.16, 4, 10).translate(0, -0.1, 0),
+    new THREE.SphereGeometry(0.13, 16, 12).scale(1, 0.92, 0.82).translate(0, -0.27, 0),
+    new THREE.SphereGeometry(0.055, 10, 8).translate(0.0, -0.235, 0.095)
+  ]));
+  /* sneaker: white upper + chunky sole, toe along +z */
+  GEO.shoeUp = shared(mergeGeos([
+    new THREE.CapsuleGeometry(0.082, 0.1, 4, 12).rotateX(Math.PI / 2).scale(1, 0.82, 1).translate(0, 0.088, 0.015),
+    new THREE.SphereGeometry(0.07, 12, 8).translate(0, 0.13, -0.035)
+  ]));
+  GEO.shoeSole = shared(new THREE.CapsuleGeometry(0.094, 0.12, 4, 12).rotateX(Math.PI / 2).scale(1, 0.34, 1).translate(0, 0.03, 0.015));
   GEO.xbar = shared(new THREE.BoxGeometry(0.15, 0.035, 0.03));
   GEO.ring = shared(new THREE.TorusGeometry(0.62, 0.035, 10, 64).rotateX(Math.PI / 2));
   GEO.disc = shared(new THREE.CircleGeometry(0.62, 48).rotateX(-Math.PI / 2));
@@ -110,7 +139,10 @@ function buildShared() {
   MAT.pupil = smat(new THREE.MeshPhysicalMaterial({ color: 0x16122a, roughness: 0.1, clearcoat: 1 }));
   MAT.glint = smat(new THREE.MeshBasicMaterial({ color: 0xffffff }));
   MAT.cheek = smat(new THREE.MeshBasicMaterial({ color: 0xff7aa0, transparent: true, opacity: 0.45, depthWrite: false }));
-  MAT.foot = smat(new THREE.MeshStandardMaterial({ color: 0x17182c, roughness: 0.35 }));
+  MAT.limb = smat(addRim(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.32, envMapIntensity: 0.8 })));
+  MAT.shoeUp = smat(new THREE.MeshStandardMaterial({ color: 0xf2f4fb, roughness: 0.5, envMapIntensity: 0.6 }));
+  MAT.shoeSole = smat(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.45 }));
+  MAT.youHull = smat(new THREE.MeshBasicMaterial({ color: 0xffd23f, side: THREE.BackSide }));
   MAT.x = smat(new THREE.MeshBasicMaterial({ color: 0x1b1530 }));
   MAT.gold = smat(new THREE.MeshStandardMaterial({ color: 0xffc94a, metalness: 1, roughness: 0.22, emissive: 0x6a4a00, emissiveIntensity: 0.5 }));
   MAT.goldGlow = smat(new THREE.MeshStandardMaterial({ color: 0xffe08a, emissive: 0xffd060, emissiveIntensity: 2.2 }));
@@ -128,7 +160,7 @@ function buildShared() {
   MAT.bubble = smat(addRim(new THREE.MeshStandardMaterial({ color: 0x7fe3ff, emissive: 0x2ab8e0, emissiveIntensity: 0.3, roughness: 0.05, transparent: true, opacity: 0.2, depthWrite: false })));
   const blobTex = canvasTex(64, 64, (x, w) => { const gg = x.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); gg.addColorStop(0, 'rgba(0,0,0,1)'); gg.addColorStop(0.55, 'rgba(0,0,0,0.6)'); gg.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = gg; x.fillRect(0, 0, w, w); });
   GEO.blob = shared(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2));
-  MAT.blob = new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false, opacity: 0.5 });
+  MAT.blob = smat(new THREE.MeshBasicMaterial({ color: 0x000000, map: blobTex, transparent: true, depthWrite: false, opacity: 0.55 }));
   MAT.star = smat(new THREE.MeshStandardMaterial({ color: 0xffe08a, emissive: 0xffd050, emissiveIntensity: 2.5 }));
 }
 
@@ -644,7 +676,7 @@ function setArena(g) {
   bloomPass.strength = sc.bloom[0] * 0.75; bloomPass.radius = Math.min(0.4, sc.bloom[1]); bloomPass.threshold = Math.max(1.0, sc.bloom[2]);
   gradePass.uniforms.uTint.value.set(sc.tint || 0x000000); gradePass.uniforms.uVig.value = sc.vig !== undefined ? sc.vig : 0.45;
   renderer.toneMappingExposure = (sc.exposure || 1) * 0.9;
-  runnerPool.forEach(rn => { scene.remove(rn.root); scene.remove(rn.blob); }); runnerPool = [];
+  runnerPool.forEach(rn => { scene.remove(rn.root); }); runnerPool = [];
   RIM.color.value.set(V.T.rimLight);
   [barPool, hammerPool, wallPool, beltPool, holePool].forEach(pl => { pl.forEach(o => scene.remove(o.root || o)); pl.length = 0; });
 }
@@ -676,36 +708,51 @@ function addRim(mat) {
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uRimColor = RIM.color; sh.uniforms.uRimStrength = RIM.strength;
     sh.fragmentShader = 'uniform vec3 uRimColor;\nuniform float uRimStrength;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>',
-      '#include <emissivemap_fragment>\n{ float rimF = 1.0 - saturate( dot( normal, normalize( vViewPosition ) ) ); totalEmissiveRadiance += uRimColor * pow( rimF, 2.6 ) * uRimStrength; }');
+      '#include <emissivemap_fragment>\n{ float rimF = 1.0 - saturate( dot( normal, normalize( vViewPosition ) ) ); totalEmissiveRadiance += uRimColor * pow( rimF, 2.6 ) * uRimStrength;\n' +
+      '  float upF = dot( normal, normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz ) ); diffuseColor.rgb *= mix( 0.42, 1.0, smoothstep( -0.75, 0.3, upF ) ); }');
   };
   mat.customProgramCacheKey = () => 'rim';
   return mat;
 }
 const FACE = {};
 function faceTextures() {
-  const mk = (kind) => canvasTex(256, 160, (x, w, h) => {
+  /* big glossy toy eyes set close together, small mouth, blush; drawn once per expression */
+  const mk = (kind) => canvasTex(512, 360, (x, w, h) => {
     x.clearRect(0, 0, w, h);
-    const eyes = [w / 2 - 60, w / 2 + 60], ey = h * 0.44, R = 40;
-    x.fillStyle = 'rgba(255,105,150,0.42)';
-    eyes.forEach((cx, i) => { x.beginPath(); x.ellipse(cx + (i ? 26 : -26), ey + 54, 20, 9, 0, 0, TAU); x.fill(); });
+    const ex = [w / 2 - 92, w / 2 + 92], ey = h * 0.36, RX = 70, RY = 88, ink = '#15112a';
     x.lineCap = 'round'; x.lineJoin = 'round';
-    eyes.forEach((cx, i) => {
+    x.fillStyle = 'rgba(255,92,140,0.38)';
+    ex.forEach((cx, i) => { x.beginPath(); x.ellipse(cx + (i ? 50 : -50), ey + 116, 38, 16, 0, 0, TAU); x.fill(); });
+    ex.forEach((cx, i) => {
       if (kind === 'open' || kind === 'up') {
-        x.fillStyle = '#ffffff'; x.beginPath(); x.ellipse(cx, ey, R * 0.92, R * 1.14, 0, 0, TAU); x.fill();
-        x.lineWidth = 4; x.strokeStyle = 'rgba(20,16,40,0.6)'; x.stroke();
-        const py = kind === 'up' ? ey - 12 : ey + 6;
-        x.fillStyle = '#16122a'; x.beginPath(); x.ellipse(cx + 2, py, R * 0.58, R * 0.7, 0, 0, TAU); x.fill();
-        x.fillStyle = '#ffffff'; x.beginPath(); x.arc(cx - 8, py - 13, 10, 0, TAU); x.fill(); x.beginPath(); x.arc(cx + 11, py + 11, 4.5, 0, TAU); x.fill();
+        x.fillStyle = ink; x.beginPath(); x.ellipse(cx, ey, RX + 7, RY + 7, 0, 0, TAU); x.fill();
+        const g = x.createLinearGradient(0, ey - RY, 0, ey + RY); g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#dfe3f2');
+        x.fillStyle = g; x.beginPath(); x.ellipse(cx, ey, RX, RY, 0, 0, TAU); x.fill();
+        const py = kind === 'up' ? ey - 20 : ey + 8, px = cx + (i ? -6 : 6);
+        x.fillStyle = ink; x.beginPath(); x.ellipse(px, py, RX * 0.68, RY * 0.7, 0, 0, TAU); x.fill();
+        x.fillStyle = 'rgba(80,90,160,0.55)'; x.beginPath(); x.ellipse(px, py + RY * 0.34, RX * 0.42, RY * 0.22, 0, 0, TAU); x.fill();
+        x.fillStyle = '#ffffff'; x.beginPath(); x.ellipse(px - 17, py - 27, 18, 22, -0.4, 0, TAU); x.fill();
+        x.beginPath(); x.arc(px + 19, py + 22, 8, 0, TAU); x.fill();
       } else if (kind === 'blink') {
-        x.strokeStyle = '#16122a'; x.lineWidth = 10; x.beginPath(); x.moveTo(cx - 30, ey + 4); x.quadraticCurveTo(cx, ey + 18, cx + 30, ey + 4); x.stroke();
+        x.strokeStyle = ink; x.lineWidth = 14; x.beginPath(); x.moveTo(cx - 40, ey + 6); x.quadraticCurveTo(cx, ey + 26, cx + 40, ey + 6); x.stroke();
       } else if (kind === 'happy') {
-        x.strokeStyle = '#16122a'; x.lineWidth = 11; x.beginPath(); x.moveTo(cx - 30, ey + 12); x.quadraticCurveTo(cx, ey - 26, cx + 30, ey + 12); x.stroke();
+        x.strokeStyle = ink; x.lineWidth = 16; x.beginPath(); x.moveTo(cx - 40, ey + 16); x.quadraticCurveTo(cx, ey - 36, cx + 40, ey + 16); x.stroke();
       } else if (kind === 'stun') {
-        x.strokeStyle = '#16122a'; x.lineWidth = 11; x.beginPath(); x.moveTo(cx - 22, ey - 22); x.lineTo(cx + 22, ey + 22); x.moveTo(cx + 22, ey - 22); x.lineTo(cx - 22, ey + 22); x.stroke();
+        x.strokeStyle = ink; x.lineWidth = 15; x.beginPath(); x.moveTo(cx - 30, ey - 30); x.lineTo(cx + 30, ey + 30); x.moveTo(cx + 30, ey - 30); x.lineTo(cx - 30, ey + 30); x.stroke();
       }
     });
-    if (kind === 'happy') { x.fillStyle = '#3a0d22'; x.beginPath(); x.moveTo(w / 2 - 20, ey + 30); x.quadraticCurveTo(w / 2, ey + 62, w / 2 + 20, ey + 30); x.closePath(); x.fill(); }
-    if (kind === 'stun') { x.strokeStyle = '#16122a'; x.lineWidth = 6; x.beginPath(); x.moveTo(w / 2 - 22, ey + 42); for (let k = 0; k < 4; k++) x.quadraticCurveTo(w / 2 - 16 + k * 11, ey + (k % 2 ? 48 : 34), w / 2 - 11 + k * 11, ey + 42); x.stroke(); }
+    const my = ey + 128;
+    x.fillStyle = ink; x.strokeStyle = ink;
+    if (kind === 'happy') {
+      x.beginPath(); x.moveTo(w / 2 - 34, my - 10); x.quadraticCurveTo(w / 2, my + 52, w / 2 + 34, my - 10); x.closePath(); x.fill();
+      x.fillStyle = '#ff6f8e'; x.beginPath(); x.ellipse(w / 2, my + 14, 15, 9, 0, 0, TAU); x.fill();
+    } else if (kind === 'stun') {
+      x.lineWidth = 9; x.beginPath(); x.moveTo(w / 2 - 34, my); for (let k = 0; k < 4; k++) x.quadraticCurveTo(w / 2 - 26 + k * 17, my + (k % 2 ? 12 : -12), w / 2 - 17 + k * 17, my); x.stroke();
+    } else if (kind === 'up') {
+      x.beginPath(); x.ellipse(w / 2, my + 4, 14, 17, 0, 0, TAU); x.fill();
+    } else {
+      x.lineWidth = 10; x.beginPath(); x.moveTo(w / 2 - 22, my - 2); x.quadraticCurveTo(w / 2, my + 18, w / 2 + 22, my - 2); x.stroke();
+    }
   });
   ['open', 'blink', 'happy', 'stun', 'up'].forEach(k => { FACE[k] = mk(k); });
 }
@@ -715,35 +762,38 @@ function surfaceZ(shape, x, y) {
   if (shape === 'star') return 0.215;
   if (shape === 'diamond') { const r = y < 0.56 ? 0.06 + 0.44 * Math.max(0, y - 0.01) / 0.55 : y > 0.64 ? 0.5 - 0.44 * Math.min(1, (y - 0.64) / 0.51) : 0.5; return r * 0.7071; }
   if (shape === 'triangle') { const r = 0.5 + (0.14 - 0.5) * Math.min(1, Math.max(0, (y - 0.2) / 0.86)); return Math.sqrt(Math.max(0.0004, r * r - x * x)); }
-  let r = 0.36;
-  if (y > 0.86) r = Math.sqrt(Math.max(0, 0.1296 - (y - 0.86) * (y - 0.86)));
-  else if (y < 0.36) r = Math.sqrt(Math.max(0, 0.1296 - (0.36 - y) * (0.36 - y)));
+  const r = beanR(y);
   return Math.sqrt(Math.max(0.0004, r * r - x * x));
 }
 const FACEGEO = {};
 function faceGeo(shape, ey) {
   if (FACEGEO[shape]) return FACEGEO[shape];
-  const g = new THREE.PlaneGeometry(0.62, 0.39, 20, 12), p = g.attributes.position;
+  const g = new THREE.PlaneGeometry(0.74, 0.52, 24, 16), p = g.attributes.position;
   for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i) + ey; p.setXYZ(i, x, y, surfaceZ(shape, x, y) + 0.012); }
   g.computeVertexNormals(); g.userData.shared = true;
   return (FACEGEO[shape] = g);
 }
 function shapeInfo(shape) {
   return {
-    round: { top: 1.22, ey: 0.82 },
-    square: { top: 1.12, ey: 0.76 },
-    triangle: { top: 1.18, ey: 0.5 },
-    diamond: { top: 1.16, ey: 0.64 },
-    star: { top: 1.24, ey: 0.64 }
-  }[shape] || { top: 1.22, ey: 0.82 };
+    round: { top: 1.14, ey: 0.68, sh: 0.42, shy: 0.46 },
+    square: { top: 1.12, ey: 0.76, sh: 0.38, shy: 0.5 },
+    triangle: { top: 1.18, ey: 0.5, sh: 0.4, shy: 0.36 },
+    diamond: { top: 1.16, ey: 0.64, sh: 0.45, shy: 0.52 },
+    star: { top: 1.24, ey: 0.64, sh: 0.36, shy: 0.5 }
+  }[shape] || { top: 1.14, ey: 0.68, sh: 0.42, shy: 0.46 };
 }
 function makeRunner(p) {
   const shape = p.shape || 'round', acc = p.skin ? p.skin.acc : 'none', info = shapeInfo(shape);
   const root = new THREE.Group(), lean = new THREE.Group(), body = new THREE.Group(); root.add(lean); lean.add(body);
-  const bc = new THREE.Color(p.color), hsl = {}; bc.getHSL(hsl); bc.setHSL(hsl.h, Math.min(1, hsl.s * 1.25), hsl.l * 0.86);
-  const mat = addRim(new THREE.MeshStandardMaterial({ color: bc, envMap: envTex, envMapIntensity: 0.75, roughness: 0.24, metalness: 0, flatShading: shape === 'diamond' }));
+  /* candy vinyl: pastel game colours pushed to saturated toy colours, clear coat on High */
+  const bc = new THREE.Color(p.color), hsl = {}; bc.getHSL(hsl); bc.setHSL(hsl.h, Math.min(1, hsl.s * 1.5 + 0.08), Math.min(0.62, hsl.l * 0.82));
+  const flat = shape === 'diamond';
+  const mat = addRim(quality.level >= 2
+    ? new THREE.MeshPhysicalMaterial({ color: bc, roughness: 0.45, clearcoat: 0.85, clearcoatRoughness: 0.14, envMapIntensity: 0.9, flatShading: flat })
+    : new THREE.MeshStandardMaterial({ color: bc, roughness: 0.3, envMapIntensity: 0.8, flatShading: flat }));
   const mesh = new THREE.Mesh(GEO[shape] || GEO.round, mat); mesh.castShadow = true; body.add(mesh);
-  const hull = new THREE.Mesh(GEO[shape] || GEO.round, MAT.hull); hull.scale.setScalar(1.045); hull.position.y = -0.02; body.add(hull);
+  /* only the player's runner gets an outline: a gold one */
+  if (p.you) { const hull = new THREE.Mesh(GEO[shape] || GEO.round, MAT.youHull); hull.scale.set(1.075, 1.04, 1.075); hull.position.y = -0.025; body.add(hull); }
   const faceMat = new THREE.MeshBasicMaterial({ map: FACE.open, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   const face = new THREE.Mesh(faceGeo(shape, info.ey), faceMat); face.renderOrder = 2; body.add(face);
   const top = info.top;
@@ -770,18 +820,17 @@ function makeRunner(p) {
   } else if (acc === 'star') {
     const s = new THREE.Mesh(GEO.topStar, MAT.goldGlow); s.position.y = top + 0.2; body.add(s);
   }
-  const feet = [-1, 1].map(() => { const f = new THREE.Mesh(GEO.foot, MAT.foot); f.scale.set(1, 0.65, 1.35); root.add(f); return f; });
   const bubble = new THREE.Mesh(GEO.bubble, MAT.bubble); bubble.position.y = 0.62; bubble.visible = false; body.add(bubble);
   const stars = [0, 1, 2].map(() => { const s = new THREE.Mesh(GEO.smallStar, MAT.star); s.visible = false; body.add(s); return s; });
-  const blob = new THREE.Mesh(GEO.blob, MAT.blob.clone()); blob.renderOrder = 1; scene.add(blob);
   scene.add(root);
   return {
-    root, lean, body, mesh, mat, face, faceMat, feet, bubble, stars, blob, top, shape, sig: sigOf(p),
+    root, lean, body, mesh, mat, face, faceMat, bubble, stars, top, shape, info, sig: sigOf(p),
+    limbCol: bc.clone().multiplyScalar(0.92), soleCol: bc.clone().multiplyScalar(0.8), armZ: 0.55, armX: [0, 0],
     sq: 1, sqv: 0, tilt: 0, tiltv: 0, spin: 0, hop: 0, hopv: 0, st: { stun: -9, air: -9, out: false, duck: -9 },
     blinkAt: 1 + Math.random() * 3, faceKind: 'open', happyUntil: -9, fly: null, lastStep: 0, lastT: null
   };
 }
-function sigOf(p) { return (p.shape || 'round') + '|' + (p.skin ? p.skin.acc : 'none') + '|' + p.color; }
+function sigOf(p) { return (p.shape || 'round') + '|' + (p.skin ? p.skin.acc : 'none') + '|' + p.color + '|' + (p.you ? 1 : 0); }
 function jumpH(u) { u = Math.min(1, Math.max(0, u)); return 1 - Math.pow(Math.abs(2 * u - 1), 2.4); }
 function setFace(rn, k) { if (rn.faceKind !== k) { rn.faceKind = k; rn.faceMat.map = FACE[k]; } }
 
@@ -807,7 +856,6 @@ function updateRunner(rn, p, i, g, V, now, dt) {
   rn.st.stun = p.stun; rn.st.air = p.air; rn.st.out = p.out; rn.st.duck = p.duck;
 
   if (p.out) {
-    rn.blob.visible = false;
     if (!rn.fly) { rn.root.visible = false; return { x, z, top: 0.2, out: true }; }
     const ft = now - rn.fly.t0;
     if (ft > 1.6) { rn.root.visible = false; return { x, z, top: 0.2, out: true }; }
@@ -816,10 +864,9 @@ function updateRunner(rn, p, i, g, V, now, dt) {
     rn.body.rotation.z = rn.fly.spin * ft; rn.body.rotation.x = rn.fly.spin * 0.6 * ft;
     rn.body.scale.setScalar(0.85 * Math.max(0.2, 1 - ft * 0.35));
     setFace(rn, 'stun');
-    rn.feet.forEach(ft2 => { ft2.visible = false; });
     return { x: rn.root.position.x, z: rn.root.position.z, top: rn.root.position.y + 1, out: true };
   }
-  rn.root.visible = true; rn.feet.forEach(ft2 => { ft2.visible = true; });
+  rn.root.visible = true;
   rn.body.rotation.set(0, 0, 0);
   let state = 'run', jump = 0;
   if (t < p.stun) state = 'stun';
@@ -850,16 +897,39 @@ function updateRunner(rn, p, i, g, V, now, dt) {
   const rel = hd - yaw, leanAmt = (running ? 0.16 : state === 'jump' ? 0.1 : 0) + rn.tilt * -0.35;
   tmpV.set(Math.cos(rel), 0, -Math.sin(rel));
   rn.lean.quaternion.setFromAxisAngle(tmpV, leanAmt);
-  rn.body.position.y = jump + bob + rn.hop;
+  rn.body.position.y = LEG + jump + bob + rn.hop;
   rn.body.scale.set(S * sx, S * rn.sq, S * sx);
   if (state === 'stun') rn.body.rotation.y = Math.sin(t * 18) * 0.25;
   const stride = running ? Math.sin(ph) : state === 'jump' ? 0.7 : 0;
-  rn.feet.forEach((ft2, k) => {
-    const s = k ? 1 : -1, lift = running ? Math.max(0, s * Math.sin(ph)) * 0.08 : 0;
-    const fx = s * 0.17 * S * sx, fz = s * stride * 0.15 * S, cr = Math.cos(rel), srr = Math.sin(rel);
-    ft2.position.set(fx * cr + fz * srr, 0.06 + lift + jump * 0.85 + rn.hop, -fx * srr + fz * cr);
-    ft2.rotation.y = rel;
-  });
+  rn.root.updateMatrixWorld(true);
+  /* sneakers (instanced across all runners), toes along the running direction */
+  for (let k = 0; k < 2; k++) {
+    const s = k ? 1 : -1, lift = running ? Math.max(0, s * Math.sin(ph)) * 0.09 : 0;
+    const fx = s * 0.19 * S * sx, fz = s * stride * 0.17 * S, cr = Math.cos(rel), srr = Math.sin(rel);
+    tmpV.set(fx * cr + fz * srr, lift + jump * 0.85 + rn.hop, -fx * srr + fz * cr).applyMatrix4(rn.root.matrixWorld);
+    tmpQ.setFromAxisAngle(Y_AXIS, yaw + rel + (running ? s * Math.cos(ph) * 0.0 : 0));
+    tmpQ2.setFromAxisAngle(X_AXIS, running ? -Math.max(0, s * Math.cos(ph)) * 0.35 : state === 'jump' ? 0.3 : 0); tmpQ.multiply(tmpQ2);
+    tmpM.compose(tmpV, tmpQ, tmpS.setScalar(S * 1.3));
+    partPush('up', tmpM); partPush('sole', tmpM, rn.soleCol);
+  }
+  /* mitten arms: pump while running, up on a jump, out on a duck, flail when stunned */
+  let az = 0.55, axA = 0;
+  if (state === 'jump' || winning) { az = 2.45; axA = -0.25; }
+  else if (state === 'duck') { az = 1.3; axA = 0.35; }
+  else if (state === 'stun') az = 1.8;
+  rn.armZ += (az - rn.armZ) * Math.min(1, dt * 16);
+  tmpQ3.copy(rn.root.quaternion).multiply(rn.lean.quaternion);
+  if (state === 'stun') { tmpQ2.setFromAxisAngle(Y_AXIS, rn.body.rotation.y); tmpQ3.multiply(tmpQ2); }
+  for (let k = 0; k < 2; k++) {
+    const s = k ? 1 : -1;
+    let a = rn.armZ, b = running ? s * stride * 0.95 : axA;
+    if (state === 'stun') { a += Math.sin(now * 24 + s * 1.3) * 0.7; b = Math.sin(now * 19 + s) * 0.6; }
+    rn.armX[k] += (b - rn.armX[k]) * Math.min(1, dt * 20);
+    tmpV.set(s * rn.info.sh, rn.info.shy, 0.02); rn.body.localToWorld(tmpV);
+    tmpQ.copy(tmpQ3); tmpQ2.setFromAxisAngle(X_AXIS, rn.armX[k]); tmpQ.multiply(tmpQ2); tmpQ2.setFromAxisAngle(Z_AXIS, s * a); tmpQ.multiply(tmpQ2);
+    tmpM.compose(tmpV, tmpQ, tmpS.setScalar(S * (0.94 + 0.06 * rn.sq)));
+    partPush('arms', tmpM, rn.limbCol);
+  }
   // face
   if (state === 'stun') setFace(rn, 'stun');
   else if (winning || now < rn.happyUntil) setFace(rn, 'happy');
@@ -869,13 +939,31 @@ function updateRunner(rn, p, i, g, V, now, dt) {
   if (rn.bubble.visible) rn.bubble.rotation.y = now;
   rn.stars.forEach((s, k) => { s.visible = state === 'stun'; if (s.visible) { const a = now * 6 + k * TAU / 3; s.position.set(Math.cos(a) * 0.4, rn.top + 0.2 + Math.sin(a * 2) * 0.04, Math.sin(a) * 0.4); s.rotation.y = a; } });
   // contact shadow
-  rn.blob.visible = true; rn.blob.position.set(x, 0.008, z);
-  const bs = 0.95 * S * sx * (1 - Math.min(0.5, (jump + rn.hop) * 0.35)); rn.blob.scale.set(bs, 1, bs);
-  rn.blob.material.opacity = 0.5 - Math.min(0.3, (jump + rn.hop) * 0.25);
+  const bs = 1.05 * S * sx * (1 - Math.min(0.55, (jump + rn.hop) * 0.4));
+  tmpM.compose(tmpV.set(x, 0.008, z), tmpQ.identity(), tmpS.set(bs, 1, bs)); partPush('blob', tmpM);
   // running dust for your runner
   if (p.you && running && now - rn.lastStep > 0.22) { rn.lastStep = now; emitDust(x, 0.04, z, 1, 0xdfe4ff, 0.16, 0.5); }
-  return { x, z, top: rn.top * S * rn.sq + jump + bob + rn.hop + 0.1, out: false };
+  return { x, z, top: LEG + rn.top * S * rn.sq + jump + bob + rn.hop + 0.1, out: false };
 }
+
+/* ---------- instanced runner parts: every runner's arms, shoes and contact shadow in 4 draw calls ---------- */
+const LEG = 0.15;
+const X_AXIS = new THREE.Vector3(1, 0, 0), Y_AXIS = new THREE.Vector3(0, 1, 0), Z_AXIS = new THREE.Vector3(0, 0, 1);
+const tmpQ2 = new THREE.Quaternion(), tmpQ3 = new THREE.Quaternion();
+let PARTS = null;
+function makeParts() {
+  const cap = 64, white = new THREE.Color(1, 1, 1);
+  const mk = (geo, mat, shadow, colored) => {
+    const m = new THREE.InstancedMesh(geo, mat, cap); m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.count = 0; m.frustumCulled = false; m.castShadow = shadow;
+    if (colored) for (let i = 0; i < cap; i++) m.setColorAt(i, white);
+    scene.add(m); return m;
+  };
+  PARTS = { arms: mk(GEO.arm, MAT.limb, true, true), up: mk(GEO.shoeUp, MAT.shoeUp, true, false), sole: mk(GEO.shoeSole, MAT.shoeSole, false, true), blob: mk(GEO.blob, MAT.blob, false, false), n: {} };
+  PARTS.blob.renderOrder = 1;
+}
+function partsBegin() { if (!PARTS) makeParts(); PARTS.n = { arms: 0, up: 0, sole: 0, blob: 0 }; }
+function partPush(k, m, c) { const im = PARTS[k], i = PARTS.n[k]; if (i >= im.instanceMatrix.count) return; im.setMatrixAt(i, m); if (c) im.setColorAt(i, c); PARTS.n[k] = i + 1; }
+function partsEnd() { ['arms', 'up', 'sole', 'blob'].forEach(k => { const im = PARTS[k]; im.count = PARTS.n[k]; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; }); }
 
 /* ---------- little effects: dust puffs, impact rings, camera punch ---------- */
 let dustPool = [], ringPool = [], zoomPunch = 0, dustTex;
@@ -1026,6 +1114,7 @@ HR3D.render = function (g, view) {
   if (curArena.sc.update) curArena.sc.update(now);
   // runners
   syncPool(runnerPool, g.players, p => makeRunner(p), p => sigOf(p));
+  partsBegin();
   const out = [];
   g.players.forEach((p, i) => {
     const rn = runnerPool[i];
@@ -1034,6 +1123,7 @@ HR3D.render = function (g, view) {
     tmpV.set(r.x, r.top, r.z).project(camera); const ty = (1 - tmpV.y) / 2 * H;
     out.push({ cx: fx, foot: fy, top: ty });
   });
+  partsEnd();
   if (!youRing) { youRing = new THREE.Group(); youRing.add(new THREE.Mesh(GEO.ring, MAT.ring)); youRing.add(new THREE.Mesh(GEO.disc, MAT.ringFill)); scene.add(youRing); }
   const you = g.players[0];
   youRing.visible = !you.out;
