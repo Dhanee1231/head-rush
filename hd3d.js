@@ -332,6 +332,7 @@ function rig(V, W, H) {
 const BOARD = {
   neon: { kind: 'hex', base: ['#16183c', '#0d0e26'], line: 'rgba(110,200,255,0.22)', glow: 'rgba(63,208,255,0.35)', rough: [0.18, 0.5], metal: 0.35, side: 'panel', sideCol: ['#1a1c42', '#07081a'], depth: 0.6, lip: 0x3fd0ff, lipLow: 0xff4fa3, emis: 1 },
   lava: { kind: 'slab', base: ['#2c2220', '#1b1413'], gap: '#120a08', gapGlow: 'rgba(255,64,10,0.55)', rings: [0.75, 1.3, 1.85, 2.4, 2.95, 3.5, 4.05, 4.6], slab: [0.55, 0.6], gapW: 0.028, tones: [[42, 33, 30], [52, 40, 35], [36, 28, 26], [58, 45, 38]], rough: [0.75, 0.95], metal: 0.05, side: 'stone', sideCol: ['#2a201d', '#0d0807'], hub: ['#4a3a34', '#140c0a'], depth: 9, lip: 0x3a2a24, lipGlow: 0xff5a14, emis: 0.32, cracks: 'rgba(255,110,30,0.75)' },
+  gear: { kind: 'tread', base: ['#2b2a2e', '#17161a'], inlay: '#a87c46', seams: [0.85, 1.6, 2.45, 3.95], rough: [0.3, 0.75], metal: 0.7, side: 'steel', sideCol: ['#2a241e', '#0b0907'], hub: ['#7a5c3a', '#24190f'], depth: 1.1, lip: 0xa87c46, lipGlow: 0xffa040, emis: 0.7 },
   frost: { kind: 'slab', base: ['#203f62', '#132a46'], gap: '#0b1a33', gapGlow: 'rgba(150,230,255,0.16)', rings: [0.75, 1.65, 2.5, 3.25, 4.1], slab: [1.1, 0.9], gapW: 0.03, tones: [[34, 66, 104], [40, 76, 118], [30, 58, 94], [46, 86, 128]], rough: [0.08, 0.3], metal: 0.15, side: 'ice', sideCol: ['#3d6a96', '#0c1a30'], hub: ['#6a90bc', '#14284a'], depth: 1.4, lip: 0xcfe9ff, lipGlow: 0x9fe3ff, emis: 0.8, cracks: 'rgba(230,248,255,0.55)' }
 };
 function boardBase(B, V, x, size, s, c, emissive, rough) {
@@ -348,6 +349,37 @@ function boardBase(B, V, x, size, s, c, emissive, rough) {
       if (rough) { const k = Math.round(30 + v * 60); x.fillStyle = shade(k); x.fill(); }
       else if (emissive) { if (v < 0.06) { x.fillStyle = 'rgba(63,208,255,0.12)'; x.fill(); } x.strokeStyle = B.glow; x.lineWidth = s * 0.012; x.globalAlpha = 0.35; x.stroke(); x.globalAlpha = 1; }
       else { x.fillStyle = `rgba(${v < 0.5 ? '255,255,255' : '0,0,0'},${0.02 + (v % 0.5) * 0.06})`; x.fill(); x.strokeStyle = B.line; x.lineWidth = s * 0.014; x.stroke(); }
+    }
+    return;
+  }
+  if (B.kind === 'tread') {
+    /* riveted steel tread plate: sector plates, raised diamond tread, brass inlay rings with rivets */
+    if (emissive) { x.fillStyle = '#000'; x.fillRect(0, 0, size, size); return; }
+    const g = x.createRadialGradient(c, c, 0, c, c, E * s); g.addColorStop(0, B.base[0]); g.addColorStop(1, B.base[1]);
+    x.fillStyle = rough ? shade(Math.round(255 * B.rough[1])) : g; x.fillRect(0, 0, size, size);
+    const st = 0.16 * s;
+    for (let yy = 0; yy < size + st; yy += st) for (let xx = 0, k = 0; xx < size + st; xx += st, k++) {
+      const px = xx + ((yy / st) % 2 ? st / 2 : 0);
+      x.save(); x.translate(px, yy); x.rotate(((k + Math.round(yy / st)) % 2 ? 1 : -1) * Math.PI / 4);
+      x.fillStyle = rough ? shade(Math.round(255 * B.rough[0])) : 'rgba(255,255,255,0.07)'; x.beginPath(); x.ellipse(0, 0, st * 0.34, st * 0.08, 0, 0, TAU); x.fill();
+      if (!rough) { x.fillStyle = 'rgba(0,0,0,0.25)'; x.beginPath(); x.ellipse(st * 0.02, st * 0.03, st * 0.34, st * 0.06, 0, 0, Math.PI); x.fill(); }
+      x.restore();
+    }
+    /* plate seams: rings + radial cuts, each with a rivet row */
+    const seam = (a0, rr0, rr1) => { const p = P(rr0, a0), q = P(rr1, a0); x.beginPath(); x.moveTo(p[0], p[1]); x.lineTo(q[0], q[1]); x.stroke(); };
+    x.strokeStyle = rough ? '#fff' : 'rgba(0,0,0,0.6)'; x.lineWidth = s * 0.02;
+    B.seams.forEach(rr => { x.beginPath(); x.arc(c, c, rr * s, 0, TAU); x.stroke(); });
+    for (let i = 0; i < 16; i++) { const a = i / 16 * TAU + 0.1; seam(a, 0.85, 1.6); seam(a + 0.2, 1.6, 2.45); seam(a, 3.95, E); }
+    for (let i = 0; i < 24; i++) seam(i / 24 * TAU + 0.05, 2.45, 3.95);
+    if (!rough) {
+      /* brass inlay bands (hub surround and outer band) */
+      [[0.8, 0.07], [E - 0.2, 0.09]].forEach(([rr, wd]) => { x.strokeStyle = B.inlay; x.lineWidth = wd * s; x.beginPath(); x.arc(c, c, rr * s, 0, TAU); x.stroke(); x.strokeStyle = 'rgba(255,230,180,0.35)'; x.lineWidth = s * 0.008; x.beginPath(); x.arc(c, c, (rr - wd * 0.3) * s, 0, TAU); x.stroke(); });
+      /* rivets along the seams */
+      const rivet = (p) => { x.fillStyle = 'rgba(0,0,0,0.55)'; x.beginPath(); x.arc(p[0] + s * 0.006, p[1] + s * 0.008, s * 0.022, 0, TAU); x.fill(); x.fillStyle = '#5a5248'; x.beginPath(); x.arc(p[0], p[1], s * 0.02, 0, TAU); x.fill(); x.fillStyle = 'rgba(255,240,210,0.35)'; x.beginPath(); x.arc(p[0] - s * 0.006, p[1] - s * 0.006, s * 0.007, 0, TAU); x.fill(); };
+      B.seams.forEach(rr => { const n = Math.round(rr * 9); for (let i = 0; i < n; i++) { const a = (i + 0.5) / n * TAU; rivet(P(rr - 0.05, a)); rivet(P(rr + 0.05, a)); } });
+      for (let i = 0; i < 24; i++) { const a = (i + 0.5) / 24 * TAU; rivet(P(E - 0.2, a)); }
+      /* wear: a few scuffs and oil stains */
+      for (let i = 0; i < 40; i++) { const p = P(0.9 + r() * (E - 1), r() * TAU), rr = s * (0.08 + r() * 0.3), gg = x.createRadialGradient(p[0], p[1], 0, p[0], p[1], rr); gg.addColorStop(0, `rgba(${r() < 0.6 ? '0,0,0,0.18' : '120,90,50,0.08'})`); gg.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = gg; x.fillRect(p[0] - rr, p[1] - rr, rr * 2, rr * 2); }
     }
     return;
   }
@@ -412,7 +444,12 @@ function sideTexture(B) {
   const t = canvasTex(512, 256, (x, w, h) => {
     const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, B.sideCol[0]); g.addColorStop(1, B.sideCol[1]); x.fillStyle = g; x.fillRect(0, 0, w, h);
     const r = rnd(23);
-    if (B.side === 'panel') { x.fillStyle = 'rgba(63,208,255,0.5)'; x.fillRect(0, 18, w, 4); x.fillStyle = 'rgba(0,0,0,0.35)'; for (let i = 0; i < 8; i++) x.fillRect(i * 64, 0, 3, h); }
+    if (B.side === 'steel') {
+      x.fillStyle = 'rgba(168,124,70,0.55)'; x.fillRect(0, 10, w, 10); x.fillRect(0, h - 26, w, 8);
+      for (let i = 0; i < 8; i++) { x.fillStyle = 'rgba(0,0,0,0.5)'; x.fillRect(i * 64, 20, 3, h - 46); for (let k = 0; k < 4; k++) { x.fillStyle = 'rgba(0,0,0,0.5)'; x.beginPath(); x.arc(i * 64 + 8 + k * 16, 15, 3.4, 0, TAU); x.fill(); x.fillStyle = 'rgba(255,220,160,0.4)'; x.beginPath(); x.arc(i * 64 + 7 + k * 16, 14, 1.6, 0, TAU); x.fill(); } }
+      const gg = x.createLinearGradient(0, 20, 0, h); gg.addColorStop(0, 'rgba(255,200,120,0.06)'); gg.addColorStop(1, 'rgba(0,0,0,0.3)'); x.fillStyle = gg; x.fillRect(0, 20, w, h - 20);
+    }
+    else if (B.side === 'panel') { x.fillStyle = 'rgba(63,208,255,0.5)'; x.fillRect(0, 18, w, 4); x.fillStyle = 'rgba(0,0,0,0.35)'; for (let i = 0; i < 8; i++) x.fillRect(i * 64, 0, 3, h); }
     else {
       const rows = B.side === 'stone' ? 6 : 3, rh = h / rows;
       for (let j = 0; j < rows; j++) { const o = r() * 60; for (let i = -1; i < 6; i++) { const bx = o + i * (w / 5) + (j % 2) * 40; x.fillStyle = `rgba(${B.side === 'ice' ? '200,235,255' : '255,240,230'},${0.03 + r() * 0.06})`; x.fillRect(bx + 3, j * rh + 3, w / 5 - 6, rh - 6); x.strokeStyle = 'rgba(0,0,0,0.45)'; x.lineWidth = 4; x.strokeRect(bx + 2, j * rh + 2, w / 5 - 4, rh - 4); } }
@@ -431,9 +468,9 @@ function buildArenaCore(V, A) {
   if (B) {
     /* platform with mass: textured side wall, a lip ring on top, a glow line where it meets the world */
     const depth = B.depth;
-    const side = new THREE.Mesh(new THREE.CylinderGeometry(E, E * (depth > 3 ? 0.86 : 0.98), depth, 96, 1, true).translate(0, -depth / 2, 0), new THREE.MeshStandardMaterial({ map: sideTexture(B), roughness: 0.8, metalness: B.side === 'panel' ? 0.5 : 0.05 }));
+    const side = new THREE.Mesh(new THREE.CylinderGeometry(E, E * (depth > 3 ? 0.86 : 0.98), depth, 96, 1, true).translate(0, -depth / 2, 0), new THREE.MeshStandardMaterial({ map: sideTexture(B), roughness: B.side === 'steel' ? 0.5 : 0.8, metalness: B.side === 'panel' || B.side === 'steel' ? 0.5 : 0.05 }));
     side.receiveShadow = true; grp.add(side);
-    const lipMat = B.side === 'panel' ? new THREE.MeshStandardMaterial({ color: B.lip, emissive: B.lip, emissiveIntensity: 1.6 }) : new THREE.MeshStandardMaterial({ color: B.lip, roughness: B.side === 'ice' ? 0.2 : 0.85, metalness: 0.05 });
+    const lipMat = B.side === 'panel' ? new THREE.MeshStandardMaterial({ color: B.lip, emissive: B.lip, emissiveIntensity: 1.6 }) : new THREE.MeshStandardMaterial({ color: B.lip, roughness: B.side === 'ice' ? 0.2 : B.side === 'steel' ? 0.32 : 0.85, metalness: B.side === 'steel' ? 1 : 0.05 });
     const lip = new THREE.Mesh(new THREE.TorusGeometry(E, B.side === 'panel' ? 0.045 : 0.11, 10, 160).rotateX(Math.PI / 2).scale(1, B.side === 'panel' ? 1 : 0.6, 1), lipMat);
     lip.position.y = 0.0; lip.castShadow = false; grp.add(lip);
     const lowC = B.lipLow || B.lipGlow;
@@ -687,34 +724,83 @@ function sceneryLava(V) {
 
 function sceneryGear(V) {
   const g = new THREE.Group(), r = rnd(31);
-  const sky = skyTexture([[0, '#0e0b09'], [1, '#1d1712']]);
-  const wallTex = canvasTex(512, 512, (x, w, h) => { x.fillStyle = '#231b14'; x.fillRect(0, 0, w, h); x.strokeStyle = 'rgba(0,0,0,0.4)'; x.lineWidth = 4; for (let i = 0; i <= 4; i++) { x.beginPath(); x.moveTo(i * 128, 0); x.lineTo(i * 128, h); x.stroke(); x.beginPath(); x.moveTo(0, i * 128); x.lineTo(w, i * 128); x.stroke(); } x.fillStyle = 'rgba(233,174,98,0.3)'; for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { x.beginPath(); x.arc(i * 128 + 10, j * 128 + 10, 3, 0, TAU); x.fill(); } });
-  wallTex.wrapS = wallTex.wrapT = THREE.RepeatWrapping; wallTex.repeat.set(20, 8);
-  const wall = new THREE.Mesh(new THREE.PlaneGeometry(120, 48), new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.8, metalness: 0.4 })); wall.position.set(0, 23, -20); g.add(wall);
-  const floorTex = canvasTex(256, 256, (x, w, h) => { x.fillStyle = '#2a231c'; x.fillRect(0, 0, w, h); x.strokeStyle = 'rgba(233,174,98,0.14)'; x.lineWidth = 3; x.strokeRect(2, 2, w - 4, h - 4); x.fillStyle = 'rgba(255,255,255,0.03)'; for (let i = 0; i < 40; i++) x.fillRect(Math.random() * w, Math.random() * h, 20, 2); });
-  floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping; floorTex.repeat.set(40, 15);
-  const fl = new THREE.Mesh(new THREE.PlaneGeometry(120, 45).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.5, metalness: 0.6 })); fl.position.set(0, -0.6, 2); fl.receiveShadow = true; g.add(fl);
-  const brass = new THREE.MeshStandardMaterial({ color: 0xb88a4e, metalness: 1, roughness: 0.32 });
-  const iron = new THREE.MeshStandardMaterial({ color: 0x6a5236, metalness: 0.9, roughness: 0.5 });
-  const gears = [];
-  [[-11, 7.5, 6.5, 18, 1], [4, 12.5, 5, 14, -1], [13.5, 5, 4, 12, 1], [-2, 3.4, 2.6, 10, -1], [22, 13, 7, 20, -1], [-24, 15, 6, 16, 1], [-19, 3, 3, 10, -1], [30, 4, 4, 12, 1]].forEach((d, i) => {
-    const geo = new THREE.ExtrudeGeometry(gearShape(d[2], d[3]), { depth: 0.6, bevelEnabled: true, bevelThickness: 0.12, bevelSize: 0.1, bevelSegments: 2, curveSegments: 6 });
-    const m = new THREE.Mesh(geo, i % 2 ? iron : brass); m.position.set(d[0], d[1], -19.4); g.add(m); gears.push({ m, sp: d[4] * 0.25 * (8 / d[3]) });
-  });
-  const pipeMat = new THREE.MeshStandardMaterial({ color: 0x5a4632, metalness: 0.8, roughness: 0.4 });
-  [[1.4, 0.45], [10, 0.38], [17, 0.55]].forEach(p => { const m = new THREE.Mesh(new THREE.CylinderGeometry(p[1], p[1], 120, 16).rotateZ(Math.PI / 2), pipeMat); m.position.set(0, p[0], -18.6); g.add(m); });
-  [-30, -16, 9, 26].forEach(x => { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 48, 16), pipeMat); m.position.set(x, 23, -18.5); g.add(m); });
-  const crate = new THREE.MeshStandardMaterial({ color: 0x6a4a2a, roughness: 0.8 });
-  [[-9.8, -11.8, 2.4, 2], [-11.6, -8.6, 1.9, 1.2], [9.8, -10.9, 2.8, 1.6]].forEach(b => { const m = new THREE.Mesh(new RoundedBoxGeometry(b[2], b[3], b[2] * 0.8, 2, 0.06), crate); m.position.set(b[0], -0.6 + b[3] / 2, b[1]); m.castShadow = m.receiveShadow = true; g.add(m); });
-  const lampMat = new THREE.MeshStandardMaterial({ color: 0xffd090, emissive: 0xffb050, emissiveIntensity: 3 });
-  const coneTex = canvasTex(64, 256, (x, w, h) => { const gg = x.createLinearGradient(0, 0, 0, h); gg.addColorStop(0, 'rgba(255,190,110,0.28)'); gg.addColorStop(1, 'rgba(255,190,110,0)'); x.fillStyle = gg; x.fillRect(0, 0, w, h); });
-  [[-8, -12], [8, -11], [-15, -17], [15, -16], [0, -16]].forEach(l => {
-    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 10), lampMat); bulb.position.set(l[0], 9, l[1]); g.add(bulb);
-    const shade = new THREE.Mesh(new THREE.ConeGeometry(0.8, 0.6, 20, 1, true), new THREE.MeshStandardMaterial({ color: 0x3a2d22, metalness: 0.8, roughness: 0.4, side: THREE.DoubleSide })); shade.position.set(l[0], 9.35, l[1]); g.add(shade);
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(3.4, 9.6, 24, 1, true), new THREE.MeshBasicMaterial({ map: coneTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })); cone.position.set(l[0], 4.2, l[1]); g.add(cone);
-    const pl = new THREE.PointLight(0xffb060, 8, 14, 2); pl.position.set(l[0], 8.4, l[1]); g.add(pl);
-  });
-  return { group: g, sky, fog: [0x1d1712, 24, 80], hemi: [0xffd8a8, 0x2a1d10, 0.55], key: [0xffe0b8, 2.0], rim: [0xffc477, 2.0], bloom: [0.55, 0.45, 0.82], exposure: 1.05, update(t) { gears.forEach(o => { o.m.rotation.z = t * o.sp; }); } };
+  const sky = new THREE.Color(0x060403);
+  /* the tower's back wall: a huge backlit clock window with gear silhouettes in front of it.
+     The card is seen ~2.3x squashed vertically, so round things are painted as tall ellipses (SQ). */
+  const SQ = 2.3;
+  g.add(backdrop((x, w, h, hz) => {
+    const pr = rnd(32);
+    const wg = x.createLinearGradient(0, 0, 0, h); wg.addColorStop(0, '#040302'); wg.addColorStop(0.4, '#120c07'); wg.addColorStop(0.62, '#1a1209'); wg.addColorStop(1, '#080604'); x.fillStyle = wg; x.fillRect(0, 0, w, h);
+    for (let j = 0; j < 10; j++) for (let i = 0; i < 26; i++) { const pw = w / 26, ph = h / 10, px = i * pw + (j % 2) * pw / 2, py = j * ph; x.fillStyle = `rgba(255,200,140,${0.008 + pr() * 0.02})`; x.fillRect(px + 3, py + 3, pw - 6, ph - 6); x.strokeStyle = 'rgba(0,0,0,0.55)'; x.lineWidth = 3; x.strokeRect(px, py, pw, ph); }
+    const cx = w * 0.5, cy = h * 0.5, R = 88;
+    const ell = (fx, fy, rr) => { x.beginPath(); x.ellipse(fx, fy, rr, rr * SQ, 0, 0, TAU); };
+    /* warm spill on the wall around the window */
+    x.save(); x.translate(cx, cy); x.scale(1, SQ); const sp = x.createRadialGradient(0, 0, R * 0.8, 0, 0, R * 2.6); sp.addColorStop(0, 'rgba(255,150,60,0.22)'); sp.addColorStop(1, 'rgba(255,150,60,0)'); x.fillStyle = sp; x.fillRect(-R * 3, -R * 3, R * 6, R * 6); x.restore();
+    /* glass: dim amber, brighter at the centre (kept well below the bars) */
+    x.save(); x.translate(cx, cy); x.scale(1, SQ); const gl = x.createRadialGradient(0, -R * 0.15, 0, 0, 0, R); gl.addColorStop(0, '#8a5a22'); gl.addColorStop(0.55, '#5a3612'); gl.addColorStop(1, '#2a1607'); x.fillStyle = gl; x.beginPath(); x.arc(0, 0, R, 0, TAU); x.fill();
+    /* iron tracery: rim, inner ring, spokes, hour bars, hands */
+    x.strokeStyle = '#0c0805'; x.lineCap = 'round';
+    x.lineWidth = 12; x.beginPath(); x.arc(0, 0, R, 0, TAU); x.stroke();
+    x.lineWidth = 5; x.beginPath(); x.arc(0, 0, R * 0.62, 0, TAU); x.stroke(); x.beginPath(); x.arc(0, 0, R * 0.16, 0, TAU); x.stroke();
+    x.lineWidth = 3; for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; x.beginPath(); x.moveTo(Math.cos(a) * R * 0.16, Math.sin(a) * R * 0.16); x.lineTo(Math.cos(a) * R, Math.sin(a) * R); x.stroke(); }
+    x.lineWidth = 7; for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; x.beginPath(); x.moveTo(Math.cos(a) * R * 0.74, Math.sin(a) * R * 0.74); x.lineTo(Math.cos(a) * R * 0.9, Math.sin(a) * R * 0.9); x.stroke(); }
+    x.lineWidth = 8; x.beginPath(); x.moveTo(0, 0); x.lineTo(Math.cos(-2.2) * R * 0.5, Math.sin(-2.2) * R * 0.5); x.stroke(); x.lineWidth = 5; x.beginPath(); x.moveTo(0, 0); x.lineTo(Math.cos(-0.55) * R * 0.8, Math.sin(-0.55) * R * 0.8); x.stroke();
+    x.restore();
+    /* soft light shafts falling from the window */
+    x.save(); x.globalCompositeOperation = 'lighter';
+    [[-0.5, 0.05], [0.15, 0.04], [0.6, 0.035]].forEach(([dx, al]) => { const bx = cx + dx * R; const lg = x.createLinearGradient(0, cy, 0, h * 0.95); lg.addColorStop(0, `rgba(255,170,80,${al})`); lg.addColorStop(1, 'rgba(255,170,80,0)'); x.fillStyle = lg; x.beginPath(); x.moveTo(bx - 30, cy); x.lineTo(bx + 30, cy); x.lineTo(bx + 150 + dx * 120, h * 0.95); x.lineTo(bx + 20 + dx * 120, h * 0.95); x.closePath(); x.fill(); });
+    x.restore();
+    /* gear silhouettes in front of the glass and along the wall */
+    const gearSil = (gx, gy, gr, teeth, col, rot) => { x.save(); x.translate(gx, gy); x.scale(1, SQ); x.rotate(rot); x.fillStyle = col; x.beginPath(); for (let i = 0; i < teeth * 4; i++) { const a = i / (teeth * 4) * TAU, rr = (i % 4 === 1 || i % 4 === 2) ? gr : gr * 0.84; i ? x.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : x.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); } x.closePath(); x.fill(); x.globalCompositeOperation = 'destination-out'; x.beginPath(); x.arc(0, 0, gr * 0.2, 0, TAU); x.fill(); x.globalCompositeOperation = 'source-over'; x.restore(); };
+    gearSil(cx - R * 0.95, cy + R * 1.6, 62, 14, '#0a0705', 0.1); gearSil(cx + R * 0.9, cy + R * 1.9, 46, 10, '#0b0806', 0.3); gearSil(cx + R * 1.75, cy + R * 0.2, 54, 12, '#0d0907', 0); gearSil(cx - R * 1.9, cy - R * 0.6, 70, 16, '#0d0907', 0.2);
+    /* iron columns and a catwalk */
+    x.fillStyle = '#0a0705'; [cx - R * 2.6, cx + R * 2.5].forEach(px => { x.fillRect(px - 18, 0, 36, h); x.fillStyle = 'rgba(255,170,90,0.09)'; x.fillRect(px - 18, 0, 3, h); x.fillStyle = '#0a0705'; });
+    x.fillRect(0, cy + R * SQ * 1.15, w, 10); for (let i = 0; i < 80; i++) x.fillRect(i * w / 80, cy + R * SQ * 1.15 - 34, 3, 34); x.fillRect(0, cy + R * SQ * 1.15 - 36, w, 4);
+    const fl = x.createLinearGradient(0, h * 0.7, 0, h); fl.addColorStop(0, 'rgba(0,0,0,0)'); fl.addColorStop(1, 'rgba(0,0,0,0.7)'); x.fillStyle = fl; x.fillRect(0, h * 0.7, w, h * 0.3);
+  }));
+  /* machine-room floor: dark tread plate, fading into darkness */
+  const floorTex = canvasTex(256, 256, (x, w, h) => { x.fillStyle = '#17140f'; x.fillRect(0, 0, w, h); for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) { x.save(); x.translate(i * 32 + (j % 2) * 16, j * 32 + 8); x.rotate((i + j) % 2 ? 0.78 : -0.78); x.fillStyle = 'rgba(255,230,190,0.06)'; x.beginPath(); x.ellipse(0, 0, 10, 2.5, 0, 0, TAU); x.fill(); x.restore(); } x.strokeStyle = 'rgba(0,0,0,0.6)'; x.lineWidth = 3; x.strokeRect(1, 1, w - 2, h - 2); });
+  floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping; floorTex.repeat.set(20, 9);
+  const fl = new THREE.Mesh(new THREE.PlaneGeometry(64, 28).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.55, metalness: 0.6, envMapIntensity: 0.5 }));
+  fl.position.set(0, -1.1, -6); fl.receiveShadow = true; g.add(fl);
+  /* big slow gears half sunk into the floor around the board: one instanced draw */
+  const gearGeo = new THREE.ExtrudeGeometry(gearShape(1, 14), { depth: 0.22, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.04, bevelSegments: 2, curveSegments: 4 }).translate(0, 0, -0.11);
+  const gearMat = new THREE.MeshStandardMaterial({ color: 0x4a3622, metalness: 0.9, roughness: 0.38, envMapIntensity: 0.8 });
+  const GD = [[-6.4, 0.2, -9, 2.6, 1], [-3.2, 3.0, -15, 1.8, -1], [6.7, 0.8, -10.5, 3.1, -1], [3.5, 3.6, -16, 1.5, 1], [0.9, 5.3, -18, 1.1, -1], [-9.6, 3.2, -13, 1.9, -1]];
+  const gearIM = new THREE.InstancedMesh(gearGeo, gearMat, GD.length); gearIM.frustumCulled = false; g.add(gearIM);
+  /* brass pipes along the back wall and up the sides, with flanges: merged */
+  const brass = new THREE.MeshStandardMaterial({ color: 0x9a7040, metalness: 1, roughness: 0.34, envMapIntensity: 0.9 });
+  const pg = [];
+  [[0.0, -18.5, 0.34], [1.1, -18.6, 0.24]].forEach(q => pg.push(new THREE.CylinderGeometry(q[2], q[2], 50, 14).rotateZ(Math.PI / 2).translate(0, q[0], q[1])));
+  [[-8.6, -12.5], [8.8, -13]].forEach(q => { pg.push(new THREE.CylinderGeometry(0.28, 0.28, 14, 14).translate(q[0], 5.9, q[1])); [0.6, 2.6, 4.6].forEach(y => pg.push(new THREE.CylinderGeometry(0.4, 0.4, 0.18, 14).translate(q[0], y, q[1]))); });
+  for (let i = -4; i <= 4; i++) pg.push(new THREE.CylinderGeometry(0.46, 0.46, 0.16, 14).rotateZ(Math.PI / 2).translate(i * 5, 0, -18.5));
+  const pipes = new THREE.Mesh(mergeGeos(pg), brass); g.add(pipes);
+  /* hanging work lamps: bulbs, shades and light cones, each merged */
+  const LP = [[-4.6, 5.4, -8.6], [5.0, 5.8, -9.6]];
+  const lampMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc070).multiplyScalar(2.2) });
+  const coneTex = canvasTex(64, 256, (x, w, h) => { const gg = x.createLinearGradient(0, 0, 0, h); gg.addColorStop(0, 'rgba(255,180,100,0.16)'); gg.addColorStop(1, 'rgba(255,180,100,0)'); x.fillStyle = gg; x.fillRect(0, 0, w, h); const g2 = x.createLinearGradient(0, 0, w, 0); g2.addColorStop(0, 'rgba(0,0,0,1)'); g2.addColorStop(0.5, 'rgba(0,0,0,0)'); g2.addColorStop(1, 'rgba(0,0,0,1)'); x.globalCompositeOperation = 'destination-out'; x.fillStyle = g2; x.fillRect(0, 0, w, h); });
+  g.add(new THREE.Mesh(mergeGeos(LP.map(l => new THREE.SphereGeometry(0.2, 12, 8).translate(l[0], l[1] - 0.1, l[2]))), lampMat));
+  g.add(new THREE.Mesh(mergeGeos(LP.map(l => [new THREE.ConeGeometry(0.62, 0.46, 18, 1, true).translate(l[0], l[1] + 0.12, l[2]), new THREE.CylinderGeometry(0.02, 0.02, 6, 4).translate(l[0], l[1] + 3.3, l[2])]).flat()), new THREE.MeshStandardMaterial({ color: 0x2a2018, metalness: 0.8, roughness: 0.45, side: THREE.DoubleSide })));
+  const cones = new THREE.Mesh(mergeGeos(LP.map(l => new THREE.ConeGeometry(1.7, l[1] + 1.1, 24, 1, true).translate(l[0], (l[1] - 1.1) / 2, l[2]))), new THREE.MeshBasicMaterial({ map: coneTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }));
+  g.add(cones);
+  LP.forEach(l => { const pl = new THREE.PointLight(0xffb060, 9, 13, 2); pl.position.set(l[0], l[1] - 0.4, l[2]); g.add(pl); });
+  const back = new THREE.PointLight(0xff9a40, 14, 22, 1.6); back.position.set(0, 4, -16); g.add(back);
+  /* steam vents on the pipes: soft puffs, a hiss every few seconds */
+  const steam = makePuffs(48, softTex()); g.add(steam);
+  const vents = [[-8.6, 2.75, -12.2, 0.35], [8.8, 0.75, -12.7, -0.3], [3.6, 0.35, -18.1, 0.1]];
+  let lastT = null, acc = 0;
+  /* dust motes in the light */
+  const dust = motes(140, [-9, 9], [-1, 7], [-17, -3], 0xffc890, 0.07, 41); g.add(dust);
+  const steamCol = new THREE.Color(0.32, 0.27, 0.22);
+  return { group: g, sky, fog: [0x0c0805, 16, 58], hemi: [0xffd8a8, 0x1a120a, 0.6], key: [0xffe2c0, 2.2], rim: [0xffa850, 2.8], bloom: [0.85, 0.35, 1], exposure: 1.1, tint: 0x080402, vig: 0.5,
+    update(t) {
+      const dt = lastT === null ? 0 : Math.min(0.05, t - lastT); lastT = t;
+      GD.forEach((d, i) => { tmpQ.setFromAxisAngle(Z_AXIS, t * d[4] * 0.32 / d[3] + i); tmpM.compose(tmpV.set(d[0], d[1], d[2]), tmpQ, tmpS.setScalar(d[3])); gearIM.setMatrixAt(i, tmpM); });
+      gearIM.instanceMatrix.needsUpdate = true;
+      acc += dt;
+      while (acc > 0.07) { acc -= 0.07; vents.forEach((v, i) => { if ((t * 0.33 + i * 0.37) % 1 < 0.3) puff(steam, { x: v[0], y: v[1], z: v[2], vx: v[3] + (Math.random() - 0.5) * 0.3, vy: 1.1 + Math.random() * 0.5, vz: (Math.random() - 0.5) * 0.3, life: 1.4 + Math.random() * 0.6, size: 0.5, grow: 2.2, col: steamCol }); }); }
+      stepPuffs(steam, dt); stepMotes(dust, t);
+    } };
 }
 
 function crystalGeo(r, x, z, n, size) {
@@ -1210,6 +1296,43 @@ function stepFx(dt) {
     const k = 1 - r.life / 0.4; r.m.scale.setScalar(0.4 + k * 1.3); r.m.material.opacity = (1 - k) * 0.7;
   });
   zoomPunch *= Math.pow(0.0005, dt);
+}
+
+/* ---------- soft billboard puffs (steam, smoke, sparks): one additive InstancedMesh per system, faded by instance colour ---------- */
+let softT;
+function softTex() { return softT || (softT = canvasTex(64, 64, (x, w) => { const gg = x.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); gg.addColorStop(0, 'rgba(255,255,255,1)'); gg.addColorStop(0.4, 'rgba(255,255,255,0.45)'); gg.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gg; x.fillRect(0, 0, w, w); })); }
+function makePuffs(cap, tex) {
+  const m = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }), cap);
+  m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.frustumCulled = false; m.count = 0; m.renderOrder = 4;
+  for (let i = 0; i < cap; i++) m.setColorAt(i, tmpC.setRGB(0, 0, 0));
+  m.userData.ps = []; return m;
+}
+function puff(m, o) { const ps = m.userData.ps; if (ps.length < m.instanceMatrix.count) ps.push(Object.assign({ age: 0, life: 1, size: 0.4, grow: 1, vx: 0, vy: 0, vz: 0, g: 0, drag: 0, spin: 0 }, o)); }
+function stepPuffs(m, dt) {
+  const ps = m.userData.ps; let n = 0;
+  for (let i = 0; i < ps.length; i++) {
+    const p = ps[i]; p.age += dt;
+    if (p.age >= p.life) { ps.splice(i--, 1); continue; }
+    const k = p.age / p.life, dr = Math.max(0, 1 - p.drag * dt);
+    p.vy -= p.g * dt; p.vx *= dr; p.vy *= dr; p.vz *= dr; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+    const sz = p.size * (1 + p.grow * k), a = Math.min(1, k * 8) * Math.pow(1 - k, 1.4);
+    tmpQ.copy(camera.quaternion); if (p.spin) { tmpQ2.setFromAxisAngle(Z_AXIS, p.spin * p.age); tmpQ.multiply(tmpQ2); }
+    tmpM.compose(tmpV.set(p.x, p.y, p.z), tmpQ, tmpS.set(sz * (p.sx || 1), sz, 1)); m.setMatrixAt(n, tmpM); m.setColorAt(n, tmpC.copy(p.col).multiplyScalar(a)); n++;
+  }
+  m.count = n; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
+}
+/* drifting ambient motes (dust, plankton-like space dust): Points that wander on slow sine paths */
+function motes(n, X, Y, Z, colr, size, seed) {
+  const geo = new THREE.BufferGeometry(), p = new Float32Array(n * 3), r = rnd(seed);
+  for (let i = 0; i < n; i++) { p[i * 3] = X[0] + r() * (X[1] - X[0]); p[i * 3 + 1] = Y[0] + r() * (Y[1] - Y[0]); p[i * 3 + 2] = Z[0] + r() * (Z[1] - Z[0]); }
+  geo.setAttribute('position', new THREE.BufferAttribute(p, 3));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ size, map: softTex(), color: colr, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  pts.userData.base = p.slice(); pts.frustumCulled = false; return pts;
+}
+function stepMotes(pts, t) {
+  const p = pts.geometry.attributes.position, b = pts.userData.base;
+  for (let i = 0; i < p.count; i++) { const k = i * 3; p.array[k] = b[k] + Math.sin(t * 0.21 + i * 1.7) * 0.6; p.array[k + 1] = b[k + 1] + Math.sin(t * 0.17 + i * 2.3) * 0.4; p.array[k + 2] = b[k + 2] + Math.cos(t * 0.13 + i) * 0.5; }
+  p.needsUpdate = true;
 }
 
 /* ---------- bars, hammers, walls, belts, holes ---------- */
