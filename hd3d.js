@@ -1655,7 +1655,7 @@ function syncPool(pool, list, make, keyFn) {
 HR3D.attach = function (api) { G_API = api; };
 HR3D.setQuality = function (lv) { setQuality(lv); try { localStorage.setItem('headrush.hdq', String(lv)); } catch (e) {} };
 HR3D.quality = () => quality.level;
-HR3D.show = function (on) { if (glCanvas) glCanvas.style.display = on ? 'block' : 'none'; if (vigEl) vigEl.style.display = on && !quality.bloom ? 'block' : 'none'; };
+HR3D.show = function (on) { if (glCanvas) glCanvas.style.display = on ? 'block' : 'none'; if (document.body.classList.contains('hd3d') !== !!on) document.body.classList.toggle('hd3d', !!on); if (vigEl) vigEl.style.display = on && !quality.bloom ? 'block' : 'none'; };
 
 HR3D.render = function (g, view) {
   const V = G_API.V3, W = view.W, H = view.H, now = view.now;

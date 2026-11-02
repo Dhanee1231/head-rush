@@ -141,6 +141,16 @@ body.v3d .toast { box-shadow: 0 4px 16px rgba(0, 0, 0, .45); }
 .ctl.cue.jump { background: var(--low); color: var(--bg); }
 .ctl.cue.lane { background: var(--ice); color: var(--bg); }
 .ctl.pressed { transform: scale(.95); }
+/* HD view only (body.hd3d is set by hd3d.js): controls as glowing toy keys lit from below in their bar colour,
+   with a squash when pressed. Visual only. */
+body.hd3d .ctl { box-shadow: inset 0 0 18px var(--glow), inset 0 -4px 0 rgba(0,0,0,.35), 0 6px 16px rgba(0,0,0,.45); text-shadow: 0 1px 0 rgba(0,0,0,.45); transition: transform .08s, box-shadow .12s, background .12s, color .12s; }
+body.hd3d .ctl.duck { --glow: rgba(63,169,255,.42); background: radial-gradient(120% 90% at 50% 125%, rgba(63,169,255,.34), rgba(63,169,255,0) 70%), linear-gradient(rgba(63,169,255,.12), rgba(63,169,255,.04)), rgba(10,11,28,.74); }
+body.hd3d .ctl.jump { --glow: rgba(255,138,42,.42); background: radial-gradient(120% 90% at 50% 125%, rgba(255,138,42,.34), rgba(255,138,42,0) 70%), linear-gradient(rgba(255,138,42,.12), rgba(255,138,42,.04)), rgba(10,11,28,.74); }
+body.hd3d .ctl.lane { --glow: rgba(223,243,255,.3); background: radial-gradient(120% 90% at 50% 125%, rgba(223,243,255,.22), rgba(223,243,255,0) 70%), rgba(10,11,28,.74); }
+body.hd3d .ctl.pressed { transform: scale(1.04, .9); box-shadow: inset 0 0 30px var(--glow), inset 0 3px 0 rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.4); }
+body.hd3d .ctl.cue.duck { background: var(--high); color: var(--bg); text-shadow: none; box-shadow: 0 0 22px rgba(63,169,255,.6), inset 0 -4px 0 rgba(0,0,0,.2); }
+body.hd3d .ctl.cue.jump { background: var(--low); color: var(--bg); text-shadow: none; box-shadow: 0 0 22px rgba(255,138,42,.6), inset 0 -4px 0 rgba(0,0,0,.2); }
+body.hd3d .ctl.cue.lane { background: var(--ice); color: var(--bg); text-shadow: none; box-shadow: 0 0 22px rgba(223,243,255,.5), inset 0 -4px 0 rgba(0,0,0,.2); }
 .ctl:focus-visible, .btn:focus-visible, .arena:focus-visible { outline: 3px solid var(--you); outline-offset: 3px; }
 
 .overlay {
