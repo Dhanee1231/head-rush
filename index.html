@@ -858,7 +858,7 @@ h1 .rush { color: var(--you); }
      If the copy fails (storage full or blocked), the key is left alone and the game keeps playing from memory. */
   var BROKEN = {};
   function rawGet(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
-  function markBroken(key, raw) { if (raw != null && raw !== 'null') BROKEN[key] = raw; }
+  function markBroken(key, raw) { if (raw != null) BROKEN[key] = raw; }
   function keepBad(key) {
     if (!(key in BROKEN)) return true;
     var raw = BROKEN[key], bk = key + '.bad';
@@ -901,6 +901,102 @@ h1 .rush { color: var(--you); }
   function loadProfile() { return PLAYERS.current ? readProfile(PLAYERS.current) : blankProfile(); }
   var PROFILE = loadProfile();
   function saveProfile() { if (!PLAYERS.current) return; safeSet(profKey(PLAYERS.current), JSON.stringify(PROFILE)); }
+  /* ---------- My Character: the look (body, colour, eyes, hat, extra) per player, under headrush.look.v1.<id> ----------
+     A separate key, so a bug here cannot damage the main profile. skin/shape/owned keep their meaning and are still written.
+     Ids are stable and saved: never rename one. Unknown ids (e.g. from a newer version) stay in the save; drawing falls back. */
+  var LOOK_CAT = {
+    body: [
+      { id: 'bean', name: 'Jellybean', free: 1, def: 'sunny', neck: 1 }, { id: 'strawberry', name: 'Strawberry', free: 1, def: 'berry', neck: 1 },
+      { id: 'pear', name: 'Pear', free: 1, def: 'lime' }, { id: 'lettuce', name: 'Lettuce', free: 1, def: 'mint', neck: 1 },
+      { id: 'cupcake', name: 'Cupcake', def: 'bubblegum' }, { id: 'robot', name: 'Wind-up Robot', def: 'teal', neck: 1 },
+      /* today's other shapes, kept as hidden bodies so nobody's runner changes without them choosing */
+      { id: 'c-triangle', name: 'Triangle', hidden: 1, shape: 'triangle' }, { id: 'c-square', name: 'Square', hidden: 1, shape: 'square' },
+      { id: 'c-diamond', name: 'Diamond', hidden: 1, shape: 'diamond' }, { id: 'c-star', name: 'Star', hidden: 1, shape: 'star' }
+    ],
+    /* palette rules (CHARS-PLAN section 2): far from both bar colours, readable on every arena floor */
+    color: [
+      { id: 'sunny', name: 'Sunny', hex: '#ffd23f', free: 1 }, { id: 'berry', name: 'Berry', hex: '#ff4d6d', free: 1 },
+      { id: 'bubblegum', name: 'Bubblegum', hex: '#ff7eb6', free: 1 }, { id: 'grape', name: 'Grape', hex: '#c58cff', free: 1 },
+      { id: 'mint', name: 'Mint', hex: '#7be0ad', free: 1 }, { id: 'lime', name: 'Lime', hex: '#a8d672', free: 1 },
+      { id: 'teal', name: 'Teal', hex: '#5fd1c8', free: 1 }, { id: 'snow', name: 'Snow', hex: '#f4f2ff', free: 1 },
+      { id: 'leaf', name: 'Leaf', hex: '#7fd35a' }, { id: 'vanilla', name: 'Vanilla', hex: '#e9e3c7' },
+      { id: 'lilac', name: 'Lilac', hex: '#d9b8ff' }, { id: 'rose', name: 'Rose', hex: '#ffb3c8' },
+      /* today's skin colours; 'own' = fails the palette rules, so only players who already have it keep it */
+      { id: 'lg-lime', name: 'Zest', skin: 'lime' }, { id: 'lg-gum', name: 'Gum', skin: 'gum' }, { id: 'lg-frost', name: 'Frost', skin: 'frost' },
+      { id: 'lg-devil', name: 'Devil', skin: 'devil', own: 1 }, { id: 'lg-royal', name: 'Royal', skin: 'royal' },
+      { id: 'lg-ghost', name: 'Ghost', skin: 'ghost' }, { id: 'lg-champ', name: 'Champ', skin: 'champ' }, { id: 'lg-gold', name: 'Gold', skin: 'gold', own: 1 }
+    ],
+    eyes: [
+      { id: 'classic', name: 'Classic', free: 1 }, { id: 'sparkle', name: 'Sparkle', free: 1 }, { id: 'dot', name: 'Button', free: 1 },
+      { id: 'lashes', name: 'Lashes' }, { id: 'sleepy', name: 'Sleepy' }, { id: 'googly', name: 'Googly' }
+    ],
+    hat: [
+      { id: 'none', name: 'No hat', free: 1 }, { id: 'party', name: 'Party Cone', free: 1 }, { id: 'cap', name: 'Ball Cap', free: 1 },
+      { id: 'flower', name: 'Daisy', free: 1 }, { id: 'beanie', name: 'Propeller Beanie' }, { id: 'bunny', name: 'Bunny Ears' },
+      { id: 'tophat', name: 'Top Hat' }, { id: 'chef', name: 'Chef Hat' }, { id: 'crown', name: 'Crown' },
+      /* today's skin accessories */
+      { id: 'halo', name: 'Halo', acc: 'halo' }, { id: 'horns', name: 'Horns', acc: 'horns' }, { id: 'antenna', name: 'Antenna', acc: 'antenna' },
+      { id: 'star', name: 'Star', acc: 'star' }, { id: 'oldcrown', name: 'Royal Crown', acc: 'crown' }
+    ],
+    extra: [
+      { id: 'none', name: 'None', free: 1 }, { id: 'glasses', name: 'Round Glasses' }, { id: 'bowtie', name: 'Bow Tie' },
+      { id: 'scarf', name: 'Scarf', neck: 1 }, { id: 'visor', name: 'Visor', acc: 'visor' }, { id: 'spots', name: 'Spots', acc: 'spots' }
+    ]
+  };
+  var LOOK_SLOTS = ['body', 'color', 'eyes', 'hat', 'extra'], LOOK_ITEM = {};
+  LOOK_SLOTS.forEach(function (sl) { LOOK_CAT[sl].forEach(function (it) { it.slot = sl; it.key = sl + '.' + it.id; if (it.skin) it.hex = skinById(it.skin).color; LOOK_ITEM[it.key] = it; }); });
+  function lookItem(slot, id) { return LOOK_ITEM[slot + '.' + id] || null; }
+  function lookKey(id) { return 'headrush.look.v1.' + id; }
+  function skinColorId(skin) { return skin === 'sunny' || !skin ? 'sunny' : 'lg-' + skin; }
+  function lookDefaults(p) { var c = skinColorId(skinById(p && p.skin).id); return { body: 'bean', color: c, eyes: 'classic', hat: 'none', hatColor: 'auto', extra: 'none' }; }
+  function blankLookSave(p) { return { v: 1, look: lookDefaults(p), unl: [], seen: [], cnt: { dailyDone: 0, closeTotal: 0 } }; }
+  function strList(a) { var out = []; (Array.isArray(a) ? a : []).forEach(function (x) { if (typeof x === 'string' && x.length < 40 && out.indexOf(x) < 0) out.push(x); }); return out; }
+  /* Right shape or null. Missing or mistyped fields get defaults; unknown string ids are kept as they are. */
+  function fixLookSave(s, p) {
+    if (!s || typeof s !== 'object' || Array.isArray(s) || s.v !== 1 || !s.look || typeof s.look !== 'object' || Array.isArray(s.look)) return null;
+    var d = lookDefaults(p), l = s.look;
+    Object.keys(d).forEach(function (k) { if (typeof l[k] !== 'string' || !l[k] || l[k].length > 40) l[k] = d[k]; });
+    s.unl = strList(s.unl); s.seen = strList(s.seen);
+    var c = s.cnt && typeof s.cnt === 'object' && !Array.isArray(s.cnt) ? s.cnt : {};
+    ['dailyDone', 'closeTotal'].forEach(function (k) { c[k] = typeof c[k] === 'number' && c[k] >= 0 && isFinite(c[k]) ? Math.floor(c[k]) : 0; });
+    s.cnt = c;
+    return s;
+  }
+  var LOOK = null, lookBroken = false, lookPid = null;
+  function newLookSave(p) { return blankLookSave(p); }
+  /* Safe load: on any error or wrong shape, defaults in memory only, the bad raw string is left untouched, and the key is not written
+     until the player changes something (then the raw string is first copied to <key>.bad). */
+  function loadLook(id, p) {
+    var raw = id ? rawGet(lookKey(id)) : null, s = null;
+    lookPid = id || null; lookBroken = false;
+    if (raw != null) {
+      try { s = fixLookSave(JSON.parse(raw), p); } catch (e) {}
+      if (!s) { lookBroken = true; markBroken(lookKey(id), raw); }
+    }
+    LOOK = s || newLookSave(p);
+    return LOOK;
+  }
+  /* The one writer. byPlayer = the player changed something (a broken save is only replaced then). Quota errors are ignored. */
+  function saveLook(byPlayer) {
+    if (!lookPid || !LOOK || (lookBroken && !byPlayer)) return false;
+    var ok = false;
+    try { ok = safeSet(lookKey(lookPid), JSON.stringify(LOOK)); } catch (e) {}
+    if (ok) lookBroken = false;
+    return ok;
+  }
+  function lookHas(slot, id) { var it = lookItem(slot, id); return !!it && (!!it.free || LOOK.unl.indexOf(it.key) >= 0); }
+  /* What to draw: every unknown id falls back, so a newer save or a bad id never breaks the runner. */
+  function lookForDraw(l) {
+    l = l || (LOOK && LOOK.look) || {};
+    var d = lookDefaults(PROFILE), out = {};
+    LOOK_SLOTS.forEach(function (sl) { out[sl] = lookItem(sl, l[sl]) ? l[sl] : d[sl]; });
+    if (!lookItem('color', out.color)) out.color = 'sunny';
+    out.hatColor = lookItem('color', l.hatColor) ? l.hatColor : 'auto';
+    if (out.extra !== 'none' && lookItem('extra', out.extra).neck && !lookItem('body', out.body).neck) out.extra = 'none';
+    out.hex = lookItem('color', out.color).hex;
+    return out;
+  }
+  loadLook(PLAYERS.current, PROFILE);
   function addPlayer(name) {
     var id = 'p' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
     var first = PLAYERS.list.length === 0;
@@ -909,9 +1005,9 @@ h1 .rush { color: var(--you); }
     var p = null;
     if (first) { try { p = fixProfile(JSON.parse(localStorage.getItem(LEGACY_KEY))); } catch (e) {} }
     PROFILE = p || blankProfile();
-    savePlayers(); saveProfile();
+    savePlayers(); saveProfile(); loadLook(id, PROFILE);
   }
-  function usePlayer(id) { PLAYERS.current = id; savePlayers(); PROFILE = loadProfile(); }
+  function usePlayer(id) { PLAYERS.current = id; savePlayers(); PROFILE = loadProfile(); loadLook(id, PROFILE); }
   /* Delete my data: removes this player's leaderboard entry and round history online, then everything about them on this phone. */
   var deleteArmed = 0;
   function deleteMyData() {
@@ -922,10 +1018,11 @@ h1 .rush { color: var(--you); }
     ensureCloud(pl);
     sbFetch('/rest/v1/rpc/delete_player', { method: 'POST', body: { p_id: pl.cloudId, p_secret: pl.secret } }).then(function () {
       try { localStorage.removeItem(profKey(pl.id)); } catch (e) {}
+      ['', '.bad'].forEach(function (x) { try { localStorage.removeItem(lookKey(pl.id) + x); localStorage.removeItem(profKey(pl.id) + x); } catch (e) {} });
       try { var q = JSON.parse(localStorage.getItem('headrush.roundlog.v1')) || []; localStorage.setItem('headrush.roundlog.v1', JSON.stringify(q.filter(function (r) { return r.pid !== pl.cloudId; }))); } catch (e) {}
       PLAYERS.list = PLAYERS.list.filter(function (x) { return x.id !== pl.id; });
       PLAYERS.current = PLAYERS.list.length ? PLAYERS.list[0].id : null; savePlayers();
-      PROFILE = PLAYERS.current ? loadProfile() : blankProfile();
+      PROFILE = PLAYERS.current ? loadProfile() : blankProfile(); loadLook(PLAYERS.current, PROFILE);
       btn.disabled = false; btn.textContent = 'Delete my data'; msg.textContent = pl.name + "'s data was deleted.";
       renderProfile(); if (!PLAYERS.current) showNameScreen(false);
     }, function () {
