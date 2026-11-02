@@ -2272,6 +2272,9 @@ h1 .rush { color: var(--you); }
       s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.05);
     } catch (e) {}
   }
+  /* new effects stay silent when Effects volume is 0 (mute), with no audio yet, or while the tab is hidden */
+  var humVoice = null;
+  function sfxLive() { return !!(AC && SFXBUS && NOISE && sfxVol > 0 && !document.hidden); }
   function tone(f1, f2, dur, type, vol) { osc(type === 'square' || type === 'sawtooth' ? 'triangle' : type, f1, f2, dur, (vol || 0.2) * 0.9); }
   var sfx = {
     jump: function () { osc('sine', 260, 700, 0.16, 0.2, 0, [28, 18]); osc('triangle', 520, 1400, 0.1, 0.05); noise(0.09, 0.05, 'bandpass', 1400, 4200, 0.8); },
@@ -2297,7 +2300,43 @@ h1 .rush { color: var(--you); }
     combo: function (m) { var f = 440 * (1 + m * 0.18); osc('triangle', f, f * 2, 0.16, 0.07); osc('sine', f * 1.5, f * 3, 0.12, 0.04, 0.06); },
     flip: function () { osc('square', 1200, 300, 0.12, 0.035); osc('square', 300, 1200, 0.12, 0.035, 0.12); },
     pop: function () { osc('sine', 520, 1040, 0.09, 0.07); osc('triangle', 1200, 1500, 0.06, 0.03, 0.04); },
-    pickup: function () { osc('sine', 880, 880, 0.12, 0.08); osc('sine', 1320, 1320, 0.14, 0.08, 0.06); osc('sine', 1760, 1760, 0.2, 0.07, 0.12); }
+    pickup: function () { osc('sine', 880, 880, 0.12, 0.08); osc('sine', 1320, 1320, 0.14, 0.08, 0.06); osc('sine', 1760, 1760, 0.2, 0.07, 0.12); },
+    /* a bar comes into approach range of You: soft electric hum, quiet and low first, rising in pitch and a little in volume (0.45 s).
+       One hum voice at a time: a new bar cuts the previous hum off instead of stacking. */
+    barHum: function () {
+      if (!sfxLive()) return;
+      try {
+        var t = AC.currentTime, d = 0.45, o = AC.createOscillator(), o2 = AC.createOscillator(), f = AC.createBiquadFilter(), g = AC.createGain();
+        if (humVoice) { try { humVoice.g.gain.cancelScheduledValues(t); humVoice.g.gain.setTargetAtTime(0.0001, t, 0.012); humVoice.o.stop(t + 0.06); humVoice.o2.stop(t + 0.06); } catch (e) {} }
+        o.type = 'sawtooth'; o.frequency.setValueAtTime(95, t); o.frequency.exponentialRampToValueAtTime(190, t + d);
+        o2.type = 'sine'; o2.frequency.setValueAtTime(190, t); o2.frequency.exponentialRampToValueAtTime(380, t + d);
+        f.type = 'lowpass'; f.Q.value = 2; f.frequency.setValueAtTime(500, t); f.frequency.exponentialRampToValueAtTime(1500, t + d);
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.018, t + 0.05); g.gain.exponentialRampToValueAtTime(0.05, t + d - 0.07); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+        o.connect(f); o2.connect(f); f.connect(g); g.connect(SFXBUS);
+        o.start(t); o2.start(t); o.stop(t + d + 0.03); o2.stop(t + d + 0.03);
+        var v = humVoice = { o: o, o2: o2, g: g }; o.onended = function () { if (humVoice === v) humVoice = null; };
+      } catch (e) {}
+    },
+    /* the Slow-mo (clock) power-up kicks in: crisp glassy chime with a frosty sparkle (0.45 s) */
+    iceChime: function () {
+      if (!sfxLive()) return;
+      [[2093, 0.07, 0.42], [3136, 0.045, 0.34], [4699, 0.03, 0.26], [6272, 0.018, 0.2]].forEach(function (p, i) { osc('sine', p[0], p[0] * 0.997, p[2], p[1], i * 0.012); });
+      noise(0.16, 0.035, 'highpass', 7000, 9500, 0.6);
+      noise(0.3, 0.02, 'bandpass', 3000, 1200, 1.2, 0.03);
+    },
+    /* the bars actually flip direction (REVERSE): reversed whoosh that swells and cuts, over a low tone dipping down (0.42 s) */
+    reverseWhoosh: function () {
+      if (!sfxLive()) return;
+      try {
+        var t = AC.currentTime, d = 0.36, s = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain();
+        s.buffer = NOISE; s.loop = true; f.type = 'bandpass'; f.Q.value = 1.1;
+        f.frequency.setValueAtTime(500, t); f.frequency.exponentialRampToValueAtTime(2600, t + d);
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.11, t + d); g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.03);
+        s.connect(f); f.connect(g); g.connect(SFXBUS); s.start(t, Math.random() * 0.5); s.stop(t + d + 0.06);
+      } catch (e) {}
+      osc('sine', 240, 80, 0.42, 0.16);
+      osc('triangle', 480, 160, 0.3, 0.03);
+    }
   };
 
   /* ---------- arena music: a tiny in-browser sequencer (drums, bass, chords, lead). Tempo rises with bar speed. ---------- */
@@ -2902,7 +2941,7 @@ h1 .rush { color: var(--you); }
     g.pickup = null; g.puNext = t + (g.daily && g.daily.twist === 'orbs' ? 4 + Math.random() * 3 : 8 + Math.random() * 7);
     burstAt(p, col, 10, 0.8);
     if (pu.type === 'shield') p.shield = t + 15;
-    else if (pu.type === 'slow') g.slowUntil = t + 3.5;
+    else if (pu.type === 'slow') { g.slowUntil = t + 3.5; sfx.iceChime(); }
     else if (p.hearts < 3) { p.hearts++; pu.healed = true; }
     else if (p.you) g.bonus += 10;
     if (p.you) {
@@ -3126,7 +3165,7 @@ h1 .rush { color: var(--you); }
     }
     return list;
   }
-  var botList = [], youList = [];
+  var botList = [], youList = [], humList = [], humSeen = {}, HUM_RANGE = 0.9;
 
   function update(dt) {
     var g = G, A = g.arena, was = g.t;
@@ -3174,7 +3213,7 @@ h1 .rush { color: var(--you); }
       }
       if (A.reverse) {
         if (!g.revWarned && t >= g.revNext - 1.5) { g.revWarned = true; toast('Reverse incoming!'); sfx.reverse(); buzz([30, 60, 30]); say('reverse', 1); }
-        if (t >= g.revNext) { g.dir = -g.dir; g.revNext = t + 11 + GR() * 5; g.revWarned = false; }
+        if (t >= g.revNext) { g.dir = -g.dir; sfx.reverseWhoosh(); g.revNext = t + 11 + GR() * 5; g.revWarned = false; }
       }
     }
 
@@ -3228,6 +3267,18 @@ h1 .rush { color: var(--you); }
       else if (t >= you.stun && (you.queued.kind !== 'jump' || t >= you.air)) { var k = you.queued.kind; you.queued = null; act(you, k); }
     }
 
+    /* sound only: a hum each time a bar comes within approach range of You (once per bar per pass) */
+    if (!you.out && !you.remote && !g.over) {
+      threats(you, humList);
+      var humNow = {};
+      for (j = 0; j < humList.length; j++) {
+        var hth = humList[j];
+        if (hth.key.charAt(0) !== 'b' || hth.tti > HUM_RANGE) continue;
+        humNow[hth.key] = 1;
+        if (!humSeen[hth.key]) sfx.barHum(); /* fires on entering range only */
+      }
+      humSeen = humNow;
+    } else humSeen = {};
     // bots
     for (i = 1; i < g.players.length; i++) {
       p = g.players[i];
