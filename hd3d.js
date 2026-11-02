@@ -1518,15 +1518,25 @@ function makeWall(V) {
   const pool = new THREE.Mesh(GEO.wallPool, MAT.wallPool); pool.renderOrder = 1; root.add(pool);
   scene.add(root); return { root };
 }
-let chevTex;
+/* Belts: a conveyor. Dark ribbed rubber with soft glowing chevrons in the speed colour (both scroll),
+   gunmetal rollers at each end and brass side rails, merged per belt. */
+let chevTex, ribTex;
 function makeBelt(bt, V) {
-  if (!chevTex) { chevTex = canvasTex(64, 64, (x, w, h) => { x.fillStyle = '#000'; x.fillRect(0, 0, w, h); x.strokeStyle = '#fff'; x.lineWidth = 9; x.lineCap = 'round'; x.lineJoin = 'round'; x.beginPath(); x.moveTo(18, 12); x.lineTo(42, 32); x.lineTo(18, 52); x.stroke(); }); chevTex.wrapS = THREE.RepeatWrapping; }
-  const fast = bt.mult > 1, colr = fast ? G_API.COL.fast : G_API.COL.slow;
-  const t = chevTex.clone(); t.needsUpdate = true; t.repeat.set(Math.round(bt.w / 0.11), 1);
-  const geo = sectorGeo(V.e0 + 0.05, V.e1 - 0.05, -bt.w / 2, bt.w / 2, 20, 0.012);
-  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: new THREE.Color(colr).multiplyScalar(0.35), emissive: colr, emissiveMap: t, emissiveIntensity: 1.6, transparent: true, opacity: 0.9, roughness: 0.5 }));
-  m.receiveShadow = true; scene.add(m);
-  return { root: m, tex: t, dir: fast ? 1 : -1 };
+  if (!chevTex) {
+    chevTex = canvasTex(64, 64, (x, w, h) => { x.fillStyle = '#000'; x.fillRect(0, 0, w, h); x.lineCap = 'round'; x.lineJoin = 'round'; x.strokeStyle = 'rgba(255,255,255,0.35)'; x.lineWidth = 15; x.beginPath(); x.moveTo(20, 14); x.lineTo(40, 32); x.lineTo(20, 50); x.stroke(); x.strokeStyle = '#fff'; x.lineWidth = 7; x.stroke(); });
+    ribTex = canvasTex(64, 64, (x, w, h) => { x.fillStyle = '#26252c'; x.fillRect(0, 0, w, h); for (let i = 0; i < 4; i++) { x.fillStyle = 'rgba(0,0,0,0.55)'; x.fillRect(i * 16, 0, 5, h); x.fillStyle = 'rgba(255,255,255,0.06)'; x.fillRect(i * 16 + 5, 0, 2, h); } });
+    chevTex.wrapS = ribTex.wrapS = THREE.RepeatWrapping;
+  }
+  const fast = bt.mult > 1, colr = fast ? G_API.COL.fast : G_API.COL.slow, r0 = V.e0 + 0.05, r1 = V.e1 - 0.05;
+  const t = chevTex.clone(), t2 = ribTex.clone(); t.needsUpdate = t2.needsUpdate = true; t.repeat.set(Math.round(bt.w / 0.11), 1); t2.repeat.copy(t.repeat);
+  const m = new THREE.Mesh(sectorGeo(r0, r1, -bt.w / 2, bt.w / 2, 20, 0.014), new THREE.MeshStandardMaterial({ map: t2, color: new THREE.Color(colr).lerp(new THREE.Color(0xffffff), 0.5), emissive: colr, emissiveMap: t, emissiveIntensity: 1.25, roughness: 0.75, metalness: 0.1 }));
+  m.receiveShadow = true;
+  const fg = [];
+  [r0 - 0.02, r1 + 0.02].forEach(rr => fg.push(new THREE.TorusGeometry(rr, 0.035, 6, 24, bt.w).rotateX(Math.PI / 2).rotateY(bt.w / 2).translate(0, 0.04, 0)));
+  [-bt.w / 2, bt.w / 2].forEach(a => fg.push(new THREE.CylinderGeometry(0.075, 0.075, r1 - r0 + 0.1, 12).rotateZ(Math.PI / 2).translate((r0 + r1) / 2, 0.05, 0).rotateY(-a)));
+  m.add(new THREE.Mesh(mergeGeos(fg), new THREE.MeshStandardMaterial({ color: 0x8a6438, metalness: 1, roughness: 0.35 })));
+  scene.add(m);
+  return { root: m, tex: t, tex2: t2, dir: fast ? 1 : -1 };
 }
 let crackTex, lavaPitTex;
 function makeHole(o, V) {
@@ -1656,7 +1666,7 @@ HR3D.render = function (g, view) {
   A.walls.forEach((w, i) => { const m = wallPool[i].root, R = V.TR + (A.lanes[w.lane] - V.mid) * V.SC, f = w.a + g.rot; m.position.set(R * Math.cos(f), 0, R * Math.sin(f)); m.rotation.y = -f; });
   // belts
   syncPool(beltPool, A.belts, bt => makeBelt(bt, V));
-  A.belts.forEach((bt, i) => { const o = beltPool[i]; o.root.rotation.y = -(bt.a + g.rot); o.tex.offset.x = -(t * 0.45 * o.dir) / 0.11 % 1; });
+  A.belts.forEach((bt, i) => { const o = beltPool[i]; o.root.rotation.y = -(bt.a + g.rot); o.tex.offset.x = o.tex2.offset.x = -(t * 0.45 * o.dir) / 0.11 % 1; });
   // holes
   syncPool(holePool, g.holes, o => makeHole(o, V));
   g.holes.forEach((o, i) => {
