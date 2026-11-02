@@ -117,8 +117,6 @@ function buildShared() {
   ]));
   GEO.shoeSole = shared(new THREE.CapsuleGeometry(0.094, 0.12, 4, 12).rotateX(Math.PI / 2).scale(1, 0.34, 1).translate(0, 0.03, 0.015));
   GEO.xbar = shared(new THREE.BoxGeometry(0.15, 0.035, 0.03));
-  GEO.ring = shared(new THREE.TorusGeometry(0.62, 0.035, 10, 64).rotateX(Math.PI / 2));
-  GEO.disc = shared(new THREE.CircleGeometry(0.62, 48).rotateX(-Math.PI / 2));
   GEO.puddle = shared(new THREE.CircleGeometry(0.42, 32).rotateX(-Math.PI / 2));
   GEO.bubble = shared(new THREE.SphereGeometry(0.82, 32, 20));
   GEO.smallStar = shared(new THREE.ExtrudeGeometry(starShape(0.09, 0.04), { depth: 0.03, bevelEnabled: false }));
@@ -156,7 +154,6 @@ function buildShared() {
   MAT.visor = smat(new THREE.MeshStandardMaterial({ color: 0x14152c, roughness: 0.08, metalness: 0.4, envMapIntensity: 1.2 }));
   MAT.spot = smat(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, transparent: true, opacity: 0.75 }));
   MAT.ring = smat(new THREE.MeshStandardMaterial({ color: 0xffd23f, emissive: 0xffc020, emissiveIntensity: 2.4 }));
-  MAT.ringFill = smat(new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.16, depthWrite: false }));
   MAT.puddle = smat(new THREE.MeshStandardMaterial({ color: 0x4a4c70, roughness: 0.2, transparent: true, opacity: 0.75 }));
   MAT.bubble = smat(addRim(new THREE.MeshStandardMaterial({ color: 0x7fe3ff, emissive: 0x2ab8e0, emissiveIntensity: 0.3, roughness: 0.05, transparent: true, opacity: 0.2, depthWrite: false })));
   const blobTex = canvasTex(64, 64, (x, w) => { const gg = x.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); gg.addColorStop(0, 'rgba(0,0,0,1)'); gg.addColorStop(0.55, 'rgba(0,0,0,0.6)'); gg.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = gg; x.fillRect(0, 0, w, w); });
@@ -1096,6 +1093,21 @@ function makeParticles() {
   m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.count = 0; m.frustumCulled = false; scene.add(m); return m;
 }
 
+/* the player's marker: bright gold ring, soft gold light pool, slow dashed outer ring (plus the gold outline on the runner) */
+function makeYouRing() {
+  const g = new THREE.Group();
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.68, 64).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffd23f).multiplyScalar(2.2), transparent: true, depthWrite: false }));
+  ring.position.y = 0.012; ring.renderOrder = 2; g.add(ring);
+  const glowT = canvasTex(128, 128, (x, w) => { const gg = x.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); gg.addColorStop(0, 'rgba(255,255,255,0.55)'); gg.addColorStop(0.5, 'rgba(255,255,255,0.4)'); gg.addColorStop(0.62, 'rgba(255,255,255,0.7)'); gg.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gg; x.fillRect(0, 0, w, w); }, false);
+  const pool = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 2.1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffa010).multiplyScalar(0.45), map: glowT, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  pool.position.y = 0.01; pool.renderOrder = 1; g.add(pool);
+  const dashT = canvasTex(256, 16, (x, w, h) => { x.fillStyle = '#fff'; for (let i = 0; i < 16; i++) x.fillRect(i * 16 + 2, 0, 9, h); }, false); dashT.wrapS = THREE.RepeatWrapping;
+  const dash = new THREE.Mesh(sectorGeo(0.78, 0.84, 0, TAU, 96, 0.012), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffd23f).multiplyScalar(1.4), map: dashT, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  dashT.repeat.set(3, 1); dash.renderOrder = 2; g.add(dash);
+  g.userData = { dash, pool };
+  scene.add(g); return g;
+}
+
 /* ---------- per-frame ---------- */
 function syncPool(pool, list, make, keyFn) {
   while (pool.length > list.length) { const o = pool.pop(); scene.remove(o.root || o); if (o.blob) scene.remove(o.blob); disposeTree(o.root || o); }
@@ -1141,7 +1153,9 @@ HR3D.render = function (g, view) {
     out.push({ cx: fx, foot: fy, top: ty });
   });
   partsEnd();
-  if (!youRing) { youRing = new THREE.Group(); youRing.add(new THREE.Mesh(GEO.ring, MAT.ring)); youRing.add(new THREE.Mesh(GEO.disc, MAT.ringFill)); scene.add(youRing); }
+  if (!youRing) youRing = makeYouRing();
+  youRing.userData.dash.rotation.y = now * 0.6;
+  youRing.userData.pool.material.opacity = 0.8 + 0.2 * Math.sin(now * 4);
   const you = g.players[0];
   youRing.visible = !you.out;
   if (!you.out) { const R = V.TR + (G_API.runnerR(you) - V.mid) * V.SC, f = you.angle + g.rot; youRing.position.set(R * Math.cos(f), 0.02, R * Math.sin(f)); }
