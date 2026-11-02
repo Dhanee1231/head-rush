@@ -555,9 +555,9 @@ function buildArenaCore(V, A) {
   cap.position.y = 1.67; hub.add(cap);
   const capRing = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.015, 6, 64).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: T.tick, emissive: T.tick, emissiveIntensity: 1.2 }));
   capRing.position.y = 1.7; hub.add(capRing);
-  const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.04, 40), new THREE.MeshStandardMaterial({ color: 0xffd23f, emissive: 0xffc030, emissiveIntensity: 1.5 }));
+  const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.04, 40), new THREE.MeshStandardMaterial({ color: 0xffd23f, emissive: 0xffc030, emissiveIntensity: 0.75 }));
   lamp.position.y = 1.71; hub.add(lamp);
-  const lamp2 = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.05, 32), new THREE.MeshStandardMaterial({ color: 0xfff3b0, emissive: 0xfff0c0, emissiveIntensity: 1.8 }));
+  const lamp2 = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.05, 32), new THREE.MeshStandardMaterial({ color: 0xfff3b0, emissive: 0xfff0c0, emissiveIntensity: 0.9 }));
   lamp2.position.y = 1.72; hub.add(lamp2);
   grp.add(hub);
   return { grp, floor, hub };
