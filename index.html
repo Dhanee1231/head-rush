@@ -1078,6 +1078,7 @@ h1 .rush { color: var(--you); }
     out.hatColor = lookItem('color', l.hatColor) ? l.hatColor : 'auto';
     if (out.extra !== 'none' && lookItem('extra', out.extra).neck && !lookItem('body', out.body).neck) out.extra = 'none';
     out.hex = lookItem('color', out.color).hex;
+    out.hatHex = out.hatColor === 'auto' ? out.hex : lookItem('color', out.hatColor).hex;
     return out;
   }
   loadLook(PLAYERS.current, PROFILE);

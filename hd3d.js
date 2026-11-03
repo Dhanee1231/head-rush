@@ -1258,9 +1258,16 @@ function placeM(x, y, z, rx, ry, rz, sx, sy, sz) {
 function GeoBag() { this.P = []; this.U = []; this.I = []; this.D = []; this.T = []; this.b = 0; }
 GeoBag.prototype.add = function (geo, det, tint, mat, keep) {
   const pos = geo.attributes.position, idx = geo.index, v = new THREE.Vector3();
+  const srcD = geo.attributes.aDet, srcT = geo.attributes.aTint, srcC = geo.attributes.color;
   for (let i = 0; i < pos.count; i++) {
     v.set(pos.getX(i), pos.getY(i), pos.getZ(i)); if (mat) v.applyMatrix4(mat);
-    this.P.push(v.x, v.y, v.z); this.U.push(0, 0); this.D.push(det); this.T.push(tint[0], tint[1], tint[2]);
+    this.P.push(v.x, v.y, v.z); this.U.push(0, 0);
+    if (det == null) {
+      this.D.push(srcD ? srcD.getX(i) : 0);
+      if (srcT) this.T.push(srcT.getX(i), srcT.getY(i), srcT.getZ(i)); else this.T.push(1, 1, 1);
+    } else if (srcC) {
+      this.D.push(det); this.T.push(srcC.getX(i) * tint[0], srcC.getY(i) * tint[1], srcC.getZ(i) * tint[2]);
+    } else { this.D.push(det); this.T.push(tint[0], tint[1], tint[2]); }
   }
   if (idx) for (let i = 0; i < idx.count; i++) this.I.push(this.b + idx.getX(i));
   else for (let i = 0; i < pos.count; i++) this.I.push(this.b + i);
@@ -1351,15 +1358,162 @@ function makeBodyMesh(id) {
   }
   return bag.done();
 }
-function bodyGeometry(id) {
-  const key = id + (lo() ? ':lo' : ':hi');
+function bodyGeometry(id, wear) {
+  const hat = wear && wear.hat && wear.hat !== 'none' ? wear.hat : '';
+  const extra = wear && wear.extra && wear.extra !== 'none' ? wear.extra : '';
+  const baked = !!(lo() && wear && (hat || extra));
+  const key = id + (lo() ? ':lo' : ':hi') + (baked ? '|' + hat + '|' + (wear.hatHex || wear.hatColor || '') + '|' + extra : '');
   if (BODYGEO[key]) return BODYGEO[key];
-  let g;
-  if (id === 'bean') g = geoSet().round;
-  else if (id && id.indexOf('c-') === 0) g = geoSet()[id.slice(2)] || geoSet().round;
-  else g = makeBodyMesh(id);
-  BODYGEO[key] = g;
+  if (!baked) {
+    let g;
+    if (id === 'bean') g = geoSet().round;
+    else if (id && id.indexOf('c-') === 0) g = geoSet()[id.slice(2)] || geoSet().round;
+    else g = makeBodyMesh(id);
+    BODYGEO[key] = g;
+    return g;
+  }
+  const shape = id === 'bean' ? 'round' : (id.indexOf('c-') === 0 ? id.slice(2) : id);
+  const info = shapeInfo(shape), bag = new GeoBag();
+  bag.add(bodyGeometry(id, null), null, TWHITE, null, true);
+  if (hat) bag.add(hatGeometry(hat), 1, RECOLOR[hat] ? hatTint(wear) : TWHITE, placeM(0, info.hat, 0), true);
+  if (hat === 'beanie') bag.add(hatGeometry('prop'), 1, TWHITE, placeM(0, info.hat + 0.18, 0), true);
+  if (extra) bag.add(hatGeometry('x-' + extra), 1, TWHITE, extraMatrix(shape, extra, info), true);
+  return (BODYGEO[key] = bag.done());
+}
+/* Hats and extras. Each kind is one mesh shared by every runner. Nothing here uses the bar colours, and nothing stands more than 0.28 over the body. */
+const RECOLOR = { party: 1, cap: 1, tophat: 1, beanie: 1 };
+const METALHAT = { crown: 1, oldcrown: 1, halo: 1, star: 1 };
+const HATGEO = {};
+function HatBag() { this.P = []; this.C = []; this.I = []; this.b = 0; }
+HatBag.prototype.add = function (geo, col, mat, keep) {
+  const pos = geo.attributes.position, idx = geo.index, v = new THREE.Vector3(), src = geo.attributes.color;
+  for (let i = 0; i < pos.count; i++) {
+    v.set(pos.getX(i), pos.getY(i), pos.getZ(i)); if (mat) v.applyMatrix4(mat);
+    this.P.push(v.x, v.y, v.z);
+    if (src) this.C.push(src.getX(i), src.getY(i), src.getZ(i)); else this.C.push(col[0], col[1], col[2]);
+  }
+  if (idx) for (let i = 0; i < idx.count; i++) this.I.push(this.b + idx.getX(i));
+  else for (let i = 0; i < pos.count; i++) this.I.push(this.b + i);
+  this.b += pos.count;
+  if (!keep) geo.dispose();
+};
+HatBag.prototype.done = function () {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(this.P, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(this.C, 3));
+  g.setIndex(this.I); g.computeVertexNormals(); g.userData.shared = true;
   return g;
+};
+function hatTint(look) {
+  return lin3((look && (look.hatHex || look.hex)) || '#ffd23f');
+}
+function extraMatrix(shape, extra, info) {
+  if (extra === 'glasses' || extra === 'visor') return placeM(0, info.ey, surfaceZ(shape, 0, info.ey) + (extra === 'visor' ? 0.02 : 0.045));
+  if (extra === 'bowtie' || extra === 'scarf') return placeM(0, Math.max(0.3, info.shy - 0.02), extra === 'scarf' ? 0 : 0.04);
+  if (extra === 'spots') return placeM(0, 0.42, 0);
+  return placeM(0, info.hat, 0);
+}
+function buildHat(kind) {
+  const bag = new HatBag(), n = segN(10, 6);
+  const gold = lin3('#ffc94a'), white = [1, 1, 1], ink = lin3('#1b1530'), leaf = lin3('#3f9d45');
+  const pink = lin3('#ff7eb6'), red = lin3('#d63b55'), paper = lin3('#fff6ea');
+  if (kind === 'party') bag.add(new THREE.ConeGeometry(0.15, 0.26, n).translate(0, 0.13, 0), white);
+  else if (kind === 'cap') {
+    bag.add(new THREE.SphereGeometry(0.18, n, n, 0, TAU, 0, Math.PI / 2), white, placeM(0, 0.02, 0));
+    bag.add(new THREE.BoxGeometry(0.16, 0.025, 0.2), white, placeM(0, 0.03, 0.2));
+  } else if (kind === 'tophat') {
+    bag.add(new THREE.CylinderGeometry(0.12, 0.13, 0.22, n), white, placeM(0, 0.13, 0));
+    bag.add(new THREE.CylinderGeometry(0.22, 0.22, 0.025, n), white, placeM(0, 0.02, 0));
+    bag.add(new THREE.CylinderGeometry(0.125, 0.125, 0.04, n), lin3('#2a2040'), placeM(0, 0.06, 0));
+  } else if (kind === 'beanie' || kind === 'prop') {
+    if (kind === 'beanie') bag.add(new THREE.SphereGeometry(0.18, n, n, 0, TAU, 0, Math.PI / 2), white, placeM(0, 0.02, 0));
+    else { bag.add(new THREE.BoxGeometry(0.22, 0.02, 0.05), gold, placeM(0, 0, 0)); bag.add(new THREE.SphereGeometry(0.035, 6, 5), red, placeM(0, 0.02, 0)); }
+  } else if (kind === 'flower') {
+    for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; bag.add(new THREE.SphereGeometry(0.055, 6, 5), paper, placeM(Math.cos(a) * 0.09, 0.03, Math.sin(a) * 0.09, 0, a, 0, 1.4, 0.35, 0.8)); }
+    bag.add(new THREE.SphereGeometry(0.05, 8, 6), gold, placeM(0, 0.05, 0));
+  } else if (kind === 'bunny') {
+    [-1, 1].forEach(s => {
+      bag.add(new THREE.SphereGeometry(0.05, n, n), white, placeM(s * 0.07, 0.16, 0, 0, 0, s * 0.15, 0.7, 2.4, 0.55));
+      bag.add(new THREE.SphereGeometry(0.03, 6, 5), pink, placeM(s * 0.07, 0.16, 0.02, 0, 0, s * 0.15, 0.4, 1.8, 0.3));
+    });
+  } else if (kind === 'chef') bag.add(latheOf([[0.12, 0], [0.18, 0.03], [0.15, 0.1], [0.1, 0.16], [0.13, 0.21], [0.05, 0.25], [0, 0.27]], segN(8, 5), n), white);
+  else if (kind === 'crown' || kind === 'oldcrown') {
+    const spikes = kind === 'oldcrown' ? 6 : 5, h = kind === 'oldcrown' ? 0.12 : 0.15;
+    bag.add(new THREE.CylinderGeometry(0.15, 0.17, 0.07, n), gold, placeM(0, 0.035, 0));
+    for (let i = 0; i < spikes; i++) { const a = i / spikes * TAU; bag.add(new THREE.ConeGeometry(0.04, h, segN(6, 4)), gold, placeM(Math.cos(a) * 0.12, 0.07 + h / 2, Math.sin(a) * 0.12)); }
+    [[red, 0], [lin3('#7aa2ff'), 2.1], [lin3('#7be0ad'), 4.2]].forEach(gm => bag.add(new THREE.SphereGeometry(0.028, 6, 5), gm[0], placeM(Math.sin(gm[1]) * 0.15, 0.05, Math.cos(gm[1]) * 0.15)));
+  } else if (kind === 'halo') bag.add(new THREE.TorusGeometry(0.2, 0.025, segN(6, 4), n), gold, placeM(0, 0.18, 0, Math.PI / 2, 0, 0));
+  else if (kind === 'horns') [-1, 1].forEach(s => bag.add(new THREE.ConeGeometry(0.06, 0.22, n), lin3('#5a1a30'), placeM(s * 0.12, 0.08, 0, 0, 0, -s * 0.45)));
+  else if (kind === 'antenna') {
+    bag.add(new THREE.CylinderGeometry(0.016, 0.016, 0.2, 5), ink, placeM(0.06, 0.1, 0, 0, 0, -0.4));
+    bag.add(new THREE.SphereGeometry(0.05, n, 6), red, placeM(0.12, 0.2, 0));
+  } else if (kind === 'star') {
+    const st = new THREE.ExtrudeGeometry(starShape(0.12, 0.05), { depth: 0.04, bevelEnabled: false, curveSegments: 3 });
+    st.translate(0, 0.1, -0.02); bag.add(st, gold);
+  } else if (kind === 'x-glasses') {
+    bag.add(new THREE.TorusGeometry(0.07, 0.012, 5, 10), ink, placeM(-0.09, 0, 0));
+    bag.add(new THREE.TorusGeometry(0.07, 0.012, 5, 10), ink, placeM(0.09, 0, 0));
+    bag.add(new THREE.BoxGeometry(0.06, 0.012, 0.012), ink);
+  } else if (kind === 'x-bowtie') {
+    bag.add(new THREE.SphereGeometry(0.035, 6, 5), gold);
+    bag.add(new THREE.ConeGeometry(0.07, 0.12, 4), red, placeM(-0.08, 0, 0, 0, 0, Math.PI / 2));
+    bag.add(new THREE.ConeGeometry(0.07, 0.12, 4), red, placeM(0.08, 0, 0, 0, 0, -Math.PI / 2));
+  } else if (kind === 'x-scarf') bag.add(new THREE.TorusGeometry(0.2, 0.04, 5, 10), red, placeM(0, 0, 0, Math.PI / 2, 0, 0));
+  else if (kind === 'x-visor') {
+    bag.add(new THREE.BoxGeometry(0.46, 0.1, 0.03), lin3('#14152c'));
+    bag.add(new THREE.BoxGeometry(0.16, 0.02, 0.012), lin3('#7fe3ff'), placeM(-0.08, 0.02, 0.02));
+  } else if (kind === 'x-spots') {
+    [[0.16, 0.12, 0.22], [-0.16, 0, 0.2], [0.04, -0.16, 0.18], [-0.12, 0.2, 0.12]].forEach(p => bag.add(new THREE.SphereGeometry(0.045, 5, 4), white, placeM(p[0], p[1], p[2], 0, 0, 0, 1, 0.75, 0.4)));
+  }
+  return bag.done();
+}
+function hatGeometry(kind) {
+  const key = kind + (lo() ? ':lo' : '');
+  if (!HATGEO[key]) HATGEO[key] = buildHat(kind);
+  return HATGEO[key];
+}
+function wearMat(metal) {
+  if (!MAT.wear) {
+    MAT.wear = smat(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.42, metalness: 0.05, vertexColors: true }));
+    MAT.wearMetal = smat(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.28, metalness: 0.85, vertexColors: true }));
+  }
+  return metal ? MAT.wearMetal : MAT.wear;
+}
+const WEAR = {}, WHITEC = new THREE.Color(1, 1, 1);
+let WEAR_N = null;
+function wearMesh(kind) {
+  const cur = WEAR[kind];
+  if (cur && cur.userData.lo === lo()) return cur;
+  if (cur) { scene.remove(cur); cur.dispose(); }
+  const m = new THREE.InstancedMesh(hatGeometry(kind), wearMat(!!METALHAT[kind]), 16);
+  m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.count = 0; m.frustumCulled = false; m.castShadow = !lo();
+  for (let i = 0; i < 16; i++) m.setColorAt(i, WHITEC);
+  m.userData.lo = lo(); scene.add(m); WEAR[kind] = m; return m;
+}
+function wearBegin() { WEAR_N = {}; }
+function wearPush(kind, matrix, color) {
+  if (!kind || lo()) return;
+  const m = wearMesh(kind), i = WEAR_N[kind] || 0;
+  if (i >= 16) return;
+  m.setMatrixAt(i, matrix); m.setColorAt(i, color || WHITEC); WEAR_N[kind] = i + 1;
+}
+function wearEnd() {
+  if (!WEAR_N) return;
+  Object.keys(WEAR).forEach(k => {
+    const m = WEAR[k]; if (m.userData.lo !== lo()) return;
+    m.count = WEAR_N[k] || 0; m.instanceMatrix.needsUpdate = true;
+    if (m.instanceColor) m.instanceColor.needsUpdate = true;
+  });
+}
+function pushWear(rn, now) {
+  if (lo() || !rn.wear) return;
+  const L = rn.wear, info = rn.info, hat = L.hat && L.hat !== 'none' ? L.hat : '', extra = L.extra && L.extra !== 'none' ? L.extra : '';
+  if (hat) {
+    tmpM.multiplyMatrices(rn.body.matrixWorld, placeM(0, info.hat, 0));
+    wearPush(hat, tmpM, RECOLOR[hat] ? rn.hatCol : WHITEC);
+    if (hat === 'beanie') { tmpM.multiplyMatrices(rn.body.matrixWorld, placeM(0, info.hat + 0.18, 0, 0, now * 8, 0)); wearPush('prop', tmpM, WHITEC); }
+  }
+  if (extra) { tmpM.multiplyMatrices(rn.body.matrixWorld, extraMatrix(rn.shape, extra, info)); wearPush('x-' + extra, tmpM, WHITEC); }
 }
 /* Same candy push the jellybean has always used. Very light colours get an exception in M2(4). */
 function candyColor(hex) {
@@ -1411,16 +1565,22 @@ function runnerBits(p, shape, info, mesh, mat, faceSc) {
   };
 }
 function makeLook(p) {
-  const id = (p.look && p.look.body) || 'bean';
+  const L = p.look || null;
+  const id = (L && L.body) || 'bean';
   const shape = id === 'bean' ? 'round' : (id.indexOf('c-') === 0 ? id.slice(2) : id);
   const info = shapeInfo(shape);
-  const geo = bodyGeometry(id === 'bean' || id.indexOf('c-') === 0 ? id : id);
-  const detail = !(id === 'bean' || id.indexOf('c-') === 0);
+  const hat = L && L.hat && L.hat !== 'none';
+  const extra = L && L.extra && L.extra !== 'none';
+  /* Low bakes the hat and extra into the body so the lobby stays at today's draw count. */
+  const geo = bodyGeometry(id, L);
+  const detail = !!(lo() && (hat || extra)) || !(id === 'bean' || id.indexOf('c-') === 0);
   const mat = bodyMaterial(p.color, detail);
   const mesh = new THREE.Mesh(geo, mat);
   const rn = runnerBits(p, shape, info, mesh, mat, info.face);
-  rn.eyeStyle = (p.look && p.look.eyes) || 'classic';
-  rn.wear = p.look || null;
+  rn.eyeStyle = (L && L.eyes) || 'classic';
+  rn.wear = L;
+  rn.hatCol = new THREE.Color((L && (L.hatHex || L.hex)) || p.color || '#ffffff');
+  if (extra && L.extra === 'visor') rn.face.visible = false;
   return rn;
 }
 function makeRunner(p) {
@@ -1572,6 +1732,8 @@ function updateRunner(rn, p, i, g, V, now, dt) {
     rn.body.rotation.z = rn.fly.spin * ft; rn.body.rotation.x = rn.fly.spin * 0.6 * ft;
     rn.body.scale.setScalar(0.85 * Math.max(0.2, 1 - ft * 0.35));
     setFace(rn, 'stun');
+    rn.root.updateMatrixWorld(true);
+    pushWear(rn, now);
     return { x: rn.root.position.x, z: rn.root.position.z, top: rn.root.position.y + 1, out: true };
   }
   rn.root.visible = true;
@@ -1644,6 +1806,7 @@ function updateRunner(rn, p, i, g, V, now, dt) {
   else if (now > rn.blinkAt) { setFace(rn, 'blink'); if (now > rn.blinkAt + 0.12) rn.blinkAt = now + 1.8 + Math.random() * 3.2; }
   else setFace(rn, state === 'jump' ? 'up' : 'open');
   if (rn.showBalls) pushBalls(rn, state);
+  pushWear(rn, now);
   rn.bubble.visible = p.shield > 0 && p.shield > t && !(p.shield - t < 2 && Math.floor(t * 10) % 2);
   if (rn.bubble.visible) rn.bubble.rotation.y = now;
   rn.stars.forEach((s, k) => { s.visible = state === 'stun'; if (s.visible) { const a = now * 6 + k * TAU / 3; s.position.set(Math.cos(a) * 0.4, rn.top + 0.2 + Math.sin(a * 2) * 0.04, Math.sin(a) * 0.4); s.rotation.y = a; } });
@@ -2079,6 +2242,7 @@ HR3D.render = function (g, view) {
   syncPool(runnerPool, g.players, p => makeRunner(p), p => sigOf(p));
   partsBegin();
   eyesBegin();
+  wearBegin();
   const out = [];
   g.players.forEach((p, i) => {
     const rn = runnerPool[i];
@@ -2089,6 +2253,7 @@ HR3D.render = function (g, view) {
   });
   partsEnd();
   eyesEnd();
+  wearEnd();
   if (!youRing) youRing = makeYouRing();
   youRing.userData.dash.rotation.y = now * 0.6;
   youRing.userData.pool.material.opacity = 0.8 + 0.2 * Math.sin(now * 4);
