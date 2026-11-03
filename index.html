@@ -4345,6 +4345,11 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     showCharCheer();
     setTimeout(function () { try { $('againBtn').focus({ preventScroll: true }); } catch (e) {} }, 50);
   }
+  var pressCore = press;
+  press = function (kind) {
+    if (SKY) { skyPress(kind); return; }
+    return pressCore(kind);
+  };
   var finishCore = finish;
   finish = function (kind, delay) {
     if (G && G.hotseat) {
@@ -5533,6 +5538,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
   }
   $('startBtn').addEventListener('click', startRound);
   $('againBtn').addEventListener('click', function () {
+    if (SKY) { skyReset(); $('endScreen').hidden = true; return; }
     if (G && G.hotseat && HOT && HOT.done) { startHotSeat(); return; }
     if (G && G.daily) { startDaily(); return; }
     if (G && G.tut) { pickMode('party'); pickDiff('easy'); startRound(); return; }
@@ -6786,6 +6792,277 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     fpsOn = this.checked; fpsEl.hidden = !fpsOn; fpsFrames = 0; fpsSince = 0;
     try { localStorage.setItem('headrush.fps', fpsOn ? '1' : '0'); } catch (e) {}
   });
+  /* Sky Tower: a rough top-down climb. Own sim, behind ?skytower=1, not in the menus.
+     Height is p.h. A hit slides you down a quarter floor and does not move your angle. */
+  var SK = null;
+  function skySpeed() {
+    var s = RUN;
+    if (SK.t < SK.boost) s *= 1.4;
+    if (SK.t < SK.stun) s *= 0.45;
+    return s;
+  }
+  function skyReset() {
+    var look = lookForDraw();
+    SK = {
+      t: -3, h: 0, flood: -1, angle: Math.PI / 2, omega: BAR0,
+      air: -9, duck: -9, stun: -9, boost: -9, hits: 0, over: false, shown: false,
+      color: (look && look.hex) || '#ffd23f', script: null, nextBar: 12,
+      bars: [
+        { a: Math.PI / 2 + 2.6, type: 'low' },
+        { a: Math.PI / 2 + 4.8, type: 'high' }
+      ],
+      pads: [
+        { a: Math.PI / 2 + 1.15, w: 0.22 },
+        { a: Math.PI / 2 + 3.7, w: 0.22 }
+      ]
+    };
+    $('endScreen').hidden = true;
+    $('hearts').hidden = true;
+    btnLane.hidden = true;
+    $('controls').classList.remove('three');
+    lastTimerText = '';
+  }
+  function skyBoot() {
+    gfx = 'flat'; view3d = false;
+    document.body.classList.remove('v3d');
+    hideAllOverlays();
+    $('startScreen').hidden = true;
+    resize();
+    skyReset();
+  }
+  function skyApplyHit() {
+    SK.h -= 0.25;
+    SK.stun = SK.t + STUN_T;
+    SK.air = -9; SK.duck = -9; SK.boost = -9;
+    SK.hits++;
+    if (SKY) { buzz(80); toast('Slid down a floor!'); }
+  }
+  function skyCross(obj) {
+    var rel = wrap(obj.a - SK.angle), prev = obj.prev;
+    obj.prev = rel;
+    return prev !== undefined && Math.abs(prev) < 1 && Math.abs(rel) < 1 && (prev > 0) !== (rel > 0);
+  }
+  function skyAddBar() {
+    var best = 0, at = SK.angle + Math.PI, angs = [], i;
+    for (i = 0; i < SK.bars.length; i++) { var a = SK.bars[i].a % TAU; if (a < 0) a += TAU; angs.push(a); }
+    angs.sort(function (x, y) { return x - y; });
+    for (i = 0; i < angs.length; i++) {
+      var n = i + 1 < angs.length ? angs[i + 1] : angs[0] + TAU, gap = n - angs[i];
+      if (gap > best) { best = gap; at = angs[i] + gap / 2; }
+    }
+    SK.bars.push({ a: at, type: SK.bars.length % 2 ? 'low' : 'high' });
+  }
+  function skyStep(dt) {
+    if (!SK || SK.over) return;
+    var was = SK.t;
+    SK.t += dt;
+    if (SK.t < 0) return;
+    if (was < 0 && SKY) toast('Climb!');
+    if (SK.script) while (SK.script.length && SK.script[0] <= SK.t) { SK.script.shift(); skyApplyHit(); }
+    var sp = skySpeed(), i;
+    SK.angle += sp * dt;
+    SK.h += sp / TAU * dt;
+    SK.flood += (RUN / TAU) * (0.9 + 0.004 * SK.t) * dt;
+    for (i = 0; i < SK.bars.length; i++) SK.bars[i].a -= SK.omega * dt;
+    if (SK.t >= SK.nextBar && SK.bars.length < 5) { skyAddBar(); SK.nextBar += 12; }
+    for (i = 0; i < SK.bars.length; i++) {
+      var b = SK.bars[i];
+      if (!skyCross(b) || SK.t < SK.stun) continue;
+      var safe = b.type === 'low' ? SK.t < SK.air : SK.t < SK.duck;
+      if (!safe) skyApplyHit();
+    }
+    for (i = 0; i < SK.pads.length; i++) {
+      var pad = SK.pads[i];
+      if (!skyCross(pad) || SK.t < SK.stun || SK.t < SK.duck) continue;
+      SK.h += 0.25; SK.boost = SK.t + 1; SK.air = SK.t + 0.6;
+      if (SKY) { sfx.boing(); toast('Lift!'); }
+    }
+    if (SK.h <= SK.flood) {
+      SK.over = true; SK.h = SK.flood;
+      if (!SK.shown) { SK.shown = true; skyShowEnd(); }
+    }
+  }
+  function skyCatch(hits) {
+    var h = 0, flood = -1, stun = -9, i = 0, t = 0, dt = 1 / 60, climb = RUN / TAU;
+    while (t < 180) {
+      t += dt;
+      while (i < hits.length && hits[i] <= t) { h -= 0.25; stun = t + STUN_T; i++; }
+      var sf = t < stun ? 0.45 : 1;
+      h += climb * sf * dt;
+      flood += climb * (0.9 + 0.004 * t) * dt;
+      if (h <= flood) return t;
+    }
+    return t;
+  }
+  function skyRun(hits) {
+    skyReset();
+    SK.t = 0; SK.h = 0; SK.flood = -1; SK.bars = []; SK.pads = []; SK.nextBar = 1e9; SK.script = hits.slice();
+    var guard = 0;
+    while (!SK.over && guard < 12000) { skyStep(1 / 60); guard++; }
+    return SK.t;
+  }
+  function skyPress(kind) {
+    flashBtn(kind);
+    if (!SK || SK.over || SK.t < 0 || SK.t < SK.stun) return;
+    if (kind === 'jump') { if (SK.t < SK.duck) SK.duck = SK.t; SK.air = SK.t + 0.5; sfx.jump(); }
+    else if (kind === 'duck') { if (SK.t < SK.air) SK.air = SK.t; SK.duck = SK.t + 0.5; sfx.duck(); }
+  }
+  function skyHud() {
+    if (!SK) return;
+    var floor = String(Math.max(1, Math.floor(SK.h + 1)));
+    if (floor !== lastTimerText) { lastTimerText = floor; timerEl.textContent = floor; }
+    $('hudPre').textContent = SK.over ? 'Caught' : 'Water ';
+    aliveEl.textContent = Math.max(0, SK.h - SK.flood).toFixed(1);
+    $('hudPost').textContent = SK.over ? '' : ' below';
+  }
+  function skyShowEnd() {
+    $('endEyebrow').textContent = 'Sky Tower · rough test';
+    $('endTitle').textContent = 'The water caught you';
+    $('endTitle').classList.remove('win');
+    $('endSub').textContent = 'You climbed ' + Math.max(0, SK.h).toFixed(1) + ' floors.';
+    $('hotPodium').hidden = true; $('matchBox').hidden = true; $('perfectBadge').hidden = true;
+    $('tipLine').hidden = true; $('tryMedium').hidden = true; $('retryBtn').hidden = true;
+    $('replayBtn').hidden = true; $('clipBtn').hidden = true; $('shareBtn').hidden = true;
+    $('fbOpenEnd').hidden = true; $('switchBtn').hidden = true; $('installBtn').hidden = true;
+    $('stLabel1').textContent = 'Floors'; $('stPlace').textContent = Math.max(0, SK.h).toFixed(1);
+    $('stTime').textContent = SK.hits + (SK.hits === 1 ? ' hit' : ' hits');
+    $('stClose').textContent = clockTenth(SK.t); $('stCoins').textContent = '0';
+    $('bestLine').textContent = 'Orange bar: jump. Blue bar: duck. A spring pad lifts you, and speeds you up.';
+    $('againBtn').textContent = 'Climb again';
+    $('syncLine').textContent = '';
+    $('endScreen').hidden = false;
+  }
+  function skyFit(text, size, maxW) {
+    ctx.font = size + 'px ' + DISPLAY;
+    var w = ctx.measureText(text).width;
+    if (w > maxW) size = Math.floor(size * maxW / w);
+    return size;
+  }
+  function skyDraw() {
+    if (!SK) return;
+    var Wd = Math.max(1, W), Hd = Math.max(1, H);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.clearRect(0, 0, Wd, Hd);
+    ctx.fillStyle = '#100c18'; ctx.fillRect(0, 0, Wd, Hd);
+    var cx = Wd * 0.46, cy = Hd * 0.52, R = Math.min(Wd, Hd) * 0.34, i;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(Math.PI / 2 - SK.angle);
+    for (i = 4; i >= 1; i--) {
+      ctx.beginPath(); ctx.arc(0, 0, R * (0.28 + 0.18 * i), 0, TAU);
+      ctx.strokeStyle = i === 4 ? '#3a3260' : '#241c40';
+      ctx.lineWidth = i === 4 ? 12 : 7; ctx.stroke();
+    }
+    var gap = Math.max(0, SK.h - SK.flood);
+    var wr = R * Math.max(0.16, Math.min(0.9, 1 - gap / 2.5));
+    ctx.beginPath(); ctx.arc(0, 0, wr, 0, TAU);
+    ctx.fillStyle = '#1a4550'; ctx.fill();
+    ctx.strokeStyle = '#3a6d78'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, wr * 0.55, 0, TAU);
+    ctx.strokeStyle = 'rgba(90, 140, 150, 0.35)'; ctx.lineWidth = 2; ctx.stroke();
+    for (i = 0; i < SK.pads.length; i++) {
+      var pad = SK.pads[i], a0 = pad.a - pad.w / 2, a1 = pad.a + pad.w / 2, s;
+      for (s = 0; s < 4; s++) {
+        ctx.beginPath(); ctx.arc(0, 0, R * (0.72 + s * 0.04), a0, a1);
+        ctx.strokeStyle = s % 2 ? '#241f3e' : '#322b52'; ctx.lineWidth = R * 0.08; ctx.stroke();
+      }
+      ctx.strokeStyle = '#f4f2ff'; ctx.lineWidth = 2; ctx.beginPath();
+      var pm = pad.a;
+      ctx.moveTo(Math.cos(pm) * R * 0.74, Math.sin(pm) * R * 0.74);
+      ctx.lineTo(Math.cos(pm) * R * 0.82 - Math.sin(pm) * 6, Math.sin(pm) * R * 0.82 + Math.cos(pm) * 6);
+      ctx.lineTo(Math.cos(pm) * R * 0.9, Math.sin(pm) * R * 0.9);
+      ctx.stroke();
+    }
+    for (i = 0; i < SK.bars.length; i++) {
+      var b = SK.bars[i], high = b.type === 'high';
+      ctx.strokeStyle = high ? '#3fa9ff' : '#ff8a2a';
+      ctx.lineWidth = high ? 16 : 14; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(b.a) * R * 0.42, Math.sin(b.a) * R * 0.42);
+      ctx.lineTo(Math.cos(b.a) * R * 1.02, Math.sin(b.a) * R * 1.02);
+      ctx.stroke();
+    }
+    var jumping = SK.t < SK.air, ducking = SK.t < SK.duck, rad = jumping ? 16 : 13;
+    var rx = Math.cos(SK.angle) * R * 0.9, ry = Math.sin(SK.angle) * R * 0.9;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.ellipse(rx, ry + 4, rad, rad * 0.45, 0, 0, TAU); ctx.fill();
+    ctx.globalAlpha = SK.t < SK.stun && Math.floor(SK.t * 12) % 2 ? 0.45 : 1;
+    ctx.fillStyle = SK.color; ctx.beginPath();
+    if (ducking) ctx.ellipse(rx, ry, 16, 8, SK.angle, 0, TAU); else ctx.arc(rx, ry, rad, 0, TAU);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    var lx = Math.min(Wd - 18, cx + R + 28), top = 28, bot = Hd - 16;
+    var span = Math.max(2.2, SK.h - SK.flood + 0.6);
+    function yAt(hh) { return bot - (hh - SK.flood) / span * (bot - top); }
+    ctx.strokeStyle = '#3a3260'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(lx, top); ctx.lineTo(lx, bot); ctx.stroke();
+    ctx.fillStyle = '#3a6d78'; ctx.beginPath(); ctx.arc(lx, yAt(SK.flood), 6, 0, TAU); ctx.fill();
+    ctx.fillStyle = SK.color; ctx.beginPath(); ctx.arc(lx, yAt(SK.h), 7, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#a9a8d0'; ctx.font = '12px ' + "'Atkinson Hyperlegible', system-ui, sans-serif";
+    ctx.textAlign = 'center'; ctx.fillText('height', lx, 16);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    var title = 'SKY TOWER', ts = skyFit(title, Math.round(Math.max(22, R * 0.16)), Wd * 0.8);
+    textOut(title, cx, 22, '#f4f2ff', ts);
+    if (SK.t < 0) {
+      var n = Math.ceil(-SK.t);
+      textOut('CLIMB', cx, cy - R * 0.15, '#ffd23f', skyFit('CLIMB', Math.round(R * 0.22), Wd * 0.8));
+      textOut(String(n), cx, cy + R * 0.2, '#f4f2ff', Math.round(R * 0.4));
+      textOut('ORANGE JUMP', cx, Hd - 36, '#ff8a2a', skyFit('ORANGE JUMP', 16, Wd * 0.45));
+      textOut('BLUE DUCK', cx, Hd - 16, '#3fa9ff', skyFit('BLUE DUCK', 16, Wd * 0.45));
+    } else if (!SK.over) {
+      var th = null, spv = skySpeed() + SK.omega;
+      for (i = 0; i < SK.bars.length; i++) {
+        var rel = wrap(SK.bars[i].a - SK.angle);
+        if (rel <= 0.02 || spv < 0.05) continue;
+        var tti = rel / spv;
+        if (tti < 0.8 && (!th || tti < th.tti)) th = { tti: tti, type: SK.bars[i].type };
+      }
+      if (th) {
+        var jumpCue = th.type === 'low';
+        textOut(jumpCue ? 'JUMP' : 'DUCK', cx, cy, jumpCue ? '#ff8a2a' : '#3fa9ff', Math.round(R * 0.2));
+        setCue(jumpCue ? 'jump' : 'duck');
+      } else setCue(null);
+    }
+  }
+  function skySelfTest() {
+    var fails = [], savedLook = JSON.stringify(LOOK);
+    function eq(name, a, b) { if (a !== b) fails.push(name + ': ' + a + ' !== ' + b); }
+    function near(name, a, b, lim) { if (Math.abs(a - b) > lim) fails.push(name + ': ' + a + ' !~ ' + b); }
+    try {
+      eq('menu', document.querySelector('[data-mode="skytower"]'), null);
+      eq('low', COL.low, '#ff8a2a');
+      eq('high', COL.high, '#3fa9ff');
+      near('zero', skyCatch([]), 100, 15);
+      near('one', skyCatch([10]), 89, 15);
+      near('two', skyCatch([10, 25]), 76, 15);
+      near('three', skyCatch([5, 8, 11]), 56, 15);
+      near('live0', skyRun([]), skyCatch([]), 2);
+      near('live1', skyRun([10]), skyCatch([10]), 2);
+      near('live3', skyRun([5, 8, 11]), skyCatch([5, 8, 11]), 2);
+      skyReset();
+      var a0 = SK.angle;
+      SK.t = 1; SK.bars = []; SK.pads = [];
+      skyStep(1 / 60);
+      eq('moved', Math.abs(SK.angle - a0) > 0 && Math.abs(SK.angle - a0) < 0.05, true);
+      var ang = SK.angle, hh = SK.h;
+      skyApplyHit();
+      eq('angle', SK.angle, ang);
+      near('drop', hh - SK.h, 0.25, 1e-6);
+      skyReset();
+      SK.t = 2; SK.stun = -9; SK.duck = -9; SK.bars = [];
+      var pad = SK.pads[0];
+      SK.angle = pad.a - 0.05; pad.prev = wrap(pad.a - SK.angle); SK.angle = pad.a + 0.05;
+      var before = SK.h;
+      skyStep(0);
+      near('lift', SK.h - before, 0.25, 1e-6);
+      eq('boost', SK.boost > SK.t, true);
+      eq('look', JSON.stringify(LOOK), savedLook);
+      skyReset(); resize(); skyDraw();
+    } catch (err) { fails.push('threw ' + (err && err.stack || err)); }
+    return { ok: fails.length === 0, fails: fails };
+  }
+
   var rafEma = 16.7, lastRaf = 0, lastRun = 0;
   function frame(ts) {
     if (lastRaf) rafEma = rafEma * 0.95 + Math.min(50, ts - lastRaf) * 0.05;
@@ -6795,6 +7072,11 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     lastRun = ts;
     var dt = last ? Math.min(0.05, (ts - last) / 1000) : 0;
     last = ts;
+    if (SKY) {
+      if (!SK) skyReset();
+      skyStep(dt); skyHud(); skyDraw();
+      requestAnimationFrame(frame); return;
+    }
     if (fpsOn) {
       fpsFrames++;
       if (!fpsSince) fpsSince = ts;
@@ -6877,11 +7159,12 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     });
   });
   renderRemind();
-  var INVITE = null;
+  var INVITE = null, SKY = false;
   try {
     var qs = new URLSearchParams(location.search), rc = (qs.get('room') || '').toUpperCase();
+    SKY = qs.get('skytower') === '1';
     if (/^[A-Z]{4}$/.test(rc) && rc.split('').every(function (ch) { return CODE_CHARS.indexOf(ch) >= 0; })) INVITE = rc;
-    if (qs.get('room') || qs.get('source')) history.replaceState(null, '', location.pathname);
+    if (qs.get('room') || qs.get('source')) history.replaceState(null, '', location.pathname + location.search.replace(/[?&](room|source)=[^&]*/g, '').replace(/^&/, '?').replace(/\?$/, ''));
   } catch (e) {}
   function useInvite() {
     if (!INVITE || !currentPlayer()) return false;
@@ -6918,7 +7201,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     if (/[?&]simtest=1(?:&|$)/.test(location.search)) {
       window.__kit = {
         slowMax: KIT_SLOW_MAX, tooFast: kitTooFast, roll: kitRoll, paint: kitPaint,
-        reseed: reseedPrev, before: kitBefore, after: kitAfter, roomIds: roomArenaIds, selfTest: kitSelfTest, bounceTest: bounceSelfTest, hotTest: hotSeatSelfTest, buddyTest: buddySelfTest
+        reseed: reseedPrev, before: kitBefore, after: kitAfter, roomIds: roomArenaIds, selfTest: kitSelfTest, bounceTest: bounceSelfTest, hotTest: hotSeatSelfTest, buddyTest: buddySelfTest, skyTest: skySelfTest
       };
     }
   } catch (e) {}
@@ -6929,6 +7212,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
   if (!currentPlayer()) { showNameScreen(false); if (INVITE) $('nameErr').textContent = 'Type your name to join room ' + INVITE + '.'; }
   else useInvite();
   if (document.fonts && document.fonts.load) document.fonts.load('40px "Lilita One"').catch(function () {});
+  if (SKY) skyBoot();
   requestAnimationFrame(frame);
 })();
 </script>
