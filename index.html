@@ -4687,11 +4687,12 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     requestAnimationFrame(function () { requestAnimationFrame(function () { fill.style.width = (100 * li.into / li.need) + '%'; }); });
     ul.textContent = '';
     function add(text, cls) { var e = document.createElement('li'); e.className = cls; e.textContent = text; ul.appendChild(e); }
-    if (res.after > res.before) {
-      add('Level up! You reached level ' + res.after + '.', 'levelup');
-      SKINS.forEach(function (sk) { if (sk.lvl > res.before && sk.lvl <= res.after) add(sk.name + ' is now in the Locker.', 'levelup'); });
-    }
-    if (res.perfect) add(res.perfect === 10 ? '10 perfect rounds! Perfect Gold is free in the Locker.' : 'Perfect round! That makes ' + res.perfect + '.', 'levelup');
+    if (res.after > res.before) add('Level up! You reached level ' + res.after + '.', 'levelup');
+    (res.unlocked || []).forEach(function (key) {
+      var it = LOOK_ITEM[key];
+      if (it) add(it.name + ' is ready in My Character.', 'levelup');
+    });
+    if (res.perfect) add(res.perfect === 10 ? '10 perfect rounds!' : 'Perfect round! That makes ' + res.perfect + '.', 'levelup');
     if (res.combo >= COMBO_STEPS[2]) add('Best combo: ' + res.combo + ' clean dodges in a row (x' + comboMult(res.combo) + ')' + (res.combo >= (PROFILE.bestCombo || 0) && res.combo > 0 ? '. Your record!' : ''), 'won');
     if (res.streak) add((res.streak.froze ? 'Your weekly freeze saved your streak! Day ' + res.streak.n : res.streak.n === 1 ? 'Day 1 of a new streak!' : 'Day ' + res.streak.n + ' streak!') + ' +' + res.streak.bonus + ' coins', 'levelup');
     res.done.forEach(function (d) { add('Challenge done: ' + d.text + '. +' + d.reward + ' coins', 'won'); });
