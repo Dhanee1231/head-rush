@@ -6286,7 +6286,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     ROOM.roundSeed = payload.seed >>> 0; ROOM.resDone = false; ROOM.roundWall = Date.now(); ROOM.decideAt = 0;
     ROOM.nextAt = 0; ROOM.nextFired = true; ROOM.skipAsked = false;
     if (!$('roomLobby').hidden) renderLobby();
-    var roster = (payload.roster || []).slice(0, 8).map(function (r) { return { id: String(r.id), name: String(r.name || 'Player').slice(0, 14), skin: r.skin, bot: !!r.bot, bi: r.bi || 0, c: typeof r.c === 'number' ? r.c : -1, sh: ['round', 'triangle', 'square', 'diamond', 'star'].indexOf(r.sh) >= 0 ? r.sh : 'round', lk: typeof r.lk === 'string' ? r.lk.slice(0, 40) : '', bd: r.bd === 1 ? 1 : 0, me: r.id === ROOM.me }; });
+    var roster = (Array.isArray(payload.roster) ? payload.roster : []).filter(function (r) { return !!r && typeof r === 'object'; }).slice(0, 8).map(function (r) { return { id: String(r.id), name: String(r.name || 'Player').slice(0, 14), skin: r.skin, bot: !!r.bot, bi: r.bi || 0, c: typeof r.c === 'number' ? r.c : -1, sh: ['round', 'triangle', 'square', 'diamond', 'star'].indexOf(r.sh) >= 0 ? r.sh : 'round', lk: typeof r.lk === 'string' ? r.lk.slice(0, 40) : '', bd: r.bd === 1 ? 1 : 0, me: r.id === ROOM.me }; });
     if (!roster.some(function (r) { return r.me; })) {
       if (!$('roomScreen').hidden) $('roomStatus').textContent = 'A round started without you. You’ll join the next one.';
       return;
