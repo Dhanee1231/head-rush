@@ -722,6 +722,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       </div>
       <div class="btn-row">
         <button class="btn" id="againBtn" type="button">Run again</button>
+        <button class="btn ghost" id="skyHome" type="button" hidden>Home</button>
         <button class="btn ghost" id="retryBtn" type="button" hidden>Replay level</button>
         <button class="btn ghost" id="replayBtn" type="button" hidden>Watch knockout replay</button>
         <button class="btn ghost" id="shareBtn" type="button">Share my result</button>
@@ -3771,6 +3772,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     if (first) PROFILE.coins += 30;
     saveProfile();
     $('retryBtn').hidden = true; $('perfectBadge').hidden = true; $('matchBox').hidden = true; $('tryMedium').hidden = true;
+    $('skyHome').hidden = true;
     $('endEyebrow').textContent = 'Tutorial · Neon Rooftop';
     $('endTitle').textContent = 'You’ve got it!'; $('endTitle').classList.add('win');
     $('endSub').textContent = 'Jump the orange bars, duck the blue ones. Bars speed up every 10 seconds, and more join in.';
@@ -4308,6 +4310,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     musicStop(0.2);
     $('tipLine').hidden = true; $('tryMedium').hidden = true; $('matchBox').hidden = true;
     $('retryBtn').hidden = true; $('replayBtn').hidden = true; $('clipBtn').hidden = true;
+    $('skyHome').hidden = true;
     $('perfectBadge').hidden = !perfect;
     $('endTitle').classList.add('win');
     $('endTitle').textContent = win.name + ' wins!';
@@ -5230,6 +5233,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
   function showEnd() {
     if (G.tut) { showTutEnd(); return; }
     if (G.hotseat) { hotSeatTurnDone(); return; }
+    $('skyHome').hidden = true;
     $('hotPodium').hidden = true;
     $('tipLine').hidden = true; $('tryMedium').hidden = true;
     $('endTitle').classList.remove('pop'); $('endLvl').classList.remove('burst'); $('endConfetti').textContent = '';
@@ -5557,6 +5561,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
   $('tryMedium').addEventListener('click', function () { PROFILE.medAsked = true; saveProfile(); pickDiff('medium'); startRound(); });
   $('replayTut').addEventListener('click', startTutorial);
   $('switchBtn').addEventListener('click', function () { if (ROOM) leaveRoom(); running = false; musicStop(0.2); $('endScreen').hidden = true; $('startScreen').hidden = false; renderProfile(); pickMode(mode); });
+  $('skyHome').addEventListener('click', skyGoHome);
 
   /* ---------- progress UI and Locker ---------- */
   function renderProfile() {
@@ -6930,6 +6935,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     $('tipLine').hidden = true; $('tryMedium').hidden = true; $('retryBtn').hidden = true;
     $('replayBtn').hidden = true; $('clipBtn').hidden = true; $('shareBtn').hidden = true;
     $('fbOpenEnd').hidden = true; $('switchBtn').hidden = true; $('installBtn').hidden = true;
+    $('skyHome').hidden = false;
     $('stLabel1').textContent = 'Floors'; $('stPlace').textContent = Math.max(0, SK.h).toFixed(1);
     $('stTime').textContent = SK.hits + (SK.hits === 1 ? ' hit' : ' hits');
     $('stClose').textContent = clockTenth(SK.t); $('stCoins').textContent = '0';
@@ -6937,6 +6943,42 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     $('againBtn').textContent = 'Climb again';
     $('syncLine').textContent = '';
     $('endScreen').hidden = false;
+    setTimeout(function () { try { $('againBtn').focus({ preventScroll: true }); } catch (e) {} }, 50);
+  }
+  /* Home leaves Sky Tower for good: the menu comes back, and a reload no longer opens the tower. */
+  function skyGoHome() {
+    if (ROOM) leaveRoom();
+    running = false;
+    musicStop(0.2);
+    setCue(null);
+    SKY = false;
+    SK = null;
+    document.body.classList.remove('sky');
+    try {
+      var next = location.pathname + location.search.replace(/[?&]skytower=[^&]*/g, '').replace(/^&/, '?').replace(/\?$/, '');
+      history.replaceState(null, '', next);
+    } catch (e) {}
+    $('hearts').hidden = false;
+    $('skyHome').hidden = true;
+    $('shareBtn').hidden = false;
+    $('fbOpenEnd').hidden = false;
+    $('switchBtn').hidden = false;
+    $('replayBtn').hidden = true;
+    $('clipBtn').hidden = true;
+    $('retryBtn').hidden = true;
+    $('installBtn').hidden = true;
+    $('againBtn').textContent = 'Run again';
+    $('endScreen').hidden = true;
+    $('startScreen').hidden = false;
+    var back = 'hd';
+    try {
+      var gsv = localStorage.getItem('headrush.gfx');
+      if (gsv === 'hd' || gsv === 'lite' || gsv === 'flat') back = gsv;
+      else if (localStorage.getItem('headrush.view') === '2d') back = 'flat';
+    } catch (e) {}
+    pickGfx(back);
+    renderProfile();
+    pickMode(mode);
   }
   function skyFit(text, size, maxW) {
     ctx.font = size + 'px ' + DISPLAY;
