@@ -6944,9 +6944,9 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     if (!SK) return;
     var floor = String(Math.max(1, Math.floor(SK.h + 1)));
     if (floor !== lastTimerText) { lastTimerText = floor; timerEl.textContent = floor; }
-    $('hudPre').textContent = SK.over ? 'Caught' : 'Water is ';
+    $('hudPre').textContent = SK.over ? 'Caught ' : 'Water is ';
     aliveEl.textContent = Math.max(0, SK.h - SK.flood).toFixed(1);
-    $('hudPost').textContent = SK.over ? '' : ' floors below';
+    $('hudPost').textContent = ' floors below';
   }
   function skyShowEnd() {
     $('endEyebrow').textContent = 'Sky Tower · rough test';
@@ -7212,6 +7212,10 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       PROFILE.xp = xpWas;
       $('endScreen').hidden = true;
       SKY = false;
+      skyReset();
+      SK.over = true; SK.h = 2; SK.flood = 2;
+      skyHud();
+      eq('caught-line', $('hudPre').textContent + $('aliveNum').textContent + $('hudPost').textContent, 'Caught 0.0 floors below');
     } catch (err) { fails.push('threw ' + (err && err.stack || err)); }
     return { ok: fails.length === 0, fails: fails };
   }
