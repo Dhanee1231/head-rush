@@ -469,8 +469,42 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
   padding: 14px 12px max(14px, env(safe-area-inset-bottom, 0px));
   display: flex; flex-direction: column; gap: 10px;
 }
-.char-lead { margin: 0; font-size: 16px; line-height: 1.4; }
-#lockerDone { height: 60px; min-height: 60px; }
+.char-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.char-tab {
+  min-height: 64px; border: 0; border-radius: 14px; background: var(--bg); color: var(--muted);
+  font-family: var(--font-display); font-size: 15px; line-height: 1.05; letter-spacing: 0; cursor: pointer; padding: 4px 2px;
+}
+.char-tab[aria-selected="true"] { color: var(--ink); box-shadow: inset 0 0 0 2px var(--you); }
+.char-tab:focus-visible, .look-card:focus-visible, .look-swatch:focus-visible, #charLockPlay:focus-visible { outline: 3px solid var(--you); outline-offset: 2px; }
+.char-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-content: start; }
+.char-grid.swatches { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.look-card, .look-swatch {
+  position: relative; box-sizing: border-box; border-radius: 16px; cursor: pointer; font: inherit; color: var(--ink);
+}
+.look-card {
+  min-height: 114px; border: 2px solid var(--line); background: var(--bg);
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; padding: 28px 4px 8px; text-align: center;
+}
+.look-card canvas { width: 72px; height: 84px; }
+.look-card .nm, .look-swatch .nm { font-size: 15px; font-weight: 700; line-height: 1.15; }
+.look-card .how { font-size: 15px; line-height: 1.15; color: var(--muted); }
+.look-card[aria-pressed="true"] { border-color: var(--you); }
+.look-card.locked { opacity: 0.72; }
+.look-swatch {
+  min-height: 72px; border: 3px solid transparent; display: flex; align-items: flex-end; justify-content: center; padding: 6px 4px;
+}
+.look-swatch[aria-pressed="true"] { border-color: #191a33; outline: 2px solid var(--you); outline-offset: 2px; }
+.look-swatch.locked { filter: grayscale(0.55) brightness(0.75); }
+.look-badge {
+  position: absolute; top: 4px; right: 4px; z-index: 1; background: var(--you); color: #191a33;
+  font-size: 15px; font-weight: 700; line-height: 1; border-radius: 999px; padding: 3px 6px; pointer-events: none;
+}
+.char-lock { display: grid; gap: 8px; background: var(--bg); border: 2px solid var(--you); border-radius: 18px; padding: 14px; }
+.char-lock h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 28px; line-height: 1; }
+.char-lock p { margin: 0; font-size: 16px; line-height: 1.35; }
+.char-bar { height: 16px; border-radius: 8px; background: var(--panel); overflow: hidden; }
+.char-bar span { display: block; height: 100%; width: 0; background: var(--fast); }
+#charLockPlay, #lockerDone { height: 60px; min-height: 60px; }
 @media (max-height: 520px) {
   .char-stage { height: 32vh; min-height: 148px; }
   .char-name { font-size: 20px; bottom: 4px; }
@@ -677,8 +711,21 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       <p class="char-name" id="charName">Jellybean</p>
     </div>
     <div class="char-sheet" id="charSheet">
-      <p class="char-lead" id="charLead">Spin your runner, or tap Surprise me. Only looks you have unlocked. It saves right away.</p>
-      <div id="charSheetBody"></div>
+      <div class="char-tabs" id="charTabs" role="tablist" aria-label="What to change">
+        <button class="char-tab" type="button" role="tab" id="charTab-body" data-slot="body" aria-controls="charGrid">Body</button>
+        <button class="char-tab" type="button" role="tab" id="charTab-color" data-slot="color" aria-controls="charGrid">Colour</button>
+        <button class="char-tab" type="button" role="tab" id="charTab-eyes" data-slot="eyes" aria-controls="charGrid">Eyes</button>
+        <button class="char-tab" type="button" role="tab" id="charTab-hat" data-slot="hat" aria-controls="charGrid">Hat</button>
+        <button class="char-tab" type="button" role="tab" id="charTab-extra" data-slot="extra" aria-controls="charGrid">Extras</button>
+      </div>
+      <div class="char-grid" id="charGrid" role="tabpanel" aria-labelledby="charTab-body"></div>
+      <div class="char-lock" id="charLock" hidden>
+        <h3 id="charLockName">Top Hat</h3>
+        <p id="charLockHow">Win 5 Party rounds to unlock it.</p>
+        <div class="char-bar" id="charLockBar" aria-hidden="true"><span id="charLockFill"></span></div>
+        <p id="charLockCount">3 of 5</p>
+        <button class="btn" id="charLockPlay" type="button">OK, let's play!</button>
+      </div>
       <button class="btn" id="lockerDone" type="button">Done</button>
     </div>
   </div>
@@ -2342,9 +2389,9 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       g.strokeStyle = '#e7c56a'; g.beginPath(); g.moveTo(cx + w * 0.1, y + h * 0.1); g.lineTo(cx + w * 0.18, y - h * 0.02); g.stroke();
       g.fillStyle = '#d63b55'; ellG(g, cx + w * 0.18, y - h * 0.02, w * 0.04, h * 0.03); g.fill();
     }
-    if (L.extra !== 'visor') paintEyesFront(g, L.eyes || 'classic', x, y, w, h, state);
+    if (L.extra !== 'visor') paintEyesFront(g, L.eyes || 'classic', cx, y, w, h, state);
     else { g.fillStyle = '#14152c'; g.fillRect(x + w * 0.12, y + h * 0.36, w * 0.76, h * 0.12); g.fillStyle = '#7fe3ff'; g.fillRect(x + w * 0.2, y + h * 0.39, w * 0.22, h * 0.03); }
-    paintExtraFront(g, L.extra, x, y, w, h);
+    paintExtraFront(g, L.extra, cx, y, w, h);
     paintHatFront(g, L.hat, L.hatHex || col, cx, y, w, h);
   }
   /* Menu cards. One canvas per look, drawn once, never rebuilt during a frame. */
@@ -4693,7 +4740,131 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     $('coinsLocker').textContent = PROFILE.coins;
     $('charSpin').setAttribute('aria-pressed', charSpinOn ? 'true' : 'false');
   }
-  function renderChar() { syncCharMode(); renderCharHead(); paintCharPreview(); }
+  var charSlot = 'body', charLockKey = null;
+  var LOOK_HOW = {
+    lvl: function (n) { return 'Reach level ' + n; },
+    rounds: function (n) { return 'Play ' + n + ' rounds'; },
+    wins: function (n) { return 'Win ' + n + ' Party rounds'; },
+    anyWin: function (n) { return n === 1 ? 'Win 1 round' : 'Win ' + n + ' rounds'; },
+    perfect: function (n) { return 'Finish ' + n + ' perfect rounds'; },
+    combo: function (n) { return 'Get a combo of ' + n; },
+    streak: function (n) { return 'Keep a ' + n + '-day streak'; },
+    dailyDone: function (n) { return n === 1 ? 'Finish 1 Daily Challenge' : 'Finish ' + n + ' Daily Challenges'; },
+    closeTotal: function (n) { return 'Get ' + n + ' close shaves'; }
+  };
+  function lookRuleFor(key) {
+    var best = null, bestLeft = 1e9;
+    LOOK_RULES.forEach(function (r) {
+      if (r.give.indexOf(key) < 0) return;
+      var left = r.n - lookCounter(r.k, PROFILE, LOOK);
+      if (left < bestLeft) { bestLeft = left; best = r; }
+    });
+    return best;
+  }
+  function lookHow(it) {
+    if (!it) return 'Keep playing to earn this.';
+    if (it.own && !lookHas(it.slot, it.id)) return 'Players who already earned this still have it.';
+    var r = lookRuleFor(it.key);
+    return r && LOOK_HOW[r.k] ? LOOK_HOW[r.k](r.n) : 'Keep playing to earn this.';
+  }
+  function lookInk(hex) {
+    var h = (hex || '#fff').replace('#', ''), n = parseInt(h.length === 3 ? h.replace(/./g, function (c) { return c + c; }) : h, 16);
+    var r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    return (r * 0.3 + g * 0.59 + b * 0.11) > 150 ? '#191a33' : '#f4f2ff';
+  }
+  function cardLook(slot, id) {
+    var L = lookForDraw(), it = lookItem(slot, id);
+    var o = { body: L.body, hex: L.hex, eyes: L.eyes, hat: L.hat, hatHex: L.hatHex, extra: L.extra };
+    if (slot === 'body') {
+      o.body = id;
+      var def = it && it.def && lookItem('color', it.def);
+      if (def) { o.hex = def.hex; o.hatHex = def.hex; }
+    }
+    else if (slot === 'eyes') o.eyes = id;
+    else if (slot === 'hat') { o.hat = id; o.hatHex = L.hatHex || L.hex; }
+    else if (slot === 'extra') o.extra = id;
+    else if (it) { o.hex = it.hex; if ((LOOK.look.hatColor || 'auto') === 'auto') o.hatHex = it.hex; }
+    return o;
+  }
+  function thumbCopy(L) {
+    var src = lookThumb(L), cnv = document.createElement('canvas');
+    cnv.width = src.width; cnv.height = src.height;
+    cnv.getContext('2d').drawImage(src, 0, 0);
+    return cnv;
+  }
+  function showItems(slot) {
+    var body = lookItem('body', LOOK.look.body);
+    return LOOK_CAT[slot].filter(function (it) {
+      if (it.hidden && !lookHas(slot, it.id) && LOOK.look[slot] !== it.id) return false;
+      if (it.own && !lookHas(slot, it.id)) return false;
+      if (slot === 'extra' && it.neck && !(body && body.neck)) return false;
+      return true;
+    });
+  }
+  function renderCharGrid() {
+    var grid = $('charGrid'), lock = $('charLock'), tabs = document.querySelectorAll('.char-tab');
+    tabs.forEach(function (b) {
+      var on = b.getAttribute('data-slot') === charSlot;
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.tabIndex = on ? 0 : -1;
+    });
+    grid.setAttribute('aria-labelledby', 'charTab-' + charSlot);
+    if (charLockKey) {
+      grid.hidden = true; lock.hidden = false;
+      var it = LOOK_ITEM[charLockKey], r = it && lookRuleFor(it.key);
+      $('charLockName').textContent = it ? it.name : 'Locked';
+      $('charLockHow').textContent = lookHow(it) + (it && !it.own ? ' to unlock it.' : '');
+      var bar = $('charLockBar'), count = $('charLockCount');
+      if (r && it && !it.own) {
+        var have = Math.min(r.n, lookCounter(r.k, PROFILE, LOOK));
+        bar.hidden = false; $('charLockFill').style.width = (100 * have / r.n) + '%';
+        count.hidden = false;
+        count.textContent = have + ' of ' + r.n + (have < r.n ? '. ' + (r.n - have) + ' more to go!' : '');
+      } else { bar.hidden = true; count.hidden = true; }
+      return;
+    }
+    grid.hidden = false; lock.hidden = true;
+    var swatch = charSlot === 'color';
+    grid.classList.toggle('swatches', swatch);
+    grid.textContent = '';
+    var wornId = LOOK.look[charSlot];
+    showItems(charSlot).forEach(function (it) {
+      var has = lookHas(charSlot, it.id), worn = wornId === it.id, isNew = has && !it.free && LOOK.seen.indexOf(it.key) < 0;
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = (swatch ? 'look-swatch' : 'look-card') + (has ? '' : ' locked');
+      b.setAttribute('aria-pressed', worn ? 'true' : 'false');
+      var label = it.name + (worn ? ', wearing now' : has ? ', tap to wear' : ', locked. ' + lookHow(it));
+      if (isNew) label = 'New. ' + label;
+      b.setAttribute('aria-label', label);
+      if (isNew) { var badge = document.createElement('span'); badge.className = 'look-badge'; badge.textContent = 'NEW'; b.appendChild(badge); }
+      if (!swatch) b.appendChild(thumbCopy(cardLook(charSlot, it.id)));
+      else { b.style.background = it.hex; b.style.color = lookInk(it.hex); }
+      var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = it.name;
+      b.appendChild(nm);
+      if (!swatch && !has) { var how = document.createElement('span'); how.className = 'how'; how.textContent = lookHow(it); b.appendChild(how); }
+      b.addEventListener('click', function () { pickLook(it); });
+      grid.appendChild(b);
+    });
+  }
+  function pickLook(it) {
+    if (!lookHas(it.slot, it.id)) { charLockKey = it.key; renderCharGrid(); try { $('charLockPlay').focus({ preventScroll: true }); } catch (e) {} return; }
+    if (it.slot === 'extra' && it.neck) { var body = lookItem('body', LOOK.look.body); if (!body || !body.neck) return; }
+    var prevBody = LOOK.look.body;
+    LOOK.look[it.slot] = it.id;
+    if (it.slot === 'body') {
+      var prev = lookItem('body', prevBody);
+      if (prev && it.def && LOOK.look.color === prev.def) LOOK.look.color = it.def;
+      var ex = lookItem('extra', LOOK.look.extra);
+      if (ex && ex.neck && !it.neck) LOOK.look.extra = 'none';
+    }
+    if (LOOK.seen.indexOf(it.key) < 0) LOOK.seen.push(it.key);
+    charLockKey = null;
+    saveLook(true);
+    if (!running) previewRound();
+    renderChar();
+  }
+  function renderChar() { syncCharMode(); renderCharHead(); renderCharGrid(); paintCharPreview(); }
   /* Surprise me picks one unlocked item per slot. Scarf only lands on a body that has a neck. */
   function surpriseLook() {
     if (!LOOK) return;
@@ -4723,7 +4894,9 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     if (window.HR3D) HR3D.previewSpin = charSpin;
     renderChar();
   }
-  function openChar() {
+  function openChar(slot) {
+    if (slot && LOOK_SLOTS.indexOf(slot) >= 0) charSlot = slot;
+    charLockKey = null;
     $('startScreen').hidden = true; $('endScreen').hidden = true; $('lockerScreen').hidden = false;
     if (!running) previewRound();
     renderChar();
@@ -4738,6 +4911,10 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
   $('lockerDone').addEventListener('click', closeChar);
   $('charSpin').addEventListener('click', spinChar);
   $('charSurprise').addEventListener('click', surpriseLook);
+  document.querySelectorAll('.char-tab').forEach(function (b) {
+    b.addEventListener('click', function () { charSlot = b.getAttribute('data-slot'); charLockKey = null; renderCharGrid(); });
+  });
+  $('charLockPlay').addEventListener('click', closeChar);
 
   /* ---------- players, leaderboard, sharing ---------- */
   var shareText = '';
