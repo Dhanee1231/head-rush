@@ -327,6 +327,13 @@ h1 .rush { color: var(--you); }
 .code-row .btn { height: 54px; padding: 0 20px; }
 .code-big { font-family: var(--font-display); font-size: 58px; line-height: 1; letter-spacing: .18em; text-align: center; color: var(--you); padding-left: .18em; -webkit-user-select: text; user-select: text; }
 .tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--you); color: var(--bg); font-size: 11px; font-weight: 700; letter-spacing: .06em; vertical-align: middle; }
+.tag.buddy { background: var(--you); color: #191a33; }
+.buddy-btn {
+  min-height: 64px; border-radius: 16px; border: 2px solid var(--line); background: var(--bg); color: var(--ink);
+  font-family: var(--font-display); font-size: 22px; text-align: left; padding: 10px 14px; cursor: pointer;
+}
+.buddy-btn[aria-pressed="true"] { border-color: var(--you); box-shadow: inset 0 0 0 2px var(--you); }
+.buddy-btn small { display: block; margin-top: 2px; font-family: var(--font-ui); font-size: 15px; line-height: 1.3; color: var(--muted); }
 .tag.play { background: var(--fast); }
 .tag.old { background: var(--heart); color: var(--ink); }
 .board li { position: relative; }
@@ -797,6 +804,10 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
         <div class="code-big" id="roomCodeBig">ABCD</div>
         <button class="btn ghost" id="roomCopy" type="button">Invite friends</button>
         <ol class="board" id="roomPlayers"></ol>
+        <button class="buddy-btn" id="buddyBtn" type="button" aria-pressed="false" aria-label="Buddy help">
+          <span id="buddyTitle">Buddy help off</span>
+          <small>More time to jump and duck, plus one free shield. Hearts stay at 3.</small>
+        </button>
         <div class="emotes" data-emotes role="group" aria-label="Send an emote"></div>
         <div class="match-box" id="lobbyMatch" hidden>
           <div class="match-head"><b id="lobbyMatchHead">Match</b><span id="lobbyMatchNote"></span></div>
@@ -3950,7 +3961,15 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       }
     }
   }
-  function kitBuddy() {}
+  function kitBuddy() {
+    if (!G || G.t < 0) return;
+    for (var i = 0; i < G.players.length; i++) {
+      var p = G.players[i];
+      if (!p || !p.buddy || p.remote || p.out || p.actAt !== G.t) continue;
+      if (p.air > G.t && p.air - p.actAt < 0.69) p.air = p.actAt + 0.7;
+      if (p.duck > G.t && p.duck - p.actAt < 0.69) p.duck = p.actAt + 0.7;
+    }
+  }
   function kitBefore() {
     if (!G || !G.arena) return;
     var pads = G.arena.pads;
@@ -4399,6 +4418,63 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     } catch (err) { fails.push('threw ' + (err && err.stack || err)); }
     finally {
       running = savedRun; GR = savedGR; Math.random = savedRand; voiceOn = savedVoice;
+    }
+    return { ok: fails.length === 0, fails: fails };
+  }
+  function buddySelfTest() {
+    var fails = [], savedRun = running, savedGR = GR, savedRand = Math.random, savedVoice = voiceOn, savedRoom = ROOM, savedBuddy = buddyOn, savedLook = JSON.stringify(LOOK);
+    function eq(name, a, b) { if (a !== b) fails.push(name + ': ' + JSON.stringify(a) + ' !== ' + JSON.stringify(b)); }
+    function near(name, a, b) { if (Math.abs(a - b) > 1e-6) fails.push(name + ': ' + a + ' !~ ' + b); }
+    voiceOn = false; running = true; buddyOn = false;
+    try {
+      eq('pts', JSON.stringify(MATCH_PTS), '[0,3,2,1]');
+      newRound('neon', 'solo', 0, null, { diff: 'medium' });
+      var you = G.players[0];
+      eq('hearts', you.hearts, 3);
+      G.t = 2; you.buddy = true; you.stun = -9; you.air = -9; you.duck = -9; you.out = false;
+      act(you, 'jump'); kitBuddy();
+      near('jump', you.air - you.actAt, 0.7);
+      act(you, 'duck'); kitBuddy();
+      near('duck', you.duck - you.actAt, 0.7);
+      eq('drop', you.air > G.t, false);
+      you.buddy = false;
+      act(you, 'jump');
+      var plain = you.air;
+      kitBuddy();
+      eq('plain', you.air, plain);
+      near('half', you.air - you.actAt, 0.5);
+      newRound('orbit', 'solo', 0, null, { diff: 'medium' });
+      you = G.players[0]; you.buddy = true; G.t = 3; you.stun = -9; you.air = -9; you.duck = -9;
+      act(you, 'jump');
+      var orbit = you.air - you.actAt;
+      kitBuddy();
+      near('orbit', you.air - you.actAt, orbit);
+      near('orbit08', orbit, 0.8);
+      you.shield = 1e9; you.hearts = 3; you.out = false; G.t = 5; G.bars = []; G.holes = [];
+      hit(you, 'low');
+      eq('blocked', you.hearts, 3);
+      eq('spent', you.shield, 0);
+      hit(you, 'low');
+      eq('second', you.hearts, 2);
+      newRound('neon', 'solo', 0, null, { diff: 'medium' });
+      you = G.players[0]; you.buddy = true; G.bars = []; G.holes = []; G.puNext = Infinity; G.pickup = null;
+      G.t = 1; you.air = 1.6; you.actAt = 0.4; you.duck = -9; you.stun = -9; you.out = false; you.queued = null; G.over = false;
+      press('jump');
+      eq('queued', you.queued && you.queued.kind, 'jump');
+      var guard = 0;
+      while (G.t < 1.32 && guard < 40) { kitBefore(); update(1 / 60); kitAfter(); guard++; }
+      eq('expired', you.queued, null);
+      near('noNewJump', you.air, 1.6);
+      ROOM = { me: 'a', ch: { presenceState: function () { return { a: [{ name: 'Ada', v: 12, joinedAt: 1, bd: 1 }], b: [{ name: 'Bo', v: 11, joinedAt: 2 }] }; } } };
+      var mem = roomMembers();
+      eq('bd', mem[0].bd, 1);
+      eq('old', mem[1].bd, 0);
+      eq('badge', isBuddyId('a'), true);
+      eq('nobadge', isBuddyId('b'), false);
+      eq('look', JSON.stringify(LOOK), savedLook);
+    } catch (err) { fails.push('threw ' + (err && err.stack || err)); }
+    finally {
+      running = savedRun; GR = savedGR; Math.random = savedRand; voiceOn = savedVoice; ROOM = savedRoom; buddyOn = savedBuddy;
     }
     return { ok: fails.length === 0, fails: fails };
   }
@@ -5039,9 +5115,10 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
         if (!q.remote || q.out || q.bot) return;
         var rq = runnerR(q), wx = Math.cos(q.angle) * rq, wy = Math.sin(q.angle) * rq;
         var lx = cx + sx + (wx * cr - wy * sr) * S, ly = cy + sy + (wx * sr + wy * cr) * S - S * 0.115;
-        var tw = ctx.measureText(q.name).width + S * 0.04;
+        var qn = (q.buddy ? '★ ' : '') + q.name;
+        var tw = ctx.measureText(qn).width + S * 0.04;
         ctx.fillStyle = 'rgba(14,15,34,0.7)'; ctx.fillRect(lx - tw / 2, ly - S * 0.032, tw, S * 0.064);
-        ctx.fillStyle = q.color; ctx.fillText(q.name, lx, ly + 1);
+        ctx.fillStyle = q.color; ctx.fillText(qn, lx, ly + 1);
       });
     }
     if (g.t < g.slowUntil) { ctx.fillStyle = COL.puSlow; ctx.globalAlpha = 0.08; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
@@ -5053,6 +5130,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       ctx.fillStyle = g.hotseat && you.color ? you.color : COL.you; ctx.font = Math.round(S * 0.062) + 'px ' + DISPLAY;
       var cp = currentPlayer();
       var tag = g.hotseat && g.hotName ? g.hotName.toUpperCase() : (cp ? cp.name.toUpperCase() : 'YOU');
+      if (you.buddy) tag = '★ ' + tag;
       ctx.fillText(tag, youX, youY + S * 0.13);
     }
     drawCombo(youX + S * 0.15, youY - S * 0.06, S);
@@ -5886,7 +5964,8 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
   $('boardDone').addEventListener('click', function () { $('boardScreen').hidden = true; $('startScreen').hidden = false; });
 
   /* ---------- Party Rooms: live multiplayer over Supabase Realtime ---------- */
-  var ROOM = null, sbClient = null, sbLoading = null, GAME_VERSION = 12;
+  var ROOM = null, sbClient = null, sbLoading = null, GAME_VERSION = 12, buddyOn = false;
+  try { buddyOn = localStorage.getItem('headrush.buddy') === '1'; } catch (e) {}
   var ROOM_COLORS = [
     { name: 'Sunny', hex: '#ffd23f' }, { name: 'Coral', hex: '#ff6b6b' }, { name: 'Mint', hex: '#5ee0a0' }, { name: 'Violet', hex: '#b48cff' },
     { name: 'Bubblegum', hex: '#ff8fd8' }, { name: 'Snow', hex: '#f4f2ff' }, { name: 'Lime', hex: '#c6f06a' }, { name: 'Peach', hex: '#f6b8a0' }
@@ -5918,7 +5997,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     var st = ROOM.ch.presenceState(), out = [];
     Object.keys(st).forEach(function (k) {
       var m = st[k] && st[k][st[k].length - 1];
-      if (m && m.name) out.push({ id: k, name: m.name, skin: m.skin, joinedAt: m.joinedAt || 0, arena: m.arena, bots: m.bots || 0, d: DIFFS[m.d] ? m.d : 'medium', status: m.status, host: !!m.host, v: m.v || 0, c: typeof m.c === 'number' ? m.c : -1, sh: m.sh || 'round', lk: typeof m.lk === 'string' && m.lk.length <= 40 ? m.lk : '', me: k === ROOM.me });
+      if (m && m.name) out.push({ id: k, name: m.name, skin: m.skin, joinedAt: m.joinedAt || 0, arena: m.arena, bots: m.bots || 0, d: DIFFS[m.d] ? m.d : 'medium', status: m.status, host: !!m.host, v: m.v || 0, c: typeof m.c === 'number' ? m.c : -1, sh: m.sh || 'round', lk: typeof m.lk === 'string' && m.lk.length <= 40 ? m.lk : '', bd: m.bd === 1 ? 1 : 0, me: k === ROOM.me });
     });
     out.sort(function (a, b) { return (b.host - a.host) || (a.joinedAt - b.joinedAt) || (a.id < b.id ? -1 : 1); });
     return out;
@@ -5928,6 +6007,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     if (!ROOM || !ROOM.ch || !ROOM.subscribed) return;
     var pl = currentPlayer();
     var msg = { name: pl ? pl.name : 'Player', skin: PROFILE.skin, joinedAt: ROOM.joinedAt, arena: ROOM.arena, bots: ROOM.bots, d: ROOM.diff, status: ROOM.status, host: ROOM.creating, c: ROOM.c, sh: PROFILE.shape, v: GAME_VERSION };
+    if (buddyOn) msg.bd = 1;
     if (LOOK) { var lk = lookCode(LOOK.look); if (lk && lk.length <= 40) msg.lk = lk; }
     ROOM.ch.track(msg);
   }
@@ -6034,6 +6114,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
   })(bn);
   function renderLobby() {
     if (!ROOM || $('roomLobby').hidden) return;
+    syncBuddyBtn();
     var mem = roomMembers(), host = mem[0], iHost = amHost();
     var allowRemix = roomAllV12();
     remixRoomBtns.forEach(function (b) { b.hidden = !allowRemix; });
@@ -6046,6 +6127,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = m.name + (m.me ? ' (you)' : '');
       if (i === 0) { var tg = document.createElement('span'); tg.className = 'tag'; tg.textContent = 'HOST'; nm.appendChild(tg); }
       if (m.status === 'playing') { var tp = document.createElement('span'); tp.className = 'tag play'; tp.textContent = 'IN A ROUND'; nm.appendChild(tp); }
+      if (m.bd) { var tb = document.createElement('span'); tb.className = 'tag buddy'; tb.textContent = '★ BUDDY'; nm.appendChild(tb); }
       if (m.v < GAME_VERSION) { var tu = document.createElement('span'); tu.className = 'tag old'; tu.textContent = 'NEEDS RELOAD'; nm.appendChild(tu); }
       var vl = document.createElement('span'); vl.className = 'vl'; vl.textContent = i < 8 ? '' : 'Full';
       li.appendChild(dot); li.appendChild(nm); li.appendChild(vl); ol.appendChild(li);
@@ -6127,12 +6209,29 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       });
     }, 1500);
   }
+  function syncBuddyBtn() {
+    var b = $('buddyBtn'), title = $('buddyTitle');
+    if (!b) return;
+    b.setAttribute('aria-pressed', buddyOn ? 'true' : 'false');
+    if (title) title.textContent = buddyOn ? '★ Buddy help on' : 'Buddy help off';
+  }
+  function applyBuddy(roster) {
+    if (!G) return;
+    var byId = {};
+    (roster || []).forEach(function (r) { if (r && r.bd && r.id) byId[r.id] = 1; });
+    G.players.forEach(function (p) {
+      if (p.you) {
+        if (buddyOn) { p.buddy = true; p.shield = 1e9; }
+      } else if (p.netId && byId[p.netId]) p.buddy = true;
+    });
+    if (G.players[0] && G.players[0].buddy) toast('Buddy shield is on');
+  }
   function startRoomRound(payload) {
     if (payload.match) { ROOM.match = cloneMatch(payload.match); }
     ROOM.roundSeed = payload.seed >>> 0; ROOM.resDone = false; ROOM.roundWall = Date.now(); ROOM.decideAt = 0;
     ROOM.nextAt = 0; ROOM.nextFired = true; ROOM.skipAsked = false;
     if (!$('roomLobby').hidden) renderLobby();
-    var roster = (payload.roster || []).slice(0, 8).map(function (r) { return { id: String(r.id), name: String(r.name || 'Player').slice(0, 14), skin: r.skin, bot: !!r.bot, bi: r.bi || 0, c: typeof r.c === 'number' ? r.c : -1, sh: ['round', 'triangle', 'square', 'diamond', 'star'].indexOf(r.sh) >= 0 ? r.sh : 'round', lk: typeof r.lk === 'string' ? r.lk.slice(0, 40) : '', me: r.id === ROOM.me }; });
+    var roster = (payload.roster || []).slice(0, 8).map(function (r) { return { id: String(r.id), name: String(r.name || 'Player').slice(0, 14), skin: r.skin, bot: !!r.bot, bi: r.bi || 0, c: typeof r.c === 'number' ? r.c : -1, sh: ['round', 'triangle', 'square', 'diamond', 'star'].indexOf(r.sh) >= 0 ? r.sh : 'round', lk: typeof r.lk === 'string' ? r.lk.slice(0, 40) : '', bd: r.bd === 1 ? 1 : 0, me: r.id === ROOM.me }; });
     if (!roster.some(function (r) { return r.me; })) {
       if (!$('roomScreen').hidden) $('roomStatus').textContent = 'A round started without you. You’ll join the next one.';
       return;
@@ -6144,6 +6243,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     arenaUi(aid);
     var iAmHost = payload.host === ROOM.me;
     newRound(aid, 'room', 0, { seed: payload.seed >>> 0, roster: roster, host: iAmHost, diff: DIFFS[payload.diff] ? payload.diff : 'medium' });
+    applyBuddy(roster);
     G.hostBots = iAmHost && roster.some(function (r) { return r.bot; });
     G.roomSeed = ROOM.roundSeed;
     running = true; audioOn(); matchStartVO(aid);
@@ -6158,7 +6258,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     var mem = roomMembers().slice(0, 8), nb = Math.max(0, Math.min(ROOM.bots || 0, 8 - mem.length));
     if (mem.length < 2 && nb < 1) return false;
     if (ROOM.roundSeed != null && !ROOM.resDone) return false;
-    var used = {}, roster = mem.map(function (m) { var c = m.me ? ROOM.c : m.c; if (used[c] || !ROOM_COLORS[c]) c = -1; else used[c] = true; return { id: m.id, name: m.name, skin: m.skin, sh: m.me ? PROFILE.shape : m.sh, c: c, lk: m.me ? lookCode(LOOK && LOOK.look) : (typeof m.lk === 'string' ? m.lk.slice(0, 40) : '') }; });
+    var used = {}, roster = mem.map(function (m) { var c = m.me ? ROOM.c : m.c; if (used[c] || !ROOM_COLORS[c]) c = -1; else used[c] = true; return { id: m.id, name: m.name, skin: m.skin, sh: m.me ? PROFILE.shape : m.sh, c: c, lk: m.me ? lookCode(LOOK && LOOK.look) : (typeof m.lk === 'string' ? m.lk.slice(0, 40) : ''), bd: m.bd ? 1 : 0 }; });
     roster.forEach(function (r) { if (r.c < 0) for (var c = 0; c < ROOM_COLORS.length; c++) if (!used[c]) { r.c = c; used[c] = true; break; } });
     var freeCols = []; for (var fc = 0; fc < ROOM_COLORS.length; fc++) if (!used[fc]) freeCols.push(fc);
     for (var i = 0; i < nb; i++) roster.push({ id: 'bot-' + i, name: BOT_NAMES[i % BOT_NAMES.length], bot: true, bi: i, c: freeCols.length ? freeCols.shift() : -1 });
@@ -6293,6 +6393,14 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     }
   }
   setInterval(roomTicker, 250);
+  function isBuddyId(id) {
+    if (!id) return false;
+    if (ROOM && id === ROOM.me && buddyOn) return true;
+    var mem = roomMembers();
+    for (var i = 0; i < mem.length; i++) if (mem[i].id === id && mem[i].bd) return true;
+    if (G && G.players) for (var j = 0; j < G.players.length; j++) if (G.players[j].netId === id && G.players[j].buddy) return true;
+    return false;
+  }
   function fillMatchBoard(ol, m, withAdd) {
     ol.textContent = '';
     var add = {}, ids = matchStandings(m);
@@ -6305,6 +6413,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       var face = document.createElement('span'); face.className = 'mface'; face.style.background = whoColor(m, id);
       var tx = document.createElement('span'); tx.className = 'tx'; tx.textContent = w.name + (ROOM && id === ROOM.me ? ' (you)' : '');
       nm.appendChild(face); nm.appendChild(tx);
+      if (isBuddyId(id)) { var star = document.createElement('span'); star.className = 'tag buddy'; star.textContent = '★'; star.title = 'Buddy'; nm.appendChild(star); }
       var wn = m.wins[id] || 0;
       if (wn) { var wb = document.createElement('span'); wb.className = 'wins'; wb.textContent = wn + (wn === 1 ? ' win' : ' wins'); nm.appendChild(wb); }
       var ad = document.createElement('span'); ad.className = 'add'; ad.textContent = withAdd && add[id] ? '+' + add[id] : '';
@@ -6366,7 +6475,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
         d.setAttribute('data-pid', id);
         if (k === 0) d.insertAdjacentHTML('beforeend', CROWN_SVG);
         var f = document.createElement('div'); f.className = 'face'; f.style.background = whoColor(m, id);
-        var n = document.createElement('div'); n.className = 'pn'; n.textContent = m.who[id].name;
+        var n = document.createElement('div'); n.className = 'pn'; n.textContent = (isBuddyId(id) ? '★ ' : '') + m.who[id].name;
         var p = document.createElement('div'); p.className = 'pp'; p.textContent = (m.pts[id] || 0) + ' pts';
         d.appendChild(f); d.appendChild(n); d.appendChild(p);
       }
@@ -6516,6 +6625,14 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
   });
   $('roomCode').addEventListener('input', function () { this.value = this.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4); });
   $('roomStart').addEventListener('click', hostStart);
+  $('buddyBtn').addEventListener('click', function () {
+    buddyOn = !buddyOn;
+    try { localStorage.setItem('headrush.buddy', buddyOn ? '1' : '0'); } catch (e) {}
+    syncBuddyBtn();
+    trackMe();
+    if (ROOM && !$('roomLobby').hidden) renderLobby();
+  });
+  syncBuddyBtn();
   $('roomBack').addEventListener('click', function () {
     if (ROOM && !$('roomLobby').hidden) { leaveRoom(); roomView('join'); setRoomBusy(false); $('roomStatus').textContent = 'You left the room.'; return; }
     $('roomScreen').hidden = true; $('startScreen').hidden = false; renderProfile();
@@ -6801,7 +6918,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     if (/[?&]simtest=1(?:&|$)/.test(location.search)) {
       window.__kit = {
         slowMax: KIT_SLOW_MAX, tooFast: kitTooFast, roll: kitRoll, paint: kitPaint,
-        reseed: reseedPrev, before: kitBefore, after: kitAfter, roomIds: roomArenaIds, selfTest: kitSelfTest, bounceTest: bounceSelfTest, hotTest: hotSeatSelfTest
+        reseed: reseedPrev, before: kitBefore, after: kitAfter, roomIds: roomArenaIds, selfTest: kitSelfTest, bounceTest: bounceSelfTest, hotTest: hotSeatSelfTest, buddyTest: buddySelfTest
       };
     }
   } catch (e) {}
