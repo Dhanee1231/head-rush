@@ -2171,6 +2171,11 @@ h1 .rush { color: var(--you); }
     return shown === acc;
   }
   function ellG(g, x, y, rx, ry) { g.beginPath(); g.ellipse(x, y, Math.max(0.4, Math.abs(rx)), Math.max(0.4, Math.abs(ry)), 0, 0, TAU); }
+  function starOn(g, x, y, R, r) {
+    g.beginPath();
+    for (var i = 0; i < 10; i++) { var a = -Math.PI / 2 + i * Math.PI / 5, rad = i % 2 ? r : R, px = x + Math.cos(a) * rad, py = y + Math.sin(a) * rad; if (i) g.lineTo(px, py); else g.moveTo(px, py); }
+    g.closePath();
+  }
   function inkOf(col) { return shade(col, '#000000', 0.62); }
   function paintEyesFront(g, kind, x, y, w, h, state) {
     var ey = y + h * (state === 'duck' ? 0.5 : 0.42), erx = w * (kind === 'googly' ? 0.16 : kind === 'dot' ? 0.07 : 0.11), ery = h * (kind === 'googly' ? 0.1 : 0.075);
@@ -2218,7 +2223,7 @@ h1 .rush { color: var(--you); }
     } else if (hat === 'halo') { g.strokeStyle = '#ffe08a'; g.lineWidth = Math.max(1.2, w * 0.04); ellG(g, x, y - h * 0.06, w * 0.22, h * 0.045); g.stroke(); }
     else if (hat === 'horns') { g.fillStyle = '#5a1a30'; [-1, 1].forEach(function (s) { g.beginPath(); g.moveTo(x + s * w * 0.08, top + h * 0.08); g.lineTo(x + s * w * 0.22, y - h * 0.12); g.lineTo(x + s * w * 0.16, top + h * 0.1); g.fill(); }); }
     else if (hat === 'antenna') { g.strokeStyle = '#1d2140'; g.lineWidth = Math.max(1, w * 0.03); g.beginPath(); g.moveTo(x + w * 0.08, top); g.lineTo(x + w * 0.2, y - h * 0.16); g.stroke(); g.fillStyle = '#d63b55'; ellG(g, x + w * 0.2, y - h * 0.16, w * 0.05, h * 0.04); g.fill(); }
-    else if (hat === 'star') { g.fillStyle = '#ffc94a'; g.beginPath(); star5p(x, y - h * 0.08, w * 0.12, w * 0.05); g.fill(); }
+    else if (hat === 'star') { g.fillStyle = '#ffc94a'; starOn(g, x, y - h * 0.08, w * 0.12, w * 0.05); g.fill(); }
   }
   function paintExtraFront(g, extra, x, y, w, h) {
     if (!extra || extra === 'none' || extra === 'visor') return;
@@ -2250,11 +2255,11 @@ h1 .rush { color: var(--you); }
     } else if (id === 'c-triangle') { g.moveTo(cx, y); g.lineTo(x + w, y + h); g.lineTo(x, y + h); g.closePath(); }
     else if (id === 'c-square') { g.roundRect(x + w * 0.08, y + h * 0.06, w * 0.84, h * 0.88, w * 0.12); }
     else if (id === 'c-diamond') { g.moveTo(cx, y); g.lineTo(x + w, y + h * 0.5); g.lineTo(cx, y + h); g.lineTo(x, y + h * 0.5); g.closePath(); }
-    else if (id === 'c-star') { star5p(cx, y + h * 0.52, w * 0.48, w * 0.22); }
+    else if (id === 'c-star') { starOn(g, cx, y + h * 0.52, w * 0.48, w * 0.22); }
     else g.ellipse(cx, y + h * 0.52, w * 0.46, h * 0.48, 0, 0, TAU);
     g.fill(); g.stroke();
     if (id === 'strawberry') {
-      g.fillStyle = '#3f9d45'; g.beginPath(); star5p(cx, y + h * 0.22, w * 0.22, w * 0.1); g.fill();
+      g.fillStyle = '#3f9d45'; starOn(g, cx, y + h * 0.22, w * 0.22, w * 0.1); g.fill();
       g.fillStyle = '#ffe08a';
       [[0, 0.5], [-0.16, 0.62], [0.16, 0.66], [-0.08, 0.74], [0.1, 0.56]].forEach(function (p) { ellG(g, cx + w * p[0], y + h * p[1], w * 0.025, h * 0.018); g.fill(); });
     } else if (id === 'pear') {
@@ -2275,6 +2280,19 @@ h1 .rush { color: var(--you); }
     else { g.fillStyle = '#14152c'; g.fillRect(x + w * 0.12, y + h * 0.36, w * 0.76, h * 0.12); g.fillStyle = '#7fe3ff'; g.fillRect(x + w * 0.2, y + h * 0.39, w * 0.22, h * 0.03); }
     paintExtraFront(g, L.extra, x, y, w, h);
     paintHatFront(g, L.hat, L.hatHex || col, cx, y, w, h);
+  }
+  /* Menu cards. One canvas per look, drawn once, never rebuilt during a frame. */
+  var THUMB = {};
+  function lookThumb(L) {
+    L = L || {};
+    var key = [L.body || 'bean', L.hex || '', L.eyes || 'classic', L.hat || 'none', L.hatHex || '', L.extra || 'none'].join('|');
+    var cnv = THUMB[key];
+    if (cnv) return cnv;
+    cnv = document.createElement('canvas');
+    cnv.width = 96; cnv.height = 112;
+    paintFront(cnv.getContext('2d'), L, 8, 16, 80, 88, 'run');
+    THUMB[key] = cnv;
+    return cnv;
   }
   function drawRunner3(it) {
     var p = it.p, t = G.t, JT = G.arena.jumpT, px = it.x, pz = it.z, S = 0.85;
@@ -5632,7 +5650,7 @@ h1 .rush { color: var(--you); }
         look: function () { return LOOK; },
         lookBroken: function () { return lookBroken; },
         saveLook: saveLook,
-        lookForDraw: lookForDraw,
+        lookForDraw: lookForDraw, lookThumb: lookThumb,
         lookHas: lookHas,
         catalog: function () { return LOOK_CAT; },
         rules: function () { return LOOK_RULES; }
