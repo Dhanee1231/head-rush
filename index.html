@@ -983,7 +983,7 @@ h1 .rush { color: var(--you); }
   ];
   function lookCounter(k, p, s) {
     p = p || {}; s = s || {}; var c = s.cnt || {};
-    if (k === 'lvl') return levelInfo(p.xp || 0).lvl;
+    if (k === 'lvl') { var xp = p.xp || 0; return levelInfo(typeof xp === 'number' && isFinite(xp) ? xp : 0).lvl; }
     if (k === 'rounds') return p.rounds || 0;
     if (k === 'wins') return p.wins || 0;
     if (k === 'perfect') return p.perfect || 0;
@@ -1018,6 +1018,17 @@ h1 .rush { color: var(--you); }
     have.forEach(function (key) { var it = LOOK_ITEM[key]; if (it && !it.free && s.unl.indexOf(key) < 0) s.unl.push(key); });
     lookEarn(s, p);
     return s;
+  }
+  /* Write one player's migrated look without disturbing whoever is on screen. Existing look keys (even broken ones) are left alone. */
+  function writeMigrated(id, p) {
+    if (!id || rawGet(lookKey(id)) != null) return false;
+    var s = migrateLook(p);
+    if (lookIsBlank(s, p)) return false;
+    var a = lookPid, b = LOOK, c = lookBroken;
+    lookPid = id; LOOK = s; lookBroken = false;
+    var ok = saveLook();
+    lookPid = a; LOOK = b; lookBroken = c;
+    return ok;
   }
   function lookIsBlank(s, p) { return JSON.stringify(s) === JSON.stringify(blankLookSave(p)); }
   function backupKey(id) { return 'headrush.backup.v1.' + id; }
@@ -1064,6 +1075,8 @@ h1 .rush { color: var(--you); }
     return out;
   }
   loadLook(PLAYERS.current, PROFILE);
+  /* Every player on this phone, not only the one on screen, is migrated on the first run (backup included). */
+  PLAYERS.list.forEach(function (pl) { if (pl && pl.id && pl.id !== PLAYERS.current) writeMigrated(pl.id, readProfile(pl.id)); });
   function addPlayer(name) {
     var id = 'p' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
     var first = PLAYERS.list.length === 0;
@@ -1169,7 +1182,7 @@ h1 .rush { color: var(--you); }
     })();
   }
   function levelInfo(xp) {
-    var lvl = 1, need = 100, rest = xp;
+    var lvl = 1, need = 100, rest = (typeof xp === 'number' && isFinite(xp) && xp > 0) ? xp : 0;
     while (rest >= need) { rest -= need; lvl++; need = 100 + (lvl - 1) * 40; }
     return { lvl: lvl, into: rest, need: need };
   }
