@@ -1128,14 +1128,29 @@ function makeBulbs(V) {
 
 /* ---------- runners ---------- */
 const RIM = { color: { value: new THREE.Color(0x6fd6ff) }, strength: { value: 0.55 } };
+/* Rim light plus the top-to-bottom shade. detail = leaf / seed / wrapper verts carry their own colour. */
+function patchRim(sh, detail) {
+  sh.uniforms.uRimColor = RIM.color; sh.uniforms.uRimStrength = RIM.strength;
+  let vs = sh.vertexShader, fs = sh.fragmentShader;
+  if (detail) {
+    vs = vs.replace('#include <common>', '#include <common>\nattribute float aDet;\nattribute vec3 aTint;\nvarying float vDet;\nvarying vec3 vTint;');
+    vs = vs.replace('#include <begin_vertex>', '#include <begin_vertex>\nvDet = aDet;\nvTint = aTint;');
+    fs = fs.replace('#include <common>', '#include <common>\nvarying float vDet;\nvarying vec3 vTint;');
+    fs = fs.replace('#include <color_fragment>', '#include <color_fragment>\nif (vDet > 0.5) diffuseColor.rgb = vTint;');
+  }
+  sh.vertexShader = vs;
+  sh.fragmentShader = 'uniform vec3 uRimColor;\nuniform float uRimStrength;\n' + fs.replace('#include <emissivemap_fragment>',
+    '#include <emissivemap_fragment>\n{ float rimF = 1.0 - saturate( abs( dot( normal, normalize( vViewPosition ) ) ) ); totalEmissiveRadiance += uRimColor * pow( rimF, 2.6 ) * uRimStrength;\n' +
+    '  float upF = dot( normal, normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz ) ); diffuseColor.rgb *= mix( 0.42, 1.0, smoothstep( -0.75, 0.3, upF ) ); }');
+}
 function addRim(mat) {
-  mat.onBeforeCompile = (sh) => {
-    sh.uniforms.uRimColor = RIM.color; sh.uniforms.uRimStrength = RIM.strength;
-    sh.fragmentShader = 'uniform vec3 uRimColor;\nuniform float uRimStrength;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>',
-      '#include <emissivemap_fragment>\n{ float rimF = 1.0 - saturate( abs( dot( normal, normalize( vViewPosition ) ) ) ); totalEmissiveRadiance += uRimColor * pow( rimF, 2.6 ) * uRimStrength;\n' +
-      '  float upF = dot( normal, normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz ) ); diffuseColor.rgb *= mix( 0.42, 1.0, smoothstep( -0.75, 0.3, upF ) ); }');
-  };
+  mat.onBeforeCompile = (sh) => { patchRim(sh, false); };
   mat.customProgramCacheKey = () => 'rim';
+  return mat;
+}
+function addRimDetail(mat) {
+  mat.onBeforeCompile = (sh) => { patchRim(sh, true); };
+  mat.customProgramCacheKey = () => 'rimdet';
   return mat;
 }
 const FACE = {};
@@ -1188,28 +1203,232 @@ function surfaceZ(shape, x, y) {
   if (shape === 'star') return 0.215;
   if (shape === 'diamond') { const r = y < 0.56 ? 0.06 + 0.44 * Math.max(0, y - 0.01) / 0.55 : y > 0.64 ? 0.5 - 0.44 * Math.min(1, (y - 0.64) / 0.51) : 0.5; return r * 0.7071; }
   if (shape === 'triangle') { const r = 0.5 + (0.14 - 0.5) * Math.min(1, Math.max(0, (y - 0.2) / 0.86)); return Math.sqrt(Math.max(0.0004, r * r - x * x)); }
+  if (shape === 'robot') return 0.34;
+  if (shape === 'strawberry' || shape === 'pear' || shape === 'lettuce' || shape === 'cupcake') { const r = profR(shape, y); return Math.sqrt(Math.max(0.0004, r * r - x * x)); }
   const r = beanR(y);
   return Math.sqrt(Math.max(0.0004, r * r - x * x));
 }
 const FACEGEO = {};
-function faceGeo(shape, ey) {
-  const fk = shape + (lo() ? ':lo' : '');
+function faceGeo(shape, ey, sc) {
+  const sx = sc && sc[0] || 1, sy = sc && sc[1] || 1;
+  const fk = shape + (sx === 1 && sy === 1 ? '' : ':' + sx + 'x' + sy) + (lo() ? ':lo' : '');
   if (FACEGEO[fk]) return FACEGEO[fk];
-  const g = new THREE.PlaneGeometry(0.74, 0.52, lo() ? 10 : 24, lo() ? 7 : 16), p = g.attributes.position;
+  const g = new THREE.PlaneGeometry(0.74 * sx, 0.52 * sy, lo() ? 10 : 24, lo() ? 7 : 16), p = g.attributes.position;
   for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i) + ey; p.setXYZ(i, x, y, surfaceZ(shape, x, y) + 0.012); }
   g.computeVertexNormals(); g.userData.shared = true;
   return (FACEGEO[fk] = g);
 }
 function shapeInfo(shape) {
   return {
-    round: { top: 1.14, ey: 0.68, sh: 0.42, shy: 0.46 },
-    square: { top: 1.12, ey: 0.76, sh: 0.38, shy: 0.5 },
-    triangle: { top: 1.18, ey: 0.5, sh: 0.4, shy: 0.36 },
-    diamond: { top: 1.16, ey: 0.64, sh: 0.45, shy: 0.52 },
-    star: { top: 1.24, ey: 0.64, sh: 0.36, shy: 0.5 }
-  }[shape] || { top: 1.14, ey: 0.68, sh: 0.42, shy: 0.46 };
+    round: { top: 1.14, ey: 0.68, sh: 0.42, shy: 0.46, hat: 1.14 },
+    square: { top: 1.12, ey: 0.76, sh: 0.38, shy: 0.5, hat: 1.12 },
+    triangle: { top: 1.18, ey: 0.5, sh: 0.4, shy: 0.36, hat: 1.18 },
+    diamond: { top: 1.16, ey: 0.64, sh: 0.45, shy: 0.52, hat: 1.16 },
+    star: { top: 1.24, ey: 0.64, sh: 0.36, shy: 0.5, hat: 1.24 },
+    strawberry: { top: 1.16, ey: 0.70, sh: 0.40, shy: 0.50, hat: 1.22, face: [0.92, 0.9] },
+    pear: { top: 1.14, ey: 0.47, sh: 0.38, shy: 0.34, hat: 1.24, face: [0.86, 0.78] },
+    lettuce: { top: 1.15, ey: 0.64, sh: 0.36, shy: 0.48, hat: 1.16, face: [0.78, 0.72] },
+    cupcake: { top: 1.08, ey: 0.34, sh: 0.36, shy: 0.28, hat: 1.10, face: [0.72, 0.62] },
+    robot: { top: 1.20, ey: 0.62, sh: 0.42, shy: 0.52, hat: 0.99, face: [0.82, 0.7] }
+  }[shape] || { top: 1.14, ey: 0.68, sh: 0.42, shy: 0.46, hat: 1.14 };
+}
+/* ---------- character bodies (drawing only; the hit envelope stays the game's) ----------
+   One shared mesh per body. Leaves, seeds, wrapper and robot parts are merged in, and those
+   verts carry their own colour so a green cap can sit on a red berry. The jellybean is the
+   original lathe, with the original material, so it stays identical. */
+const BPROF = {
+  strawberry: [[0, 0], [0.05, 0.02], [0.16, 0.08], [0.30, 0.22], [0.38, 0.42], [0.43, 0.58], [0.44, 0.67], [0.40, 0.80], [0.30, 0.94], [0.16, 1.04], [0.06, 1.10], [0, 1.14]],
+  pear: [[0, 0], [0.08, 0.02], [0.24, 0.10], [0.38, 0.20], [0.44, 0.33], [0.40, 0.46], [0.28, 0.60], [0.18, 0.76], [0.12, 0.92], [0.07, 1.05], [0, 1.12]],
+  lettuce: [[0, 0], [0.10, 0.04], [0.22, 0.16], [0.32, 0.36], [0.34, 0.55], [0.30, 0.72], [0.20, 0.90], [0.10, 1.02], [0, 1.12]],
+  cupcake: [[0.20, 0], [0.24, 0.04], [0.30, 0.18], [0.36, 0.36], [0.40, 0.50], [0.34, 0.62], [0.26, 0.74], [0.20, 0.86], [0.12, 0.98], [0.04, 1.06], [0, 1.08]]
+};
+function profR(id, y) {
+  const pts = BPROF[id]; if (!pts) return beanR(y);
+  for (let i = 1; i < pts.length; i++) if (y <= pts[i][1]) { const a = pts[i - 1], b = pts[i], u = (y - a[1]) / (b[1] - a[1] || 1); return a[0] + (b[0] - a[0]) * u; }
+  return 0;
+}
+function segN(hi, loN) { return lo() ? loN : hi; }
+function lin3(hex) { const c = new THREE.Color(hex); return [c.r, c.g, c.b]; }
+const TWHITE = [1, 1, 1];
+function placeM(x, y, z, rx, ry, rz, sx, sy, sz) {
+  const m = new THREE.Matrix4();
+  m.compose(new THREE.Vector3(x || 0, y || 0, z || 0), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx || 0, ry || 0, rz || 0)), new THREE.Vector3(sx == null ? 1 : sx, sy == null ? 1 : sy, sz == null ? 1 : sz));
+  return m;
+}
+function GeoBag() { this.P = []; this.U = []; this.I = []; this.D = []; this.T = []; this.b = 0; }
+GeoBag.prototype.add = function (geo, det, tint, mat, keep) {
+  const pos = geo.attributes.position, idx = geo.index, v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.set(pos.getX(i), pos.getY(i), pos.getZ(i)); if (mat) v.applyMatrix4(mat);
+    this.P.push(v.x, v.y, v.z); this.U.push(0, 0); this.D.push(det); this.T.push(tint[0], tint[1], tint[2]);
+  }
+  if (idx) for (let i = 0; i < idx.count; i++) this.I.push(this.b + idx.getX(i));
+  else for (let i = 0; i < pos.count; i++) this.I.push(this.b + i);
+  this.b += pos.count;
+  if (!keep) geo.dispose();
+};
+GeoBag.prototype.done = function () {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(this.P, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(this.U, 2));
+  g.setAttribute('aDet', new THREE.Float32BufferAttribute(this.D, 1));
+  g.setAttribute('aTint', new THREE.Float32BufferAttribute(this.T, 3));
+  g.setIndex(this.I); g.computeVertexNormals(); g.userData.shared = true; g.userData.tris = this.I.length / 3;
+  return g;
+};
+function latheOf(pts, rings, sides) {
+  return new THREE.LatheGeometry(new THREE.SplineCurve(pts.map(p => new THREE.Vector2(p[0], p[1]))).getPoints(rings), sides);
+}
+function waveVerts(geo, freq, amp, dampFront) {
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i), h = Math.hypot(x, z) || 1, a = Math.atan2(z, x);
+    const front = Math.max(0, z / h);
+    const w = 1 + amp * Math.sin(a * freq + y * 2) * (dampFront ? (1 - front * dampFront) : 1);
+    p.setXYZ(i, x * w, y, z * w);
+  }
+  return geo;
+}
+function twistVerts(geo, k) {
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i), a = y * k, c = Math.cos(a), s = Math.sin(a);
+    p.setXYZ(i, x * c - z * s, y, x * s + z * c);
+  }
+  return geo;
+}
+const BODYGEO = {};
+function makeBodyMesh(id) {
+  const bag = new GeoBag(), leaf = lin3('#3f9d45'), leaf2 = lin3('#8ed85a'), stem = lin3('#6b4a2a'), seed = lin3('#ffe08a'), paper = lin3('#f4e7c8'), speck = lin3('#5d6a32');
+  const gold = lin3('#ffc94a'), cherry = lin3('#d63b55'), bolt = lin3('#e7c56a');
+  const sides = segN(28, 12), rings = segN(16, 8);
+  if (id === 'strawberry') {
+    bag.add(latheOf(BPROF.strawberry, rings, sides), 0, TWHITE);
+    for (let i = 0; i < 7; i++) {
+      const a = -Math.PI / 2 + i / 7 * TAU;
+      bag.add(new THREE.SphereGeometry(0.11, segN(8, 5), segN(5, 4)), 1, i % 2 ? leaf2 : leaf, placeM(Math.cos(a) * 0.10, 1.02, Math.sin(a) * 0.10, 0.7, a, 0.55, 1.35, 0.28, 0.72));
+    }
+    bag.add(new THREE.CylinderGeometry(0.018, 0.026, 0.16, segN(8, 5)), 1, stem, placeM(0, 1.16, 0));
+    const ns = segN(16, 7);
+    for (let i = 0; i < ns; i++) {
+      const y = 0.16 + (i / ns) * 0.78, a = i * 2.39996, r = profR('strawberry', y) * 0.98;
+      bag.add(new THREE.SphereGeometry(0.026, segN(6, 4), segN(4, 3)), 1, seed, placeM(Math.cos(a) * r, y, Math.sin(a) * r));
+    }
+  } else if (id === 'pear') {
+    bag.add(latheOf(BPROF.pear, rings, sides), 0, TWHITE);
+    bag.add(new THREE.CylinderGeometry(0.016, 0.024, 0.15, segN(8, 5)), 1, stem, placeM(0, 1.16, 0));
+    bag.add(new THREE.SphereGeometry(0.1, segN(8, 5), segN(5, 4)), 1, leaf, placeM(0.09, 1.14, 0, 0.2, 0, -1.05, 1.5, 0.28, 0.7));
+    const ns = segN(10, 5);
+    for (let i = 0; i < ns; i++) {
+      const y = 0.08 + (i / ns) * 0.7, a = i * 2.39996, r = profR('pear', y) * 0.96;
+      bag.add(new THREE.SphereGeometry(0.02, 4, 3), 1, speck, placeM(Math.cos(a) * r, y, Math.sin(a) * r));
+    }
+  } else if (id === 'lettuce') {
+    bag.add(latheOf(BPROF.lettuce, rings, sides), 0, TWHITE);
+    const shell = waveVerts(latheOf([[0.16, 0.02], [0.30, 0.16], [0.42, 0.40], [0.40, 0.66], [0.30, 0.88], [0.16, 1.02], [0.04, 1.10]], segN(12, 7), segN(22, 12)), 7, 0.16, 0.85);
+    bag.add(shell, 1, leaf);
+    const shell2 = waveVerts(latheOf([[0.22, 0.08], [0.36, 0.30], [0.38, 0.58], [0.24, 0.86], [0.08, 1.04]], segN(8, 5), segN(18, 10)), 6, 0.12, 0.7);
+    bag.add(shell2, 1, leaf2);
+  } else if (id === 'cupcake') {
+    const wrap = waveVerts(latheOf([[0.22, 0], [0.26, 0.06], [0.32, 0.24], [0.40, 0.46], [0.42, 0.56]], segN(8, 5), segN(24, 14)), 14, 0.07, 0);
+    bag.add(wrap, 1, paper);
+    const frost = twistVerts(latheOf([[0, 0.50], [0.12, 0.54], [0.24, 0.64], [0.22, 0.78], [0.14, 0.90], [0.06, 1.00], [0, 1.06]], rings, sides), 3.2);
+    bag.add(frost, 0, TWHITE);
+    bag.add(new THREE.SphereGeometry(0.07, segN(10, 6), segN(8, 5)), 1, cherry, placeM(0, 1.12, 0));
+    bag.add(new THREE.CylinderGeometry(0.012, 0.012, 0.08, 5), 1, leaf, placeM(0.02, 1.2, 0, 0, 0, -0.5));
+    for (let i = 0; i < segN(8, 4); i++) {
+      const a = i / 8 * TAU, y = 0.7 + (i % 3) * 0.1;
+      bag.add(new THREE.SphereGeometry(0.018, 4, 3), 1, i % 2 ? seed : lin3('#ff7eb6'), placeM(Math.cos(a) * 0.12, y, Math.sin(a) * 0.12));
+    }
+  } else if (id === 'robot') {
+    bag.add(new RoundedBoxGeometry(0.74, 0.98, 0.66, segN(4, 2), 0.12).translate(0, 0.49, 0), 0, TWHITE);
+    [-1, 1].forEach(s => bag.add(new THREE.CylinderGeometry(0.06, 0.06, 0.08, segN(10, 6)), 1, bolt, placeM(s * 0.40, 0.72, 0, 0, 0, Math.PI / 2)));
+    [[-0.14, '#ffe08a'], [0, '#7be0ad'], [0.14, '#ff7eb6']].forEach(L => bag.add(new THREE.SphereGeometry(0.045, segN(8, 5), segN(6, 4)), 1, lin3(L[1]), placeM(L[0], 0.40, 0.30)));
+    bag.add(new THREE.CylinderGeometry(0.02, 0.02, 0.2, segN(6, 5)), 1, bolt, placeM(0.18, 1.08, 0, 0, 0, -0.35));
+    bag.add(new THREE.SphereGeometry(0.045, segN(8, 5), segN(6, 4)), 1, cherry, placeM(0.24, 1.16, 0));
+    bag.add(new THREE.TorusGeometry(0.055, 0.014, segN(6, 4), segN(10, 6)), 1, gold, placeM(0, 0.52, -0.36, Math.PI / 2, 0, 0));
+    bag.add(new THREE.BoxGeometry(0.025, 0.11, 0.025), 1, gold, placeM(0, 0.64, -0.36));
+  }
+  return bag.done();
+}
+function bodyGeometry(id) {
+  const key = id + (lo() ? ':lo' : ':hi');
+  if (BODYGEO[key]) return BODYGEO[key];
+  let g;
+  if (id === 'bean') g = geoSet().round;
+  else if (id && id.indexOf('c-') === 0) g = geoSet()[id.slice(2)] || geoSet().round;
+  else g = makeBodyMesh(id);
+  BODYGEO[key] = g;
+  return g;
+}
+/* Same candy push the jellybean has always used. Very light colours get an exception in M2(4). */
+function candyColor(hex) {
+  const bc = new THREE.Color(hex), hsl = {}; bc.getHSL(hsl);
+  bc.setHSL(hsl.h, Math.min(1, hsl.s * 1.5 + 0.08), Math.min(0.62, hsl.l * 0.82));
+  return bc;
+}
+const BODYMAT = {};
+function bodyMaterial(hex, detail) {
+  const k = (hex || '#ffd23f') + (detail ? '|d' : '') + (quality.level >= 2 ? '|p' : '|s');
+  if (BODYMAT[k]) return BODYMAT[k];
+  const bc = candyColor(hex || '#ffd23f');
+  const mat = quality.level >= 2
+    ? new THREE.MeshPhysicalMaterial({ color: bc, roughness: 0.45, clearcoat: 0.85, clearcoatRoughness: 0.14, envMapIntensity: 0.9 })
+    : new THREE.MeshStandardMaterial({ color: bc, roughness: 0.3, envMapIntensity: 0.8 });
+  mat.userData.shared = true;
+  return (BODYMAT[k] = detail ? addRimDetail(mat) : addRim(mat));
+}
+/* A jellybean (or a hidden classic shape) with the classic face and today's accessory still uses the original meshes. */
+const LEGACY_HAT = { none: 'none', oldcrown: 'crown', halo: 'halo', horns: 'horns', antenna: 'antenna', star: 'star' };
+const LEGACY_EX = { none: 'none', visor: 'visor', spots: 'spots' };
+function drawClassic(p) {
+  const L = p.look;
+  if (!L || !L.body) return true;
+  const shape = p.shape || 'round';
+  if (!((L.body === 'bean' && shape === 'round') || L.body === 'c-' + shape)) return false;
+  if (L.eyes && L.eyes !== 'classic') return false;
+  const hat = L.hat || 'none', extra = L.extra || 'none';
+  if (!Object.prototype.hasOwnProperty.call(LEGACY_HAT, hat) || !Object.prototype.hasOwnProperty.call(LEGACY_EX, extra)) return false;
+  const acc = p.skin && p.skin.acc ? p.skin.acc : 'none';
+  const shown = extra !== 'none' ? LEGACY_EX[extra] : LEGACY_HAT[hat];
+  return shown === acc;
+}
+function runnerBits(p, shape, info, mesh, mat, faceSc) {
+  const root = new THREE.Group(), lean = new THREE.Group(), body = new THREE.Group(); root.add(lean); lean.add(body);
+  mesh.castShadow = true; body.add(mesh);
+  const bc = candyColor(p.color || '#ffd23f');
+  if (p.you) { const hull = new THREE.Mesh(mesh.geometry, MAT.youHull); hull.scale.set(1.075, 1.04, 1.075); hull.position.y = -0.025; body.add(hull); }
+  const faceMat = new THREE.MeshBasicMaterial({ map: FACE.open, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const face = new THREE.Mesh(faceGeo(shape, info.ey, faceSc || info.face), faceMat); face.renderOrder = 2; body.add(face);
+  const bubble = new THREE.Mesh(GEO.bubble, MAT.bubble); bubble.position.y = 0.62; bubble.visible = false; body.add(bubble);
+  const stars = [0, 1, 2].map(() => { const s = new THREE.Mesh(GEO.smallStar, MAT.star); s.visible = false; body.add(s); return s; });
+  scene.add(root);
+  return {
+    root, lean, body, mesh, mat, face, faceMat, bubble, stars, top: info.top, shape, info,
+    limbCol: bc.clone().multiplyScalar(0.92), soleCol: bc.clone().multiplyScalar(0.8), armZ: 0.55, armX: [0, 0],
+    sq: 1, sqv: 0, tilt: 0, tiltv: 0, spin: 0, hop: 0, hopv: 0, st: { stun: -9, air: -9, out: false, duck: -9 },
+    blinkAt: 1 + Math.random() * 3, faceKind: 'open', happyUntil: -9, fly: null, lastStep: 0, lastT: null, eyeStyle: 'classic'
+  };
+}
+function makeLook(p) {
+  const id = (p.look && p.look.body) || 'bean';
+  const shape = id === 'bean' ? 'round' : (id.indexOf('c-') === 0 ? id.slice(2) : id);
+  const info = shapeInfo(shape);
+  const geo = bodyGeometry(id === 'bean' || id.indexOf('c-') === 0 ? id : id);
+  const detail = !(id === 'bean' || id.indexOf('c-') === 0);
+  const mat = bodyMaterial(p.color, detail);
+  const mesh = new THREE.Mesh(geo, mat);
+  const rn = runnerBits(p, shape, info, mesh, mat, info.face);
+  rn.eyeStyle = (p.look && p.look.eyes) || 'classic';
+  rn.wear = p.look || null;
+  return rn;
 }
 function makeRunner(p) {
+  const rn = drawClassic(p) ? makeClassic(p) : makeLook(p);
+  rn.sig = sigOf(p);
+  return rn;
+}
+function makeClassic(p) {
   const shape = p.shape || 'round', acc = p.skin ? p.skin.acc : 'none', info = shapeInfo(shape);
   const root = new THREE.Group(), lean = new THREE.Group(), body = new THREE.Group(); root.add(lean); lean.add(body);
   /* candy vinyl: pastel game colours pushed to saturated toy colours, clear coat on High */
@@ -1257,7 +1476,13 @@ function makeRunner(p) {
     blinkAt: 1 + Math.random() * 3, faceKind: 'open', happyUntil: -9, fly: null, lastStep: 0, lastT: null
   };
 }
-function sigOf(p) { return (p.shape || 'round') + '|' + (p.skin ? p.skin.acc : 'none') + '|' + p.color + '|' + (p.you ? 1 : 0) + (lo() ? '|lo' : ''); }
+function sigOf(p) {
+  if (!drawClassic(p)) {
+    const L = p.look || {};
+    return ['lk', L.body, L.eyes, L.hat, L.hatColor, L.extra, p.color, p.you ? 1 : 0, lo() ? 'lo' : 'hi'].join('|');
+  }
+  return (p.shape || 'round') + '|' + (p.skin ? p.skin.acc : 'none') + '|' + p.color + '|' + (p.you ? 1 : 0) + (lo() ? '|lo' : '');
+}
 function jumpH(u) { u = Math.min(1, Math.max(0, u)); return 1 - Math.pow(Math.abs(2 * u - 1), 2.4); }
 function setFace(rn, k) { if (rn.faceKind !== k) { rn.faceKind = k; rn.faceMat.map = FACE[k]; } }
 

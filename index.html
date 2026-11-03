@@ -2822,9 +2822,10 @@ h1 .rush { color: var(--you); }
     var a0 = A0, players = [], A = ARENAS[id] || ARENAS.neon, L = md === 'solo' ? LEVELS[li] : null;
     var count = md === 'party' ? 8 : md === 'room' ? room.roster.length : 1;
     for (var i = 0; i < count; i++) {
+      var mine = (i === 0 && LOOK) ? lookForDraw() : null;
       players.push({
-        you: i === 0, name: i ? BOT_NAMES[i - 1] : 'You', color: i ? BOT_COLORS[i - 1] : skinById(PROFILE.skin).color,
-        skin: i ? null : skinById(PROFILE.skin), shape: i ? 'round' : PROFILE.shape,
+        you: i === 0, name: i ? BOT_NAMES[i - 1] : 'You', color: i ? BOT_COLORS[i - 1] : (mine ? mine.hex : skinById(PROFILE.skin).color),
+        skin: i ? null : skinById(PROFILE.skin), shape: i ? 'round' : PROFILE.shape, look: mine,
         angle: a0 + i * TAU / 8, hearts: 3, air: -9, duck: -9, actAt: -9, stun: -9,
         out: false, outAt: 0, prev: {}, dec: {}, queued: null, lastHit: null,
         lane: 1, laneX: 1, laneAt: -9, shield: 0,
