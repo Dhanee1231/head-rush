@@ -514,10 +514,11 @@ function sideTexture(B) {
 }
 
 function buildArenaCore(V, A) {
-  const T = V.T, E = V.edge, grp = new THREE.Group(), B = BOARD[A.id];
+  const T = V.T, E = V.edge, grp = new THREE.Group(), B = BOARD[A.remixOf] || BOARD[A.id];
   const size = quality.level >= 3 ? 2048 : 1024;
   const ft = floorTextures(V, A, size, B);
   const floorMat = new THREE.MeshStandardMaterial({ map: ft.mapT, emissiveMap: ft.emT, emissive: 0xffffff, emissiveIntensity: B ? B.emis : 1.0, roughness: B ? (ft.roughT ? 1 : (B.rough[0] + B.rough[1]) / 2) : 0.6, roughnessMap: ft.roughT, metalness: B ? B.metal : 0.2 });
+  if (A.floorTint) floorMat.color.setHex(A.floorTint);
   const floor = new THREE.Mesh(new THREE.CircleGeometry(E, lo() ? 64 : 128).rotateX(-Math.PI / 2), floorMat);
   floor.receiveShadow = true; grp.add(floor);
   if (B) {
@@ -1080,7 +1081,7 @@ function setArena(g) {
   let pack = arenaCache[key];
   if (!pack) {
     const core = buildArenaCore(V, A);
-    const sc = (SCENERY[A.id] || sceneryNeon)(V);
+    const sc = (SCENERY[A.remixOf] || SCENERY[A.id] || sceneryNeon)(V);
     const root = new THREE.Group(); root.add(core.grp); root.add(sc.group);
     root.traverse(o => { if (o.isMesh && !o.isInstancedMesh && o !== core.floor) { if (o.castShadow === undefined) o.castShadow = false; } });
     pack = arenaCache[key] = { id: A.id, key, edge: V.edge, root, core, sc };
@@ -1710,7 +1711,7 @@ function setFace(rn, k) {
 }
 
 function updateRunner(rn, p, i, g, V, now, dt) {
-  const t = g.t, JT = g.arena.jumpT;
+  const t = g.t, JT = (p.airSpan && t < p.air) ? p.airSpan : g.arena.jumpT;
   const R = V.TR + (G_API.runnerR(p) - V.mid) * V.SC, f = p.angle + g.rot;
   let x = R * Math.cos(f), z = R * Math.sin(f);
   const fresh = rn.lastT === null || t < rn.lastT - 0.5; rn.lastT = t;
@@ -2225,6 +2226,35 @@ HR3D.setQuality = function (lv) { setQuality(lv); try { localStorage.setItem('he
 HR3D.quality = () => quality.level;
 HR3D.show = function (on) { if (glCanvas) glCanvas.style.display = on ? 'block' : 'none'; if (document.body.classList.contains('hd3d') !== !!on) document.body.classList.toggle('hd3d', !!on); if (vigEl) vigEl.style.display = on && !quality.bloom ? 'block' : 'none'; };
 
+let padMesh = null;
+function syncPads(A, g, V) {
+  const pads = A.pads || [];
+  if (!pads.length) { if (padMesh) padMesh.visible = false; return; }
+  if (!padMesh || padMesh.userData.e0 !== V.e0 || padMesh.userData.n !== pads.length) {
+    if (padMesh) { scene.remove(padMesh); padMesh.geometry.dispose(); if (padMesh.material.map) padMesh.material.map.dispose(); padMesh.material.dispose(); }
+    const r0 = V.e0 + 0.08, r1 = V.e1 - 0.08;
+    const geo = sectorGeo(r0, r1, -0.06, 0.06, 6, 0.02);
+    const tex = canvasTex(128, 64, (x, w, h) => {
+      x.fillStyle = '#1a1730'; x.fillRect(0, 0, w, h);
+      x.fillStyle = '#322b52';
+      for (let i = 0; i < 8; i += 2) x.fillRect(i * w / 8, 0, w / 8, h);
+      x.strokeStyle = '#6d6988'; x.lineWidth = 4; x.strokeRect(2, 2, w - 4, h - 4);
+      x.strokeStyle = '#f4f2ff'; x.lineWidth = 7; x.lineCap = 'round'; x.lineJoin = 'round'; x.beginPath();
+      x.moveTo(w * 0.32, h * 0.78); x.lineTo(w * 0.42, h * 0.48); x.lineTo(w * 0.52, h * 0.72); x.lineTo(w * 0.62, h * 0.28); x.lineTo(w * 0.72, h * 0.55);
+      x.stroke();
+    });
+    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, metalness: 0, emissive: 0x000000, emissiveIntensity: 0 });
+    padMesh = new THREE.InstancedMesh(geo, mat, pads.length);
+    padMesh.userData.e0 = V.e0; padMesh.userData.n = pads.length;
+    padMesh.castShadow = false; padMesh.receiveShadow = true; padMesh.frustumCulled = false;
+    scene.add(padMesh);
+  }
+  padMesh.visible = !HR3D.preview;
+  padMesh.count = pads.length;
+  for (let i = 0; i < pads.length; i++) { tmpM.makeRotationY(-(pads[i].a + g.rot)); padMesh.setMatrixAt(i, tmpM); }
+  padMesh.instanceMatrix.needsUpdate = true;
+}
+
 HR3D.render = function (g, view) {
   const V = G_API.V3, W = view.W, H = view.H, now = view.now;
   HR3D.show(true);
@@ -2330,6 +2360,7 @@ HR3D.render = function (g, view) {
   // belts
   syncPool(beltPool, A.belts, bt => makeBelt(bt, V));
   A.belts.forEach((bt, i) => { const o = beltPool[i]; o.root.rotation.y = -(bt.a + g.rot); o.tex.offset.x = o.tex2.offset.x = -(t * 0.45 * o.dir) / 0.11 % 1; });
+  syncPads(A, g, V);
   // holes
   syncPool(holePool, g.holes, o => makeHole(o, V));
   g.holes.forEach((o, i) => {
@@ -2411,7 +2442,7 @@ function adapt(dt) {
     if (++fastChecks >= 3 && quality.dyn < 1) { fastChecks = 0; quality.dyn = Math.min(1, quality.dyn + 0.06); lastSize = ''; }
   }
 }
-HR3D.stats = () => ({ level: quality.level, pr: effPR(), dyn: quality.dyn });
+HR3D.stats = () => ({ level: quality.level, pr: effPR(), dyn: quality.dyn, calls: renderer.info.render.calls });
 
 try { init(); HR3D.ok = true; } catch (e) { HR3D.ok = false; HR3D.error = String(e && e.message || e); if (glCanvas) glCanvas.remove(); }
 window.dispatchEvent(new Event('hr3d-ready'));
