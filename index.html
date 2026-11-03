@@ -1312,6 +1312,21 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
   function usePlayer(id) { PLAYERS.current = id; savePlayers(); PROFILE = loadProfile(); loadLook(id, PROFILE); }
   /* Delete my data: removes this player's leaderboard entry and round history online, then everything about them on this phone. */
   var deleteArmed = 0;
+  /* Broken saves are kept as <key>.bad and, if that slot was already taken, <key>.bad.<timestamp>. Remove every copy. */
+  function forgetPlayerStorage(id) {
+    var bases = [profKey(id), lookKey(id)];
+    var kill = [];
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k) continue;
+        for (var b = 0; b < bases.length; b++) {
+          if (k === bases[b] || k.indexOf(bases[b] + '.bad') === 0) { kill.push(k); break; }
+        }
+      }
+    } catch (e) {}
+    kill.forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} });
+  }
   function deleteMyData() {
     var pl = currentPlayer(), msg = $('deleteMsg'), btn = $('deleteData');
     if (!pl) return;
@@ -1319,8 +1334,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     deleteArmed = 0; btn.disabled = true; msg.textContent = 'Deleting\u2026';
     ensureCloud(pl);
     sbFetch('/rest/v1/rpc/delete_player', { method: 'POST', body: { p_id: pl.cloudId, p_secret: pl.secret } }).then(function () {
-      try { localStorage.removeItem(profKey(pl.id)); } catch (e) {}
-      ['', '.bad'].forEach(function (x) { try { localStorage.removeItem(lookKey(pl.id) + x); localStorage.removeItem(profKey(pl.id) + x); } catch (e) {} });
+      forgetPlayerStorage(pl.id);
       try { localStorage.removeItem(backupKey(pl.id)); } catch (e) {}
       try { var q = JSON.parse(localStorage.getItem('headrush.roundlog.v1')) || []; localStorage.setItem('headrush.roundlog.v1', JSON.stringify(q.filter(function (r) { return r.pid !== pl.cloudId; }))); } catch (e) {}
       PLAYERS.list = PLAYERS.list.filter(function (x) { return x.id !== pl.id; });
