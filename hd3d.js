@@ -1515,9 +1515,15 @@ function pushWear(rn, now) {
   }
   if (extra) { tmpM.multiplyMatrices(rn.body.matrixWorld, extraMatrix(rn.shape, extra, info)); wearPush('x-' + extra, tmpM, WHITEC); }
 }
-/* Same candy push the jellybean has always used. Very light colours get an exception in M2(4). */
+/* Same candy push the jellybean has always used. Near-white colours (Snow, Ghost) are the exception:
+   a tiny tint becomes full HSL saturation, and the usual push turns them lilac. */
 function candyColor(hex) {
   const bc = new THREE.Color(hex), hsl = {}; bc.getHSL(hsl);
+  if (hsl.l >= 0.82) {
+    const chroma = Math.max(bc.r, bc.g, bc.b) - Math.min(bc.r, bc.g, bc.b);
+    bc.setHSL(hsl.h, Math.min(0.22, chroma * 1.6), Math.min(0.94, hsl.l * 0.99));
+    return bc;
+  }
   bc.setHSL(hsl.h, Math.min(1, hsl.s * 1.5 + 0.08), Math.min(0.62, hsl.l * 0.82));
   return bc;
 }
@@ -1592,7 +1598,7 @@ function makeClassic(p) {
   const shape = p.shape || 'round', acc = p.skin ? p.skin.acc : 'none', info = shapeInfo(shape);
   const root = new THREE.Group(), lean = new THREE.Group(), body = new THREE.Group(); root.add(lean); lean.add(body);
   /* candy vinyl: pastel game colours pushed to saturated toy colours, clear coat on High */
-  const bc = new THREE.Color(p.color), hsl = {}; bc.getHSL(hsl); bc.setHSL(hsl.h, Math.min(1, hsl.s * 1.5 + 0.08), Math.min(0.62, hsl.l * 0.82));
+  const bc = candyColor(p.color);
   const flat = shape === 'diamond';
   const mat = addRim(quality.level >= 2
     ? new THREE.MeshPhysicalMaterial({ color: bc, roughness: 0.45, clearcoat: 0.85, clearcoatRoughness: 0.14, envMapIntensity: 0.9, flatShading: flat })
