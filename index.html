@@ -3898,6 +3898,69 @@ h1 .rush { color: var(--you); }
     else ctx.arc(0, 0, R, 0, TAU);
     ctx.restore();
   }
+  /* Top-down token. The filled radius is the same number today's runner uses. Hats are a small mark. */
+  function paintTop(L, rad, a, you, ducking) {
+    L = L || {};
+    var id = L.body || 'bean', col = L.hex || '#ffd23f';
+    ctx.save();
+    ctx.rotate(a);
+    if (ducking) ctx.scale(0.62, 1.22);
+    ctx.fillStyle = col;
+    ctx.strokeStyle = you ? COL.ink : COL.bg;
+    ctx.lineWidth = you ? 0.016 : 0.01;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    if (id === 'robot') {
+      var q = rad * 0.86, cr = rad * 0.22;
+      ctx.moveTo(-q + cr, -q); ctx.lineTo(q - cr, -q); ctx.quadraticCurveTo(q, -q, q, -q + cr);
+      ctx.lineTo(q, q - cr); ctx.quadraticCurveTo(q, q, q - cr, q); ctx.lineTo(-q + cr, q);
+      ctx.quadraticCurveTo(-q, q, -q, q - cr); ctx.lineTo(-q, -q + cr); ctx.quadraticCurveTo(-q, -q, -q + cr, -q); ctx.closePath();
+    } else ctx.arc(0, 0, rad, 0, TAU);
+    ctx.fill(); ctx.stroke();
+    if (id === 'strawberry') {
+      ctx.fillStyle = '#3f9d45'; ctx.beginPath();
+      for (var i = 0; i < 8; i++) { var an = -Math.PI / 2 + i / 8 * TAU, rr = i % 2 ? rad * 0.28 : rad * 0.62; i ? ctx.lineTo(Math.cos(an) * rr, Math.sin(an) * rr) : ctx.moveTo(Math.cos(an) * rr, Math.sin(an) * rr); }
+      ctx.closePath(); ctx.fill();
+    } else if (id === 'pear') {
+      ctx.strokeStyle = '#6b4a2a'; ctx.lineWidth = Math.max(0.004, rad * 0.1);
+      ctx.beginPath(); ctx.moveTo(0, -rad * 0.15); ctx.lineTo(0, -rad * 0.72); ctx.stroke();
+      ctx.fillStyle = '#3f9d45'; ctx.beginPath(); ctx.ellipse(rad * 0.22, -rad * 0.48, rad * 0.22, rad * 0.1, -0.4, 0, TAU); ctx.fill();
+    } else if (id === 'lettuce') {
+      ctx.strokeStyle = '#8ed85a'; ctx.lineWidth = rad * 0.14; ctx.beginPath(); ctx.arc(0, 0, rad * 0.62, 0, TAU); ctx.stroke();
+    } else if (id === 'cupcake') {
+      ctx.strokeStyle = 'rgba(255,246,234,0.9)'; ctx.lineWidth = rad * 0.08;
+      ctx.beginPath(); ctx.arc(0, 0, rad * 0.55, 0, TAU); ctx.stroke();
+      ctx.fillStyle = '#d63b55'; ctx.beginPath(); ctx.arc(0, 0, rad * 0.16, 0, TAU); ctx.fill();
+    } else if (id === 'robot') {
+      ctx.fillStyle = '#d63b55'; ctx.beginPath(); ctx.arc(rad * 0.28, -rad * 0.28, rad * 0.12, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+    if (L.extra === 'visor') {
+      ctx.strokeStyle = '#14152c'; ctx.lineWidth = rad * 0.28;
+      ctx.beginPath(); ctx.arc(0, 0, rad * 0.45, a - 0.7, a + 0.7); ctx.stroke();
+    } else if (!ducking) {
+      var tx = -Math.sin(a), ty = Math.cos(a), nx = Math.cos(a), ny = Math.sin(a), kind = L.eyes || 'classic';
+      var er = rad * (kind === 'googly' ? 0.22 : kind === 'dot' ? 0.1 : 0.16);
+      [-1, 1].forEach(function (s) {
+        var ex = (tx * 0.4 + nx * 0.3 * s) * rad, ey = (ty * 0.4 + ny * 0.3 * s) * rad;
+        if (kind === 'sleepy') { ctx.strokeStyle = COL.bg; ctx.lineWidth = rad * 0.08; ctx.beginPath(); ctx.arc(ex, ey, er, 0.2, Math.PI - 0.2); ctx.stroke(); return; }
+        if (kind === 'googly') { ctx.fillStyle = '#ffffff'; circle(ex, ey, er); ctx.fillStyle = COL.bg; circle(ex, ey, er * 0.45); return; }
+        ctx.fillStyle = COL.bg; circle(ex, ey, er);
+        if (kind === 'sparkle') { ctx.fillStyle = '#ffe08a'; circle(ex - er * 0.3, ey - er * 0.3, er * 0.28); }
+      });
+    }
+    if (L.extra === 'spots') { ctx.fillStyle = 'rgba(255,255,255,0.75)'; circle(-rad * 0.2, rad * 0.15, rad * 0.1); circle(rad * 0.22, rad * 0.05, rad * 0.08); }
+    if (L.extra === 'glasses') {
+      ctx.strokeStyle = '#1b1530'; ctx.lineWidth = rad * 0.06;
+      var tx2 = -Math.sin(a), ty2 = Math.cos(a), nx2 = Math.cos(a), ny2 = Math.sin(a);
+      [-1, 1].forEach(function (s) { ctx.beginPath(); ctx.arc((tx2 * 0.4 + nx2 * 0.3 * s) * rad, (ty2 * 0.4 + ny2 * 0.3 * s) * rad, rad * 0.16, 0, TAU); ctx.stroke(); });
+    }
+    if (L.hat && L.hat !== 'none') {
+      var bx = Math.sin(a) * rad * 0.35, by = -Math.cos(a) * rad * 0.35;
+      ctx.fillStyle = L.hatHex || L.hex || col;
+      circle(bx, by, rad * 0.2);
+    }
+  }
   function drawRunner(p) {
     var t = G.t, a = p.angle, rr = runnerR(p), x = Math.cos(a) * rr, y = Math.sin(a) * rr, r = 0.055, JT = G.arena.jumpT;
     if (p.out) {
@@ -3917,6 +3980,9 @@ h1 .rush { color: var(--you); }
     ctx.save();
     ctx.translate(x + ux * h * 0.06, y + uy * h * 0.06);
     if (stunned) ctx.globalAlpha = Math.floor(t * 14) % 2 ? 0.45 : 1;
+    if (!runnerIsClassic(p)) {
+      paintTop(p.look, ducking ? r : r * (1 + 0.5 * h), a, p.you, ducking);
+    } else {
     ctx.fillStyle = p.color;
     ctx.strokeStyle = p.you ? COL.ink : COL.bg;
     ctx.lineWidth = p.you ? 0.016 : 0.01;
@@ -3931,6 +3997,7 @@ h1 .rush { color: var(--you); }
       circle((tx * 0.42 - nx * 0.32) * r * s, (ty * 0.42 - ny * 0.32) * r * s, r * 0.17 * s);
     }
     if (p.skin && p.skin.acc !== 'none') drawAccessory(ctx, p.skin.acc, r * (ducking ? 0.8 : 1 + 0.5 * h), a);
+    }
     if (p.shield > t) {
       ctx.strokeStyle = COL.puShield; ctx.lineWidth = 0.009;
       ctx.globalAlpha = p.shield - t < 2 ? (Math.floor(t * 10) % 2 ? 0.3 : 0.9) : 0.65 + 0.25 * Math.sin(t * 6);
