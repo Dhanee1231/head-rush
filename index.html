@@ -5414,6 +5414,12 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
 
   /* ---------- menus ---------- */
   function startRound() {
+    /* Space/Enter on an end card calls this when focus is not on a button.
+       During Sky Tower that used to hide both screens and leave the water caught. */
+    if (SKY) {
+      if (!$('endScreen').hidden) { skyReset(); $('endScreen').hidden = true; }
+      return;
+    }
     if (mode === 'hotseat') { startHotSeat(); return; }
     audioOn(); keepAwake();
     $('startScreen').hidden = true; $('endScreen').hidden = true;
@@ -7118,6 +7124,31 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       skyReset(); skyHud();
       eq('water', $('hudPost').textContent, ' floors below');
       resize(); skyDraw();
+      var skyFlag = SKY;
+      SKY = true;
+      skyReset();
+      SK.over = true; SK.h = 1; SK.flood = 1; SK.t = 12; SK.hits = 2; SK.shown = true;
+      $('startScreen').hidden = true;
+      skyShowEnd();
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      var tag = document.activeElement ? document.activeElement.tagName : '';
+      eq('space-focus', tag === 'BUTTON' || tag === 'INPUT', false);
+      document.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space', key: ' ', bubbles: true, cancelable: true }));
+      eq('space-dead', $('endScreen').hidden && $('startScreen').hidden && !!(SK && SK.over), false);
+      if ($('endScreen').hidden && SK && !SK.over) {
+        SK.t = 1; SK.stun = -9; SK.air = -9;
+        skyPress('jump');
+        eq('space-jump', SK.air > 1, true);
+      }
+      skyReset();
+      SK.over = true; SK.h = 1; SK.flood = 1; SK.t = 12; SK.shown = true;
+      $('startScreen').hidden = true;
+      skyShowEnd();
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      document.dispatchEvent(new KeyboardEvent('keydown', { code: 'Enter', key: 'Enter', bubbles: true, cancelable: true }));
+      eq('enter-dead', $('endScreen').hidden && $('startScreen').hidden && !!(SK && SK.over), false);
+      SKY = skyFlag;
+      $('endScreen').hidden = true;
     } catch (err) { fails.push('threw ' + (err && err.stack || err)); }
     return { ok: fails.length === 0, fails: fails };
   }
