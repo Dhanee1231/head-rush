@@ -1185,7 +1185,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     if (!ensureBackup(lookPid)) return false;
     var ok = false;
     try { ok = safeSet(lookKey(lookPid), JSON.stringify(LOOK)); } catch (e) {}
-    if (ok) lookBroken = false;
+    if (ok) { lookBroken = false; if (typeof trackMe === 'function') trackMe(); }
     return ok;
   }
   function lookHas(slot, id) { var it = lookItem(slot, id); return !!it && (!!it.free || LOOK.unl.indexOf(it.key) >= 0); }
@@ -1200,6 +1200,33 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     out.hex = lookItem('color', out.color).hex;
     out.hatHex = out.hatColor === 'auto' ? out.hex : lookItem('color', out.hatColor).hex;
     return out;
+  }
+  /* Short presence token, about 20 bytes: b0.e1.h4.x0.k3 and, when the hat colour is not automatic, .t2.
+     Indexes follow LOOK_CAT, which is append-only, so an older client still reads the ids it knows. */
+  function lookIndex(slot, id) {
+    var list = LOOK_CAT[slot];
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return i;
+    return -1;
+  }
+  function lookCode(l) {
+    var d = lookForDraw(l);
+    var s = 'b' + lookIndex('body', d.body) + '.e' + lookIndex('eyes', d.eyes) + '.h' + lookIndex('hat', d.hat) + '.x' + lookIndex('extra', d.extra) + '.k' + lookIndex('color', d.color);
+    if (d.hatColor && d.hatColor !== 'auto') s += '.t' + lookIndex('color', d.hatColor);
+    return s;
+  }
+  function lookFromCode(code) {
+    if (typeof code !== 'string' || code.length > 40 || !/^b\d+\.e\d+\.h\d+\.x\d+\.k\d+(?:\.t\d+)?$/.test(code)) return null;
+    var got = {}, ok = true;
+    code.split('.').forEach(function (part) {
+      var letter = part.charAt(0), n = parseInt(part.slice(1), 10);
+      var slot = letter === 'b' ? 'body' : letter === 'e' ? 'eyes' : letter === 'h' ? 'hat' : letter === 'x' ? 'extra' : 'color';
+      var list = LOOK_CAT[slot];
+      if (!list || !list[n]) { ok = false; return; }
+      if (letter === 't') got.hatColor = list[n].id; else got[slot] = list[n].id;
+    });
+    if (!ok || !got.body || !got.color || !got.eyes || !got.hat || !got.extra) return null;
+    if (!got.hatColor) got.hatColor = 'auto';
+    return lookForDraw(got);
   }
   loadLook(PLAYERS.current, PROFILE);
   /* Every player on this phone, not only the one on screen, is migrated on the first run (backup included). */
@@ -3079,6 +3106,22 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     return T >= o.until + 1.3 && T < o.until + 3.5;
   }
 
+  /* Room colour wins over the look's own colour. Eyes, hat and extras stay. Hat colour follows the room when it was automatic. */
+  function tintLook(p, hex) {
+    if (!hex) return;
+    p.color = hex;
+    if (!p.look) return;
+    p.look.hex = hex;
+    if (!p.look.hatColor || p.look.hatColor === 'auto') p.look.hatHex = hex;
+  }
+  function presenceLk(id) {
+    try {
+      if (!ROOM || !ROOM.ch || typeof ROOM.ch.presenceState !== 'function') return '';
+      var st = ROOM.ch.presenceState() || {}, row = st[id], m = row && row[row.length - 1];
+      if (m && typeof m.lk === 'string' && m.lk.length > 0 && m.lk.length <= 40) return m.lk;
+    } catch (e) {}
+    return '';
+  }
   function newRound(id, md, li, room, opt) {
     RBUF = []; REPLAY = null;
     md = md || 'party';
@@ -3121,12 +3164,19 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       players.forEach(function (p, k) {
         var r = k === 0 ? room.roster[meIdx] : others[k - 1], slot = room.roster.indexOf(r);
         p.slot = slot; p.angle = a0 + slot * TAU / count; p.netId = r.id;
-        if (k === 0 && ROOM_COLORS[r.c]) p.color = ROOM_COLORS[r.c].hex;
         if (k > 0) {
           if (r.bot) { p.bot = true; p.name = r.name; p.color = ROOM_COLORS[r.c] ? ROOM_COLORS[r.c].hex : BOT_COLORS[r.bi % BOT_COLORS.length]; p.skin = null; }
-          else { var sk = skinById(r.skin); p.name = r.name; p.color = ROOM_COLORS[r.c] ? ROOM_COLORS[r.c].hex : sk.color; p.skin = sk; p.shape = r.sh || 'round'; }
+          else {
+            var sk = skinById(r.skin), code = (typeof r.lk === 'string' && r.lk) ? r.lk : presenceLk(r.id), parsed = lookFromCode(code);
+            p.name = r.name; p.skin = sk; p.shape = r.sh || 'round';
+            if (parsed) { p.look = parsed; p.skin = null; }
+            p.color = ROOM_COLORS[r.c] ? ROOM_COLORS[r.c].hex : (p.look ? p.look.hex : sk.color);
+          }
           if (!r.bot || !room.host) { p.remote = true; p.netA = p.angle; p.netT = 0; p.netL = 1; }
         }
+        var slotHex = ROOM_COLORS[r.c] ? ROOM_COLORS[r.c].hex : '';
+        if (k === 0 && slotHex) p.color = slotHex;
+        if (slotHex && p.look && (k === 0 || !r.bot)) tintLook(p, slotHex);
       });
     }
     G = {
@@ -5132,7 +5182,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     var st = ROOM.ch.presenceState(), out = [];
     Object.keys(st).forEach(function (k) {
       var m = st[k] && st[k][st[k].length - 1];
-      if (m && m.name) out.push({ id: k, name: m.name, skin: m.skin, joinedAt: m.joinedAt || 0, arena: m.arena, bots: m.bots || 0, d: DIFFS[m.d] ? m.d : 'medium', status: m.status, host: !!m.host, v: m.v || 0, c: typeof m.c === 'number' ? m.c : -1, sh: m.sh || 'round', me: k === ROOM.me });
+      if (m && m.name) out.push({ id: k, name: m.name, skin: m.skin, joinedAt: m.joinedAt || 0, arena: m.arena, bots: m.bots || 0, d: DIFFS[m.d] ? m.d : 'medium', status: m.status, host: !!m.host, v: m.v || 0, c: typeof m.c === 'number' ? m.c : -1, sh: m.sh || 'round', lk: typeof m.lk === 'string' && m.lk.length <= 40 ? m.lk : '', me: k === ROOM.me });
     });
     out.sort(function (a, b) { return (b.host - a.host) || (a.joinedAt - b.joinedAt) || (a.id < b.id ? -1 : 1); });
     return out;
@@ -5141,7 +5191,9 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
   function trackMe() {
     if (!ROOM || !ROOM.ch || !ROOM.subscribed) return;
     var pl = currentPlayer();
-    ROOM.ch.track({ name: pl ? pl.name : 'Player', skin: PROFILE.skin, joinedAt: ROOM.joinedAt, arena: ROOM.arena, bots: ROOM.bots, d: ROOM.diff, status: ROOM.status, host: ROOM.creating, c: ROOM.c, sh: PROFILE.shape, v: GAME_VERSION });
+    var msg = { name: pl ? pl.name : 'Player', skin: PROFILE.skin, joinedAt: ROOM.joinedAt, arena: ROOM.arena, bots: ROOM.bots, d: ROOM.diff, status: ROOM.status, host: ROOM.creating, c: ROOM.c, sh: PROFILE.shape, v: GAME_VERSION };
+    if (LOOK) { var lk = lookCode(LOOK.look); if (lk && lk.length <= 40) msg.lk = lk; }
+    ROOM.ch.track(msg);
   }
   function roomView(which) {
     $('roomJoin').hidden = which !== 'join'; $('roomLobby').hidden = which !== 'lobby';
@@ -5331,7 +5383,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     ROOM.roundSeed = payload.seed >>> 0; ROOM.resDone = false; ROOM.roundWall = Date.now(); ROOM.decideAt = 0;
     ROOM.nextAt = 0; ROOM.nextFired = true; ROOM.skipAsked = false;
     if (!$('roomLobby').hidden) renderLobby();
-    var roster = (payload.roster || []).slice(0, 8).map(function (r) { return { id: String(r.id), name: String(r.name || 'Player').slice(0, 14), skin: r.skin, bot: !!r.bot, bi: r.bi || 0, c: typeof r.c === 'number' ? r.c : -1, sh: ['round', 'triangle', 'square', 'diamond', 'star'].indexOf(r.sh) >= 0 ? r.sh : 'round', me: r.id === ROOM.me }; });
+    var roster = (payload.roster || []).slice(0, 8).map(function (r) { return { id: String(r.id), name: String(r.name || 'Player').slice(0, 14), skin: r.skin, bot: !!r.bot, bi: r.bi || 0, c: typeof r.c === 'number' ? r.c : -1, sh: ['round', 'triangle', 'square', 'diamond', 'star'].indexOf(r.sh) >= 0 ? r.sh : 'round', lk: typeof r.lk === 'string' ? r.lk.slice(0, 40) : '', me: r.id === ROOM.me }; });
     if (!roster.some(function (r) { return r.me; })) {
       if (!$('roomScreen').hidden) $('roomStatus').textContent = 'A round started without you. You’ll join the next one.';
       return;
@@ -5357,7 +5409,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     var mem = roomMembers().slice(0, 8), nb = Math.max(0, Math.min(ROOM.bots || 0, 8 - mem.length));
     if (mem.length < 2 && nb < 1) return false;
     if (ROOM.roundSeed != null && !ROOM.resDone) return false;
-    var used = {}, roster = mem.map(function (m) { var c = m.me ? ROOM.c : m.c; if (used[c] || !ROOM_COLORS[c]) c = -1; else used[c] = true; return { id: m.id, name: m.name, skin: m.skin, sh: m.me ? PROFILE.shape : m.sh, c: c }; });
+    var used = {}, roster = mem.map(function (m) { var c = m.me ? ROOM.c : m.c; if (used[c] || !ROOM_COLORS[c]) c = -1; else used[c] = true; return { id: m.id, name: m.name, skin: m.skin, sh: m.me ? PROFILE.shape : m.sh, c: c, lk: m.me ? lookCode(LOOK && LOOK.look) : (typeof m.lk === 'string' ? m.lk.slice(0, 40) : '') }; });
     roster.forEach(function (r) { if (r.c < 0) for (var c = 0; c < ROOM_COLORS.length; c++) if (!used[c]) { r.c = c; used[c] = true; break; } });
     var freeCols = []; for (var fc = 0; fc < ROOM_COLORS.length; fc++) if (!used[fc]) freeCols.push(fc);
     for (var i = 0; i < nb; i++) roster.push({ id: 'bot-' + i, name: BOT_NAMES[i % BOT_NAMES.length], bot: true, bi: i, c: freeCols.length ? freeCols.shift() : -1 });
@@ -5966,6 +6018,14 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
         lookBroken: function () { return lookBroken; },
         saveLook: saveLook,
         lookForDraw: lookForDraw, lookThumb: lookThumb, showCharCheer: showCharCheer,
+        lookCode: function () { return LOOK ? lookCode(LOOK.look) : ''; }, lookFromCode: lookFromCode,
+        players: function () {
+          if (!G) return null;
+          return G.players.map(function (p) {
+            var L = p.look;
+            return { you: !!p.you, name: p.name, bot: !!p.bot, color: p.color, shape: p.shape, skin: p.skin ? p.skin.id : null, look: L ? { body: L.body, eyes: L.eyes, hat: L.hat, extra: L.extra, hex: L.hex, hatHex: L.hatHex, hatColor: L.hatColor || 'auto' } : null };
+          });
+        },
         lookHas: lookHas,
         catalog: function () { return LOOK_CAT; },
         rules: function () { return LOOK_RULES; }
