@@ -6786,6 +6786,8 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
   var gfxBtns = Array.prototype.slice.call(document.querySelectorAll('[data-gfx]'));
   var GFX_NOTE = { hd: 'Real 3D with lighting, shadows and glow. Lowers its own detail if your phone struggles.', lite: 'Drawn 3D look. Easier on older phones.', flat: 'Simple top-down view. Fastest.' };
   function pickGfx(v) {
+    /* Sky Tower forces flat in memory only. Writing here would replace a saved HD or Lite choice. */
+    if (SKY) return;
     gfx = v; view3d = v !== 'flat'; document.body.classList.toggle('v3d', view3d);
     try { localStorage.setItem('headrush.gfx', v); } catch (e) {}
     gfxBtns.forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-gfx') === v ? 'true' : 'false'); });
@@ -6796,7 +6798,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
   }
   gfxBtns.forEach(function (b) { b.addEventListener('click', function () { pickGfx(b.getAttribute('data-gfx')); }); });
   pickGfx(gfx);
-  window.addEventListener('hr3d-ready', function () { pickGfx(gfx); });
+  window.addEventListener('hr3d-ready', function () { if (!SKY) pickGfx(gfx); });
   $('deleteData').addEventListener('click', deleteMyData);
   $('voiceToggle').checked = voiceOn;
   $('voiceToggle').addEventListener('change', function () {
@@ -6810,7 +6812,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
   });
   /* Sky Tower: a rough top-down climb. Own sim, behind ?skytower=1, not in the menus.
      Height is p.h. A hit slides you down a quarter floor and does not move your angle. */
-  var SK = null;
+  var SK = null, gfxHold = null;
   function skySpeed() {
     var s = RUN;
     if (SK.t < SK.boost) s *= 1.4;
@@ -6839,6 +6841,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     lastTimerText = '';
   }
   function skyBoot() {
+    if (gfxHold == null) gfxHold = gfx;
     gfx = 'flat'; view3d = false;
     document.body.classList.add('sky');
     document.body.classList.remove('v3d');
@@ -6976,12 +6979,16 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     $('againBtn').textContent = 'Run again';
     $('endScreen').hidden = true;
     $('startScreen').hidden = false;
-    var back = 'hd';
-    try {
-      var gsv = localStorage.getItem('headrush.gfx');
-      if (gsv === 'hd' || gsv === 'lite' || gsv === 'flat') back = gsv;
-      else if (localStorage.getItem('headrush.view') === '2d') back = 'flat';
-    } catch (e) {}
+    var back = gfxHold;
+    gfxHold = null;
+    if (back !== 'hd' && back !== 'lite' && back !== 'flat') {
+      back = 'hd';
+      try {
+        var gsv = localStorage.getItem('headrush.gfx');
+        if (gsv === 'hd' || gsv === 'lite' || gsv === 'flat') back = gsv;
+        else if (localStorage.getItem('headrush.view') === '2d') back = 'flat';
+      } catch (e) {}
+    }
     pickGfx(back);
     renderProfile();
     pickMode(mode);
@@ -7149,6 +7156,23 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       eq('enter-dead', $('endScreen').hidden && $('startScreen').hidden && !!(SK && SK.over), false);
       SKY = skyFlag;
       $('endScreen').hidden = true;
+      var gfxKept = null, gfxMem = gfx;
+      try { gfxKept = localStorage.getItem('headrush.gfx'); localStorage.setItem('headrush.gfx', 'hd'); } catch (e) { fails.push('gfx storage ' + e); }
+      gfx = 'hd'; view3d = true; gfxHold = null;
+      SKY = true;
+      skyBoot();
+      eq('flat-mem', gfx, 'flat');
+      eq('flat-store', localStorage.getItem('headrush.gfx'), 'hd');
+      window.dispatchEvent(new Event('hr3d-ready'));
+      eq('ready-store', localStorage.getItem('headrush.gfx'), 'hd');
+      pickGfx('lite');
+      eq('pick-store', localStorage.getItem('headrush.gfx'), 'hd');
+      eq('pick-mem', gfx, 'flat');
+      SKY = false;
+      gfxHold = null;
+      gfx = gfxMem;
+      pickGfx(gfxMem);
+      try { if (gfxKept == null) localStorage.removeItem('headrush.gfx'); else localStorage.setItem('headrush.gfx', gfxKept); } catch (e) {}
     } catch (err) { fails.push('threw ' + (err && err.stack || err)); }
     return { ok: fails.length === 0, fails: fails };
   }
