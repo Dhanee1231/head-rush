@@ -957,6 +957,13 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     })
   };
   var ORDER = ['neon', 'gear', 'frost', 'lava', 'orbit', 'carnival'];
+  /* Daily stays on today's six arenas even after a remix is added. Remix ids never join ORDER. */
+  var DAILY_ORDER = ['neon', 'gear', 'frost', 'lava', 'orbit', 'carnival'];
+  var REMIX_IDS = [];
+  ORDER.forEach(function (id) {
+    if (!ARENAS[id].pads) ARENAS[id].pads = [];
+    if (!ARENAS[id].hazards) ARENAS[id].hazards = [];
+  });
 
   /* ---------- player profile: coins, XP, looks, daily challenges (this phone only) ---------- */
   var SKINS = [
@@ -1390,7 +1397,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
   function dailyFor(key) {
     var h = 2166136261;
     for (var i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619) >>> 0;
-    var r = mulberry32(h ^ 0xda1e), arena = ORDER[Math.floor(r() * ORDER.length)];
+    var r = mulberry32(h ^ 0xda1e), arena = DAILY_ORDER[Math.floor(r() * DAILY_ORDER.length)];
     var twist = DAILY_TWISTS[Math.floor(r() * DAILY_TWISTS.length)];
     var diff = ['medium', 'medium', 'hard', 'medium', 'hard', 'easy'][Math.floor(r() * 6)];
     if (twist.id === 'onehp' && diff === 'hard') diff = 'medium';
@@ -3755,6 +3762,249 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     }
     return list;
   }
+
+  /* Obstacle kit. Old arenas have empty pads and hazards, so these hooks change nothing there.
+     Spawns read t, GR and bar state only (R1). A hazard yields once per pass at 1.2 s (R2).
+     Movers must stay under a stunned runner on a slow belt (R3). Teleports call reseedPrev (R4). */
+  var KIT_YIELD_AT = 1.2;
+  var KIT_SLOW_MAX = RUN * 0.5 * 0.45;
+  var speedAtCore = speedAt;
+  speedAt = function (p) {
+    var s = speedAtCore(p);
+    if (p && p.boostTill > G.t) return s * 1.4;
+    return s;
+  };
+  var barRelSpeedCore = barRelSpeed;
+  barRelSpeed = function () {
+    var s = barRelSpeedCore();
+    var pads = G && G.arena && G.arena.pads;
+    if (pads && pads.length) return G.omega + RUN * 1.4 * (G.arena.belts.length ? 1.65 : 1);
+    return s;
+  };
+  var threatsCore = threats;
+  threats = function (p, list) {
+    threatsCore(p, list);
+    var hz = G && G.arena && G.arena.hazards;
+    if (!hz || !hz.length || !p) return list;
+    var s = speedAt(p) * (G.t < p.stun ? 0.45 : 1);
+    if (s < 1e-4) return list;
+    for (var k = 0; k < hz.length; k++) {
+      var h = hz[k];
+      if (kitTooFast(h)) continue;
+      var pass = (p.kitPass && p.kitPass[h.id]) || 0;
+      if (p.kitYield && p.kitYield[h.id + ':' + pass] === true) continue;
+      var tti = wrap(kitHazardAngle(h, G.t) - p.angle) / s;
+      if (tti > 0 && tti < 2) list.push({ key: 'z' + h.id, tti: tti, need: h.need, vis: true });
+    }
+    return list;
+  };
+  function kitRoll() { return GR(); }
+  function kitHazardAngle(h, t) {
+    if (!h || !h.amp || !h.period) return h.a;
+    return h.a + h.amp * Math.sin(TAU * ((t + (h.ph || 0)) / h.period));
+  }
+  function kitTooFast(h) {
+    if (!h || !h.amp || !h.period) return false;
+    return Math.abs(h.amp) * TAU / h.period > KIT_SLOW_MAX + 1e-9;
+  }
+  /* Grey means safe for this runner. Lit hazards use the bar colours for the move they need. */
+  function kitPaint(need, yielded) {
+    if (yielded) return COL.muted;
+    if (need === 'duck') return COL.high;
+    if (need === 'lane') return COL.ice;
+    return COL.low;
+  }
+  function kitBarConflict(p, hazTti, need) {
+    var list = [], gap = G.D.gapT, i;
+    threatsCore(p, list);
+    for (i = 0; i < list.length; i++) {
+      var th = list[i];
+      if (th.need === 'lane' || th.need === need) continue;
+      if (Math.abs(th.tti - hazTti) <= gap) return true;
+    }
+    return false;
+  }
+  function kitLatchAll() {
+    var hz = G.arena.hazards;
+    if (!hz || !hz.length) return;
+    for (var i = 0; i < G.players.length; i++) {
+      var p = G.players[i];
+      if (!p || p.out || p.remote) continue;
+      if (!p.kitYield) p.kitYield = {};
+      if (!p.kitPass) p.kitPass = {};
+      if (!p.kitWasStun) p.kitWasStun = {};
+      var s = speedAt(p) * (G.t < p.stun ? 0.45 : 1);
+      for (var k = 0; k < hz.length; k++) {
+        var h = hz[k];
+        if (kitTooFast(h)) continue;
+        var pass = p.kitPass[h.id] || 0, key = h.id + ':' + pass;
+        var tti = s < 1e-4 ? 99 : wrap(kitHazardAngle(h, G.t) - p.angle) / s;
+        if (tti > 0 && tti <= KIT_YIELD_AT && p.kitYield[key] === undefined) p.kitYield[key] = kitBarConflict(p, tti, h.need);
+        var stunned = G.t < p.stun;
+        if (p.kitWasStun[h.id] && !stunned && tti > 0 && tti <= KIT_YIELD_AT && p.kitYield[key] !== true && kitBarConflict(p, tti, h.need)) p.kitYield[key] = true;
+        p.kitWasStun[h.id] = stunned;
+      }
+    }
+  }
+  function kitHazards() {
+    var hz = G.arena.hazards;
+    if (!hz || !hz.length || G.t < 0) return;
+    for (var i = 0; i < G.players.length; i++) {
+      var p = G.players[i];
+      if (!p || p.remote || p.out) continue;
+      for (var k = 0; k < hz.length; k++) {
+        var h = hz[k];
+        if (kitTooFast(h)) continue;
+        if (!crossed(p, 'z' + h.id, kitHazardAngle(h, G.t))) continue;
+        var pass = (p.kitPass && p.kitPass[h.id]) || 0;
+        if (!(p.kitYield && p.kitYield[h.id + ':' + pass] === true)) {
+          if (h.need === 'lane') resolveWall(p, { lane: h.lane || 0 });
+          else resolve(p, h.need, h.kind || 'hazard');
+        }
+        if (!p.kitPass) p.kitPass = {};
+        p.kitPass[h.id] = pass + 1;
+      }
+    }
+  }
+  function kitPads() {
+    if (!G.arena.pads || !G.arena.pads.length) return;
+  }
+  function kitBuddy() {}
+  function kitBefore() {
+    if (!G || !G.arena) return;
+    var pads = G.arena.pads;
+    if (pads && pads.length) {
+      var cap = minBarGap() / G.D.gapT - RUN * 1.4 * (G.arena.belts.length ? 1.65 : 1);
+      if (G.omega > cap) G.omega = Math.max(0.5, cap);
+    }
+    kitLatchAll();
+  }
+  function kitAfter() {
+    if (!G || !G.arena) return;
+    kitPads();
+    kitHazards();
+    kitBuddy();
+  }
+  function reseedPrev(p) {
+    if (!G || !p) return;
+    G.bars.forEach(function (b) { p.prev['b' + b.id] = wrap(b.angle - p.angle); });
+    G.arena.hammers.forEach(function (h, n) { p.prev['h' + n] = wrap(h.a - p.angle); });
+    G.arena.walls.forEach(function (w, n) { p.prev['w' + n] = wrap(w.a - p.angle); });
+    G.holes.forEach(function (o, n) { p.prev['o' + n] = wrap(o.a - p.angle); });
+    if (G.pickup) p.prev['pu' + G.pickup.id] = wrap(G.pickup.a - p.angle);
+    (G.arena.pads || []).forEach(function (pad, n) { p.prev['pad' + n] = wrap(pad.a - p.angle); });
+    (G.arena.hazards || []).forEach(function (h, n) { p.prev['z' + (h.id || n)] = wrap(kitHazardAngle(h, G.t) - p.angle); });
+  }
+  function roomAllV12() {
+    if (GAME_VERSION < 12 || !ROOM) return false;
+    var mem = roomMembers();
+    if (!mem.length) return false;
+    for (var i = 0; i < mem.length; i++) if ((mem[i].v || 0) < 12) return false;
+    return true;
+  }
+  function roomArenaIds() {
+    var ids = ORDER.slice();
+    if (roomAllV12()) REMIX_IDS.forEach(function (id) { if (ARENAS[id] && ids.indexOf(id) < 0) ids.push(id); });
+    return ids;
+  }
+  function kitSelfTest() {
+    var fails = [], savedRoom = ROOM, savedRun = running, savedGR = GR, savedRand = Math.random, savedVoice = voiceOn;
+    function eq(name, a, b) { if (a !== b) fails.push(name + ': ' + a + ' !== ' + b); }
+    voiceOn = false;
+    try {
+      eq('slow', Math.round(KIT_SLOW_MAX * 1e6), Math.round(RUN * 0.5 * 0.45 * 1e6));
+      eq('fast', kitTooFast({ amp: 0.2, period: 5 }), true);
+      eq('still', kitTooFast({ a: 1 }), false);
+      eq('slowok', kitTooFast({ amp: 0.05, period: 8 }), false);
+      var grN = 0, mathN = 0;
+      GR = function () { grN++; return 0.25; };
+      Math.random = function () { mathN++; return 0.9; };
+      eq('roll', kitRoll(), 0.25);
+      eq('roll2', kitRoll(), 0.25);
+      eq('grN', grN, 2);
+      eq('mathN', mathN, 0);
+      GR = savedGR; Math.random = savedRand;
+      function rolls(seed) {
+        var g0 = GR; GR = mulberry32(seed);
+        var s = [kitRoll(), kitRoll(), kitRoll()].join(',');
+        GR = g0; return s;
+      }
+      eq('det', rolls(99), rolls(99));
+      eq('detDiff', rolls(99) === rolls(100), false);
+      eq('low', kitPaint('jump', false), '#ff8a2a');
+      eq('high', kitPaint('duck', false), '#3fa9ff');
+      eq('ice', kitPaint('lane', false), '#dff3ff');
+      eq('grey', kitPaint('jump', true) === '#ff8a2a' || kitPaint('jump', true) === '#3fa9ff' || kitPaint('jump', true) === '#7fe3ff', false);
+      eq('greyIsMuted', kitPaint('duck', true), COL.muted);
+      eq('daily', DAILY_ORDER.join(','), 'neon,gear,frost,lava,orbit,carnival');
+      eq('order', ORDER.join(','), DAILY_ORDER.join(','));
+      eq('remixOut', REMIX_IDS.join(','), '');
+      ROOM = { me: 'a', ch: { presenceState: function () { return { a: [{ name: 'A', v: 11, joinedAt: 1 }], b: [{ name: 'B', v: 12, joinedAt: 2 }] }; } } };
+      eq('memV', roomMembers()[0].v, 11);
+      eq('pool11', roomArenaIds().join(','), ORDER.join(','));
+      ROOM = { me: 'a', ch: { presenceState: function () { return { a: [{ name: 'A', v: 12, joinedAt: 1 }], b: [{ name: 'B', v: 12, joinedAt: 2 }] }; } } };
+      eq('pool12', roomArenaIds().join(','), ORDER.join(','));
+      ROOM = savedRoom;
+      running = true;
+      var rng = mulberry32(7);
+      Math.random = rng;
+      newRound('neon', 'solo', 0, null, { diff: 'medium' });
+      Math.random = savedRand;
+      G.bars = []; G.omega = 0; G.bf = 1; G.t = 1; G.puNext = Infinity;
+      var you = G.players[0];
+      you.angle = 0; you.air = -9; you.duck = -9; you.stun = -9; you.hearts = 3; you.out = false; you.prev = {}; you.shield = 0;
+      ARENAS.neon.hazards = [{ id: '1', a: 0.70, need: 'duck', kind: 'test' }];
+      G.bars.push({ id: 99, angle: 0.70, type: 'low', born: -9, ph: 0 });
+      kitBefore();
+      eq('latched', you.kitYield['1:0'], true);
+      G.bars = [];
+      kitBefore();
+      eq('stuck', you.kitYield['1:0'], true);
+      var list = []; threats(you, list);
+      eq('skip', list.some(function (th) { return th.key === 'z1'; }), false);
+      you.angle = 0.69; you.prev = { z1: wrap(0.70 - 0.69) };
+      kitBefore();
+      you.angle = 0.71;
+      kitAfter();
+      eq('hearts', you.hearts, 3);
+      you.kitYield = {}; you.kitPass = {}; you.kitWasStun = {}; you.stun = -9; you.out = false; you.hearts = 3;
+      you.angle = 0.69; you.prev = { z1: wrap(0.70 - 0.69) };
+      G.bars = [];
+      kitBefore();
+      eq('noyield', you.kitYield['1:0'], false);
+      you.angle = 0.71;
+      kitAfter();
+      eq('hit', you.hearts, 2);
+      you.hearts = 3; you.out = false; you.stun = -9; you.air = -9; you.duck = -9;
+      you.kitYield = { '1:0': false }; you.kitPass = { '1': 0 }; you.kitWasStun = { '1': true };
+      you.angle = 0; G.t = 5;
+      G.bars = [{ id: 100, angle: 0.70, type: 'low', born: -9, ph: 0 }];
+      kitBefore();
+      eq('restun', you.kitYield['1:0'], true);
+      you.kitYield['1:0'] = true; you.kitWasStun = { '1': true }; G.bars = [];
+      kitBefore();
+      eq('nounyield', you.kitYield['1:0'], true);
+      you.angle = 0.2; you.kitYield = {}; you.kitPass = {}; you.kitWasStun = {};
+      G.bars = [{ id: 101, angle: 1.05, type: 'low', born: -9, ph: 0 }];
+      ARENAS.neon.hazards = [{ id: '1', a: 0.70, need: 'duck' }];
+      kitBefore();
+      eq('far', you.kitYield['1:0'], false);
+      you.angle = 0; G.bars = [{ id: 7, angle: 0.4, type: 'low', born: -9, ph: 0 }];
+      you.prev = { b7: 0.9 }; you.angle = 0.5; you.hearts = 3; you.out = false; you.stun = -9;
+      reseedPrev(you);
+      eq('reseed', Math.round(you.prev.b7 * 1e6), Math.round(wrap(0.4 - 0.5) * 1e6));
+      var h0 = you.hearts;
+      ARENAS.neon.hazards = [];
+      update(1 / 60);
+      eq('noFalseHit', you.hearts, h0);
+    } catch (err) { fails.push('threw ' + (err && err.message)); }
+    finally {
+      ARENAS.neon.hazards = [];
+      ROOM = savedRoom; running = savedRun; GR = savedGR; Math.random = savedRand; voiceOn = savedVoice;
+    }
+    return { ok: fails.length === 0, fails: fails };
+  }
+
   var botList = [], youList = [], humList = [], humSeen = {}, HUM_RANGE = 0.9;
 
   function update(dt) {
@@ -5454,10 +5704,10 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       if (m.pts[r.id] == null) m.pts[r.id] = 0;
       if (m.wins[r.id] == null) m.wins[r.id] = 0;
     });
-    var arena = ROOM.arena;
-    if (!ARENAS[arena]) {
-      var left = ORDER.filter(function (a) { return m.used.indexOf(a) < 0; });
-      if (!left.length) { m.used = []; left = ORDER.slice(); }
+    var pool = roomArenaIds(), arena = ROOM.arena;
+    if (pool.indexOf(arena) < 0) {
+      var left = pool.filter(function (a) { return m.used.indexOf(a) < 0; });
+      if (!left.length) { m.used = []; left = pool.slice(); }
       arena = left[Math.floor(mulberry32(seed ^ 0x5bd1e995)() * left.length)];
     }
     m.used.push(arena);
@@ -5954,7 +6204,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     }
     if (G) {
       if (REPLAY) replayStep(dt);
-      if (running) { update(dt); recordSnap(); }
+      if (running) { kitBefore(); update(dt); kitAfter(dt); recordSnap(); }
       if (view3d && running && G.t > 2 && !G.over && !slowHinted && dt > 0) {
         slowFrames = slowFrames * 0.97 + (dt > 1 / 32 ? 1 : 0) * 0.03;
         if (G.t > 8 && slowFrames > 0.6 && gfx !== 'hd') { slowHinted = true; toast('Running slow? Try Flat graphics in the menu'); }
@@ -6063,6 +6313,14 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
         lookHas: lookHas,
         catalog: function () { return LOOK_CAT; },
         rules: function () { return LOOK_RULES; }
+      };
+    }
+  } catch (e) {}
+  try {
+    if (/[?&]simtest=1(?:&|$)/.test(location.search)) {
+      window.__kit = {
+        slowMax: KIT_SLOW_MAX, tooFast: kitTooFast, roll: kitRoll, paint: kitPaint,
+        reseed: reseedPrev, before: kitBefore, after: kitAfter, roomIds: roomArenaIds, selfTest: kitSelfTest
       };
     }
   } catch (e) {}
