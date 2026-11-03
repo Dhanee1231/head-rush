@@ -892,8 +892,10 @@ h1 .rush { color: var(--you); }
     return p;
   }
   function blankProfile() { return fixProfile({ coins: 0, xp: 0, owned: ['sunny'], skin: 'sunny', daily: null, rounds: 0, solo: {}, surv: {} }); }
+  var PROF_RAW = {};
   function readProfile(id) {
     var raw = rawGet(profKey(id));
+    PROF_RAW[id] = raw;
     try { var p = fixProfile(JSON.parse(raw)); if (p) return p; } catch (e) {}
     markBroken(profKey(id), raw);
     return blankProfile();
@@ -922,7 +924,7 @@ h1 .rush { color: var(--you); }
       { id: 'leaf', name: 'Leaf', hex: '#7fd35a' }, { id: 'vanilla', name: 'Vanilla', hex: '#e9e3c7' },
       { id: 'lilac', name: 'Lilac', hex: '#d9b8ff' }, { id: 'rose', name: 'Rose', hex: '#ffb3c8' },
       /* today's skin colours; 'own' = fails the palette rules, so only players who already have it keep it */
-      { id: 'lg-lime', name: 'Zest', skin: 'lime' }, { id: 'lg-gum', name: 'Gum', skin: 'gum' }, { id: 'lg-frost', name: 'Frost', skin: 'frost' },
+      { id: 'lg-lime', name: 'Zest', skin: 'lime', free: 1 }, { id: 'lg-gum', name: 'Gum', skin: 'gum', free: 1 }, { id: 'lg-frost', name: 'Frost', skin: 'frost' },
       { id: 'lg-devil', name: 'Devil', skin: 'devil', own: 1 }, { id: 'lg-royal', name: 'Royal', skin: 'royal' },
       { id: 'lg-ghost', name: 'Ghost', skin: 'ghost' }, { id: 'lg-champ', name: 'Champ', skin: 'champ' }, { id: 'lg-gold', name: 'Gold', skin: 'gold', own: 1 }
     ],
@@ -940,7 +942,7 @@ h1 .rush { color: var(--you); }
     ],
     extra: [
       { id: 'none', name: 'None', free: 1 }, { id: 'glasses', name: 'Round Glasses' }, { id: 'bowtie', name: 'Bow Tie' },
-      { id: 'scarf', name: 'Scarf', neck: 1 }, { id: 'visor', name: 'Visor', acc: 'visor' }, { id: 'spots', name: 'Spots', acc: 'spots' }
+      { id: 'scarf', name: 'Scarf', neck: 1 }, { id: 'visor', name: 'Visor', acc: 'visor', free: 1 }, { id: 'spots', name: 'Spots', acc: 'spots', free: 1 }
     ]
   };
   var LOOK_SLOTS = ['body', 'color', 'eyes', 'hat', 'extra'], LOOK_ITEM = {};
@@ -962,8 +964,70 @@ h1 .rush { color: var(--you); }
     s.cnt = c;
     return s;
   }
+  /* Unlocks: fixed and visible, earned by playing (CHARS-PLAN section 3). No purchases, no random rewards. At most 2 need streaks.
+     k = counter (lvl, rounds, wins = Party wins, perfect, combo, streak = days in a row with the weekly freeze, dailyDone, closeTotal). */
+  var LOOK_RULES = [
+    { id: 'beanie', give: ['hat.beanie'], k: 'lvl', n: 2 }, { id: 'lashes', give: ['eyes.lashes'], k: 'lvl', n: 3 },
+    { id: 'bunny', give: ['hat.bunny'], k: 'lvl', n: 4 }, { id: 'leaf', give: ['color.leaf'], k: 'rounds', n: 10 },
+    { id: 'googly', give: ['eyes.googly'], k: 'lvl', n: 5 }, { id: 'cupcake', give: ['body.cupcake'], k: 'dailyDone', n: 3 },
+    { id: 'vanilla', give: ['color.vanilla'], k: 'wins', n: 1 }, { id: 'glasses', give: ['extra.glasses'], k: 'perfect', n: 3 },
+    { id: 'bowtie', give: ['extra.bowtie'], k: 'closeTotal', n: 50 }, { id: 'sleepy', give: ['eyes.sleepy'], k: 'streak', n: 3 },
+    { id: 'tophat', give: ['hat.tophat'], k: 'wins', n: 5 }, { id: 'chef', give: ['hat.chef'], k: 'rounds', n: 25 },
+    { id: 'lilac', give: ['color.lilac'], k: 'dailyDone', n: 10 }, { id: 'scarf', give: ['extra.scarf'], k: 'combo', n: 15 },
+    { id: 'robot', give: ['body.robot'], k: 'lvl', n: 8 }, { id: 'crown', give: ['hat.crown'], k: 'streak', n: 7 },
+    { id: 'rose', give: ['color.rose'], k: 'lvl', n: 10 },
+    /* today's skins keep today's level gates, now free; Devil and Gold colours stay with players who already own them */
+    { id: 'sk-frost', give: ['color.lg-frost', 'hat.antenna'], k: 'lvl', n: 2 }, { id: 'sk-devil', give: ['hat.horns'], k: 'lvl', n: 2 },
+    { id: 'sk-royal', give: ['color.lg-royal', 'hat.oldcrown'], k: 'lvl', n: 3 }, { id: 'sk-ghost', give: ['color.lg-ghost', 'hat.halo'], k: 'lvl', n: 5 },
+    { id: 'sk-champ', give: ['color.lg-champ', 'hat.star'], k: 'lvl', n: 8 }, { id: 'sk-gold', give: ['hat.halo'], k: 'perfect', n: 10 }
+  ];
+  function lookCounter(k, p, s) {
+    p = p || {}; s = s || {}; var c = s.cnt || {};
+    if (k === 'lvl') return levelInfo(p.xp || 0).lvl;
+    if (k === 'rounds') return p.rounds || 0;
+    if (k === 'wins') return p.wins || 0;
+    if (k === 'perfect') return p.perfect || 0;
+    if (k === 'combo') return p.bestCombo || 0;
+    if (k === 'streak') return p.streak && p.streak.n || 0;
+    return c[k] || 0;
+  }
+  /* Adds every earned item that is not in unl yet; returns the newly added item keys (each one only ever once). */
+  function lookEarn(s, p) {
+    var added = [];
+    LOOK_RULES.forEach(function (r) {
+      if (lookCounter(r.k, p, s) < r.n) return;
+      r.give.forEach(function (key) { if (s.unl.indexOf(key) < 0) { s.unl.push(key); added.push(key); } });
+    });
+    return added;
+  }
+  /* Today's skin -> its colour + hat or extra. */
+  function skinLook(sk) {
+    var o = { color: skinColorId(sk.id), hat: 'none', extra: 'none' };
+    LOOK_CAT.hat.concat(LOOK_CAT.extra).forEach(function (it) { if (it.acc && it.acc === sk.acc) o[it.slot] = it.id; });
+    return o;
+  }
+  function skinItems(sk) { var o = skinLook(sk), out = ['color.' + o.color]; if (o.hat !== 'none') out.push('hat.' + o.hat); if (o.extra !== 'none') out.push('extra.' + o.extra); return out; }
+  /* First run of this version for a player (no look key yet): the same runner as before, plus everything already owned or earned. */
+  function migrateLook(p) {
+    var s = blankLookSave(p), sk = skinById(p && p.skin), sl = skinLook(sk), shape = (p && p.shape) || 'round';
+    s.look.color = sl.color; s.look.hat = sl.hat; s.look.extra = sl.extra;
+    s.look.body = shape === 'round' ? 'bean' : 'c-' + shape;
+    var have = [];
+    ((p && p.owned) || []).concat([sk.id]).forEach(function (id) { var k = skinById(id); if (k.id === id) have = have.concat(skinItems(k)); });
+    if (shape !== 'round' && lookItem('body', s.look.body)) have.push('body.' + s.look.body);
+    have.forEach(function (key) { var it = LOOK_ITEM[key]; if (it && !it.free && s.unl.indexOf(key) < 0) s.unl.push(key); });
+    lookEarn(s, p);
+    return s;
+  }
+  function lookIsBlank(s, p) { return JSON.stringify(s) === JSON.stringify(blankLookSave(p)); }
+  function backupKey(id) { return 'headrush.backup.v1.' + id; }
+  /* One copy of the profile exactly as this version first read it, written once before the first look write, never after. */
+  function ensureBackup(id) {
+    var raw = id in PROF_RAW ? PROF_RAW[id] : rawGet(profKey(id));
+    if (raw == null) return true;
+    try { if (localStorage.getItem(backupKey(id)) == null) localStorage.setItem(backupKey(id), raw); return true; } catch (e) { return false; }
+  }
   var LOOK = null, lookBroken = false, lookPid = null;
-  function newLookSave(p) { return blankLookSave(p); }
   /* Safe load: on any error or wrong shape, defaults in memory only, the bad raw string is left untouched, and the key is not written
      until the player changes something (then the raw string is first copied to <key>.bad). */
   function loadLook(id, p) {
@@ -973,12 +1037,15 @@ h1 .rush { color: var(--you); }
       try { s = fixLookSave(JSON.parse(raw), p); } catch (e) {}
       if (!s) { lookBroken = true; markBroken(lookKey(id), raw); }
     }
-    LOOK = s || newLookSave(p);
+    /* missing: migrate (and save if there is anything to keep); broken: the same migrated look, in memory only */
+    LOOK = s || migrateLook(p);
+    if (!s && !lookBroken && lookPid && !lookIsBlank(LOOK, p)) saveLook();
     return LOOK;
   }
   /* The one writer. byPlayer = the player changed something (a broken save is only replaced then). Quota errors are ignored. */
   function saveLook(byPlayer) {
     if (!lookPid || !LOOK || (lookBroken && !byPlayer)) return false;
+    if (!ensureBackup(lookPid)) return false;
     var ok = false;
     try { ok = safeSet(lookKey(lookPid), JSON.stringify(LOOK)); } catch (e) {}
     if (ok) lookBroken = false;
@@ -1019,6 +1086,7 @@ h1 .rush { color: var(--you); }
     sbFetch('/rest/v1/rpc/delete_player', { method: 'POST', body: { p_id: pl.cloudId, p_secret: pl.secret } }).then(function () {
       try { localStorage.removeItem(profKey(pl.id)); } catch (e) {}
       ['', '.bad'].forEach(function (x) { try { localStorage.removeItem(lookKey(pl.id) + x); localStorage.removeItem(profKey(pl.id) + x); } catch (e) {} });
+      try { localStorage.removeItem(backupKey(pl.id)); } catch (e) {}
       try { var q = JSON.parse(localStorage.getItem('headrush.roundlog.v1')) || []; localStorage.setItem('headrush.roundlog.v1', JSON.stringify(q.filter(function (r) { return r.pid !== pl.cloudId; }))); } catch (e) {}
       PLAYERS.list = PLAYERS.list.filter(function (x) { return x.id !== pl.id; });
       PLAYERS.current = PLAYERS.list.length ? PLAYERS.list[0].id : null; savePlayers();
