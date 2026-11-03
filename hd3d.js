@@ -1484,7 +1484,63 @@ function sigOf(p) {
   return (p.shape || 'round') + '|' + (p.skin ? p.skin.acc : 'none') + '|' + p.color + '|' + (p.you ? 1 : 0) + (lo() ? '|lo' : '');
 }
 function jumpH(u) { u = Math.min(1, Math.max(0, u)); return 1 - Math.pow(Math.abs(2 * u - 1), 2.4); }
-function setFace(rn, k) { if (rn.faceKind !== k) { rn.faceKind = k; rn.faceMat.map = FACE[k]; } }
+/* Extra eye styles. Blink, happy and stun stay on the shared classic textures, so a hit still reads the same. */
+function paintStyledFace(x, style, kind, balls) {
+  const w = 512, h = 360, ex = [w / 2 - 92, w / 2 + 92], ey = h * 0.36, ink = '#15112a';
+  x.lineCap = 'round'; x.lineJoin = 'round';
+  x.fillStyle = 'rgba(255,92,140,0.38)';
+  ex.forEach((cx, i) => { x.beginPath(); x.ellipse(cx + (i ? 50 : -50), ey + 116, 38, 16, 0, 0, TAU); x.fill(); });
+  const up = kind === 'up';
+  if (!balls) ex.forEach((cx, i) => {
+    if (style === 'sleepy') {
+      x.strokeStyle = ink; x.lineWidth = 16;
+      x.beginPath(); x.moveTo(cx - 48, ey + 6); x.quadraticCurveTo(cx, ey + (up ? -6 : 30), cx + 48, ey + 6); x.stroke();
+      x.lineWidth = 8; x.beginPath(); x.moveTo(cx - 34, ey + 16); x.quadraticCurveTo(cx, ey + (up ? 6 : 22), cx + 34, ey + 16); x.stroke();
+      return;
+    }
+    const roundEye = style === 'dot' || style === 'googly';
+    const rx = roundEye ? 60 : 70, ry = roundEye ? 60 : 88;
+    x.fillStyle = ink; x.beginPath(); x.ellipse(cx, ey, rx + 7, ry + 7, 0, 0, TAU); x.fill();
+    const g = x.createLinearGradient(0, ey - ry, 0, ey + ry); g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#dfe3f2');
+    x.fillStyle = g; x.beginPath(); x.ellipse(cx, ey, rx, ry, 0, 0, TAU); x.fill();
+    const px = cx + (i ? -8 : 8), py = up ? ey - 14 : ey + (style === 'googly' ? 2 : 8);
+    const pr = style === 'dot' ? 24 : style === 'googly' ? 22 : rx * 0.66;
+    x.fillStyle = ink; x.beginPath(); x.ellipse(px, py, pr, style === 'dot' || style === 'googly' ? pr : ry * 0.68, 0, 0, TAU); x.fill();
+    x.fillStyle = '#ffffff'; x.beginPath(); x.ellipse(px - pr * 0.35, py - pr * 0.4, style === 'sparkle' ? 16 : 11, style === 'sparkle' ? 20 : 14, -0.4, 0, TAU); x.fill();
+    if (style === 'sparkle') {
+      x.fillStyle = '#fff6c2';
+      [[18, -16, 8], [-20, 8, 5], [16, 14, 4]].forEach(s => { x.beginPath(); x.arc(px + s[0], py + s[1], s[2], 0, TAU); x.fill(); });
+    }
+    if (style === 'lashes') {
+      x.strokeStyle = ink; x.lineWidth = 8;
+      [-0.85, -0.2, 0.45].forEach((t, n) => {
+        x.beginPath();
+        x.moveTo(cx + Math.sin(-0.4 + n * 0.45) * rx * 0.3, ey - ry * 0.55);
+        x.quadraticCurveTo(cx + t * rx, ey - ry * 1.05, cx + t * rx * 1.05, ey - ry * 1.28);
+        x.stroke();
+      });
+    }
+  });
+  const my = ey + 128;
+  x.fillStyle = ink; x.strokeStyle = ink;
+  if (up) { x.beginPath(); x.ellipse(w / 2, my + 4, 14, 17, 0, 0, TAU); x.fill(); }
+  else { x.lineWidth = 10; x.beginPath(); x.moveTo(w / 2 - 22, my - 2); x.quadraticCurveTo(w / 2, my + 18, w / 2 + 22, my - 2); x.stroke(); }
+}
+function styledFace(style, kind, balls) {
+  const key = style + ':' + kind + (balls ? ':3d' : '') + (lo() ? ':lo' : '');
+  if (FACE[key]) return FACE[key];
+  const sc = lo() ? 0.5 : 1;
+  FACE[key] = canvasTex(512 * sc, 360 * sc, (ctx) => { ctx.scale(sc, sc); ctx.clearRect(0, 0, 512, 360); paintStyledFace(ctx, style, kind, balls); });
+  return FACE[key];
+}
+function setFace(rn, k) {
+  const style = (k === 'open' || k === 'up') && rn.eyeStyle && rn.eyeStyle !== 'classic' ? rn.eyeStyle : 'classic';
+  const balls = style === 'googly' && !lo() && (k === 'open' || k === 'up');
+  const map = style === 'classic' ? FACE[k] : styledFace(style, k, balls);
+  const token = style + ':' + k + (balls ? ':3d' : '');
+  if (rn.faceKind !== token) { rn.faceKind = token; if (map) rn.faceMat.map = map; }
+  rn.showBalls = !!balls;
+}
 
 function updateRunner(rn, p, i, g, V, now, dt) {
   const t = g.t, JT = g.arena.jumpT;
@@ -1587,6 +1643,7 @@ function updateRunner(rn, p, i, g, V, now, dt) {
   else if (winning || now < rn.happyUntil) setFace(rn, 'happy');
   else if (now > rn.blinkAt) { setFace(rn, 'blink'); if (now > rn.blinkAt + 0.12) rn.blinkAt = now + 1.8 + Math.random() * 3.2; }
   else setFace(rn, state === 'jump' ? 'up' : 'open');
+  if (rn.showBalls) pushBalls(rn, state);
   rn.bubble.visible = p.shield > 0 && p.shield > t && !(p.shield - t < 2 && Math.floor(t * 10) % 2);
   if (rn.bubble.visible) rn.bubble.rotation.y = now;
   rn.stars.forEach((s, k) => { s.visible = state === 'stun'; if (s.visible) { const a = now * 6 + k * TAU / 3; s.position.set(Math.cos(a) * 0.4, rn.top + 0.2 + Math.sin(a * 2) * 0.04, Math.sin(a) * 0.4); s.rotation.y = a; } });
@@ -1618,6 +1675,37 @@ function makeParts() {
 function partsBegin() { if (PARTS && PARTS.lo !== lo()) { ['arms', 'up', 'sole', 'blob'].forEach(k => { scene.remove(PARTS[k]); PARTS[k].dispose(); }); PARTS = null; } if (!PARTS) makeParts(); PARTS.n = { arms: 0, up: 0, sole: 0, blob: 0 }; }
 function partPush(k, m, c) { const im = PARTS[k], i = PARTS.n[k]; if (i >= im.instanceMatrix.count) return; im.setMatrixAt(i, m); if (c) im.setColorAt(i, c); PARTS.n[k] = i + 1; }
 function partsEnd() { ['arms', 'up', 'sole', 'blob'].forEach(k => { const im = PARTS[k]; im.count = PARTS.n[k]; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; }); }
+
+/* Googly eyes: one instanced pool for every runner, and only on High. Low paints them on the face. */
+let EYES = null;
+function eyesBegin() {
+  if (lo()) { if (EYES) { EYES.white.count = 0; EYES.pupil.count = 0; } return; }
+  if (!EYES) {
+    const mk = (geo, mat) => { const m = new THREE.InstancedMesh(geo, mat, 16); m.count = 0; m.frustumCulled = false; scene.add(m); return m; };
+    EYES = { white: mk(GEO.eye, MAT.eye), pupil: mk(GEO.pupil, MAT.pupil), n: 0 };
+  }
+  EYES.n = 0;
+}
+function pushBalls(rn, state) {
+  if (!EYES || lo()) return;
+  const info = rn.info;
+  for (let s = -1; s <= 1; s += 2) {
+    const i = EYES.n; if (i >= 16) return;
+    const x = s * 0.15, y = info.ey, z = surfaceZ(rn.shape, x, y) + 0.055;
+    const bob = state === 'jump' ? 0.03 : 0;
+    tmpM.multiplyMatrices(rn.body.matrixWorld, placeM(x, y + bob, z, 0, 0, 0, 0.48, 0.56, 0.4));
+    EYES.white.setMatrixAt(i, tmpM);
+    tmpM.multiplyMatrices(rn.body.matrixWorld, placeM(x + s * 0.018, y + bob - 0.01, z + 0.04, 0, 0, 0, 0.26, 0.26, 0.18));
+    EYES.pupil.setMatrixAt(i, tmpM);
+    EYES.n++;
+  }
+}
+function eyesEnd() {
+  if (!EYES) return;
+  const n = lo() ? 0 : (EYES.n || 0);
+  EYES.white.count = n; EYES.pupil.count = n;
+  EYES.white.instanceMatrix.needsUpdate = true; EYES.pupil.instanceMatrix.needsUpdate = true;
+}
 
 /* ---------- little effects: dust, hit sparks, knockout confetti, impact rings, camera punch ----------
    Dust, sparks and flashes share one additive instanced puff system; confetti is one instanced mesh. */
@@ -1990,6 +2078,7 @@ HR3D.render = function (g, view) {
   // runners
   syncPool(runnerPool, g.players, p => makeRunner(p), p => sigOf(p));
   partsBegin();
+  eyesBegin();
   const out = [];
   g.players.forEach((p, i) => {
     const rn = runnerPool[i];
@@ -1999,6 +2088,7 @@ HR3D.render = function (g, view) {
     out.push({ cx: fx, foot: fy, top: ty });
   });
   partsEnd();
+  eyesEnd();
   if (!youRing) youRing = makeYouRing();
   youRing.userData.dash.rotation.y = now * 0.6;
   youRing.userData.pool.material.opacity = 0.8 + 0.2 * Math.sin(now * 4);
