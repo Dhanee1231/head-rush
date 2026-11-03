@@ -505,6 +505,9 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
 .char-bar { height: 16px; border-radius: 8px; background: var(--panel); overflow: hidden; }
 .char-bar span { display: block; height: 100%; width: 0; background: var(--fast); }
 #charLockPlay, #lockerDone { height: 60px; min-height: 60px; }
+.char-cheer { display: grid; gap: 8px; padding: 12px; border-radius: 16px; background: var(--bg); border: 2px solid var(--you); }
+.char-cheer p { margin: 0; font-family: var(--font-display); font-size: 22px; line-height: 1.15; }
+.char-cheer .btn { height: 56px; min-height: 56px; font-size: 22px; }
 @media (max-height: 520px) {
   .char-stage { height: 32vh; min-height: 148px; }
   .char-name { font-size: 20px; bottom: 4px; }
@@ -672,6 +675,10 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       <div class="progress-box">
         <div class="prog-row"><span class="lvl-badge" id="endLvl">Lv 1</span><div class="xpbar" aria-hidden="true"><span id="endXpFill"></span></div><span class="xp-gain" id="endXp">+0 XP</span></div>
         <ul class="chal" id="endChal" hidden></ul>
+      </div>
+      <div class="char-cheer" id="charCheer" hidden>
+        <p id="charCheerText">New hat: Top Hat!</p>
+        <button class="btn" id="charCheerGo" type="button">Try it on</button>
       </div>
       <div class="btn-row">
         <button class="btn" id="againBtn" type="button">Run again</button>
@@ -4481,6 +4488,15 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     if (stk && PROFILE.remind) pushSave(null, true).catch(function () {});
     res.streak = stk;
     res.combo = g.bestRun || 0; res.perfect = perfect ? PROFILE.perfect : 0;
+    /* Streak grows after the round is counted, so check unlocks once more. Same round, still not during play. */
+    if (LOOK) {
+      var more = lookEarn(LOOK, PROFILE);
+      if (more.length) {
+        if (!LOOK.pending) LOOK.pending = [];
+        more.forEach(function (k) { if (LOOK.pending.indexOf(k) < 0) LOOK.pending.push(k); if (res.unlocked.indexOf(k) < 0) res.unlocked.push(k); });
+        saveLook();
+      }
+    }
     renderEndProgress(res);
     var TIPS = [
       ['Power-ups:', ' grab the glowing orbs. A shield blocks a hit, a clock slows the bars, a heart heals you.'],
@@ -4518,7 +4534,23 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     });
     if (md !== 'room') running = false;
     $('endScreen').hidden = false;
-    setTimeout(function () { try { $('againBtn').focus({ preventScroll: true }); } catch (e) {} }, 50);
+    showCharCheer();
+    setTimeout(function () { try { if ($('charCheer').hidden) $('againBtn').focus({ preventScroll: true }); else $('charCheerGo').focus({ preventScroll: true }); } catch (e) {} }, 50);
+  }
+  /* One celebration per new unlock, on the results screen only. Opening it does not show it again. */
+  var charCheerSlot = 'body';
+  function showCharCheer() {
+    var box = $('charCheer');
+    if (!LOOK || !LOOK.pending || !LOOK.pending.length) { box.hidden = true; return; }
+    var keys = LOOK.pending.slice(), first = LOOK_ITEM[keys[0]];
+    charCheerSlot = first ? first.slot : 'body';
+    var word = { body: 'body', color: 'colour', eyes: 'eyes', hat: 'hat', extra: 'extra' }[charCheerSlot] || 'look';
+    var line = first ? ('New ' + word + ': ' + first.name + '!') : 'New look!';
+    if (keys.length > 1) line += ' And ' + (keys.length - 1) + ' more.';
+    $('charCheerText').textContent = line;
+    box.hidden = false;
+    LOOK.pending = [];
+    saveLook();
   }
 
   /* ---------- menus ---------- */
@@ -4916,6 +4948,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     b.addEventListener('click', function () { charSlot = b.getAttribute('data-slot'); charLockKey = null; renderCharGrid(); });
   });
   $('charLockPlay').addEventListener('click', closeChar);
+  $('charCheerGo').addEventListener('click', function () { $('charCheer').hidden = true; openChar(charCheerSlot); });
 
   /* ---------- players, leaderboard, sharing ---------- */
   var shareText = '';
@@ -5932,7 +5965,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
         look: function () { return LOOK; },
         lookBroken: function () { return lookBroken; },
         saveLook: saveLook,
-        lookForDraw: lookForDraw, lookThumb: lookThumb,
+        lookForDraw: lookForDraw, lookThumb: lookThumb, showCharCheer: showCharCheer,
         lookHas: lookHas,
         catalog: function () { return LOOK_CAT; },
         rules: function () { return LOOK_RULES; }
