@@ -100,6 +100,11 @@ body {
 @media (prefers-reduced-motion: reduce) { .timer.tense, .result.pop, .lvl-badge.burst { animation: none; } }
 .alive { justify-self: end; font-size: 13px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
 .alive b { color: var(--ink); font-size: 18px; font-variant-numeric: tabular-nums; }
+/* Sky Tower hides the hearts, so the two remaining HUD cells share the row. */
+body.sky .hud { grid-template-columns: auto minmax(0, 1fr); }
+body.sky .timer { justify-self: start; font-size: 26px; }
+body.sky .timer::before { content: 'Floor '; font-size: 14px; color: var(--muted); letter-spacing: 0; }
+body.sky .alive { letter-spacing: 0; text-transform: none; font-size: 15px; white-space: nowrap; }
 .stage { position: relative; flex: 1; min-height: 0; touch-action: none; }
 .stage canvas { position: absolute; inset: 0; display: block; }
 body.v3d #app { isolation: isolate; }
@@ -6824,6 +6829,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
   }
   function skyBoot() {
     gfx = 'flat'; view3d = false;
+    document.body.classList.add('sky');
     document.body.classList.remove('v3d');
     hideAllOverlays();
     $('startScreen').hidden = true;
@@ -6911,9 +6917,9 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     if (!SK) return;
     var floor = String(Math.max(1, Math.floor(SK.h + 1)));
     if (floor !== lastTimerText) { lastTimerText = floor; timerEl.textContent = floor; }
-    $('hudPre').textContent = SK.over ? 'Caught' : 'Water ';
+    $('hudPre').textContent = SK.over ? 'Caught' : 'Water is ';
     aliveEl.textContent = Math.max(0, SK.h - SK.flood).toFixed(1);
-    $('hudPost').textContent = SK.over ? '' : ' below';
+    $('hudPost').textContent = SK.over ? '' : ' floors below';
   }
   function skyShowEnd() {
     $('endEyebrow').textContent = 'Sky Tower · rough test';
@@ -6990,6 +6996,14 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     ctx.fillStyle = SK.color; ctx.beginPath();
     if (ducking) ctx.ellipse(rx, ry, 16, 8, SK.angle, 0, TAU); else ctx.arc(rx, ry, rad, 0, TAU);
     ctx.fill();
+    if (!ducking) {
+      var ux = Math.cos(SK.angle), uy = Math.sin(SK.angle);
+      ctx.fillStyle = '#191a33';
+      ctx.beginPath();
+      ctx.arc(rx - ux * 5 - uy * 4, ry - uy * 5 + ux * 4, 1.7, 0, TAU);
+      ctx.arc(rx - ux * 5 + uy * 4, ry - uy * 5 - ux * 4, 1.7, 0, TAU);
+      ctx.fill();
+    }
     ctx.globalAlpha = 1;
     ctx.restore();
     var lx = Math.min(Wd - 18, cx + R + 28), top = 28, bot = Hd - 16;
@@ -7003,7 +7017,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     ctx.textAlign = 'center'; ctx.fillText('height', lx, 16);
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     var title = 'SKY TOWER', ts = skyFit(title, Math.round(Math.max(22, R * 0.16)), Wd * 0.8);
-    textOut(title, cx, 22, '#f4f2ff', ts);
+    textOut(title, cx, 72, '#f4f2ff', ts);
     if (SK.t < 0) {
       var n = Math.ceil(-SK.t);
       textOut('CLIMB', cx, cy - R * 0.15, '#ffd23f', skyFit('CLIMB', Math.round(R * 0.22), Wd * 0.8));
@@ -7031,6 +7045,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     function near(name, a, b, lim) { if (Math.abs(a - b) > lim) fails.push(name + ': ' + a + ' !~ ' + b); }
     try {
       eq('menu', document.querySelector('[data-mode="skytower"]'), null);
+      eq('flag', document.body.classList.contains('sky'), false);
       eq('low', COL.low, '#ff8a2a');
       eq('high', COL.high, '#3fa9ff');
       near('zero', skyCatch([]), 100, 15);
@@ -7058,7 +7073,9 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       near('lift', SK.h - before, 0.25, 1e-6);
       eq('boost', SK.boost > SK.t, true);
       eq('look', JSON.stringify(LOOK), savedLook);
-      skyReset(); resize(); skyDraw();
+      skyReset(); skyHud();
+      eq('water', $('hudPost').textContent, ' floors below');
+      resize(); skyDraw();
     } catch (err) { fails.push('threw ' + (err && err.stack || err)); }
     return { ok: fails.length === 0, fails: fails };
   }
