@@ -10,6 +10,9 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 
 const HR3D = (window.HR3D = window.HR3D || {});
 HR3D.ok = false;
+HR3D.preview = false;
+HR3D.previewSpin = 0;
+HR3D.reduce = false;
 const TAU = Math.PI * 2;
 
 let G_API = null;
@@ -1760,13 +1763,13 @@ function updateRunner(rn, p, i, g, V, now, dt) {
   rn.tiltv += (-rn.tilt * 220 - rn.tiltv * 9) * dt; rn.tilt += rn.tiltv * dt;
   rn.hopv -= 18 * dt; rn.hop = Math.max(0, rn.hop + rn.hopv * dt); if (rn.hop === 0 && rn.hopv < 0) rn.hopv = 0;
   const S = 0.85, sx = 1 / Math.sqrt(rn.sq);
-  const bob = running ? Math.abs(Math.cos(ph)) * 0.05 : 0;
+  const bob = running ? Math.abs(Math.cos(ph)) * 0.05 : (HR3D.preview && i === 0 && !HR3D.reduce ? Math.sin(now * 2.2) * 0.035 : 0);
   rn.root.position.set(x, 0, z);
   const hd = Math.atan2(-Math.sin(f), Math.cos(f));
   const cyaw = Math.atan2(RIG.cam.x - x, RIG.cam.z - z);
   let d = hd - cyaw; d = Math.atan2(Math.sin(d), Math.cos(d));
   const yaw = cyaw + d * (HR3D.faceBlend !== undefined ? HR3D.faceBlend : 0.22);
-  rn.root.rotation.y = yaw;
+  rn.root.rotation.y = yaw + ((HR3D.preview && i === 0) ? (HR3D.previewSpin || 0) : 0);
   // lean toward running direction (and wobble back after a hit)
   const rel = hd - yaw, leanAmt = (running ? 0.16 : state === 'jump' ? 0.1 : 0) + rn.tilt * -0.35;
   tmpV.set(Math.cos(rel), 0, -Math.sin(rel));
@@ -2239,6 +2242,23 @@ HR3D.render = function (g, view) {
   camera.zoom = 1 + zoomPunch;
   camera.setViewOffset(W, H, W / 2 - RG.cx - (view.sx || 0), H / 2 - RG.cy - (view.sy || 0), W, H);
   camera.updateProjectionMatrix();
+  /* My Character: zoom the same camera onto runner 0. The card covers the lower half, so the look point sits low in the frame. */
+  if (HR3D.preview && g.players[0]) {
+    const youP = g.players[0];
+    const Rp = V.TR + (G_API.runnerR(youP) - V.mid) * V.SC;
+    const f = youP.angle + g.rot, ox = Math.cos(f), oz = Math.sin(f);
+    const x = Rp * ox, z = Rp * oz;
+    camera.position.set(x + ox * 5.05, 0.98, z + oz * 5.05);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(x, 0.62, z);
+    camera.fov = 42;
+    camera.zoom = 1;
+    /* Shift the runner up into the open top of the screen. The card covers everything below that. */
+    camera.setViewOffset(W, H, 0, Math.round(H * 0.30), W, H);
+    camera.aspect = W / H;
+    camera.updateProjectionMatrix();
+    HR3D.faceBlend = 0;
+  } else HR3D.faceBlend = 0.22;
   const t = g.t, A = g.arena;
   curArena.core.floor.rotation.y = -g.rot;
   if (curArena.sc.update) curArena.sc.update(now);
@@ -2250,6 +2270,7 @@ HR3D.render = function (g, view) {
   const out = [];
   g.players.forEach((p, i) => {
     const rn = runnerPool[i];
+    if (HR3D.preview && i > 0) { rn.root.visible = false; out.push({ cx: 0, foot: 0, top: 0 }); return; }
     const r = updateRunner(rn, p, i, g, V, now, Math.min(0.05, view.dt || 0.016));
     tmpV.set(r.x, 0, r.z).project(camera); const fx = (tmpV.x + 1) / 2 * W, fy = (1 - tmpV.y) / 2 * H;
     tmpV.set(r.x, r.top, r.z).project(camera); const ty = (1 - tmpV.y) / 2 * H;
@@ -2262,7 +2283,7 @@ HR3D.render = function (g, view) {
   youRing.userData.dash.rotation.y = now * 0.6;
   youRing.userData.pool.material.opacity = 0.8 + 0.2 * Math.sin(now * 4);
   const you = g.players[0];
-  youRing.visible = !you.out;
+  youRing.visible = !HR3D.preview && !you.out;
   if (!you.out) { const R = V.TR + (G_API.runnerR(you) - V.mid) * V.SC, f = you.angle + g.rot; youRing.position.set(R * Math.cos(f), 0.02, R * Math.sin(f)); }
   // slow-mo tint via exposure (set before the bars: their cores are compensated for the current exposure)
   renderer.toneMappingExposure = (curArena.sc.exposure || 1) * 0.9 * (g.t < g.slowUntil ? 0.85 : 1);
@@ -2271,6 +2292,7 @@ HR3D.render = function (g, view) {
   syncPool(barPool, g.bars, b => makeBar(b.type, V), b => b.type + '|' + V.barOut + (lo() ? '|lo' : ''));
   g.bars.forEach((b, i) => {
     const o = barPool[i], vis = G_API.barVisible(b, t);
+    o.root.visible = !HR3D.preview;
     o.root.rotation.y = -(b.angle + g.rot);
     if (o.ex !== EX) { o.ex = EX; o.mat.color.copy(exactColor(b.type === 'high' ? G_API.COL.high : G_API.COL.low, EX)); }
     const al = vis ? 1 : 0.18; o.mat.opacity = al; o.capMat.opacity = al; o.halo.material.uniforms.uA.value = vis ? 1 : 0.15;
@@ -2290,6 +2312,7 @@ HR3D.render = function (g, view) {
   syncPool(hammerPool, A.hammers, () => makeHammer(V));
   A.hammers.forEach((h, i) => {
     const o = hammerPool[i], type = G_API.hammerType(h, t), P = G_API.HAMMER_P, ph = ((t + h.ph) % P + P) % P, k = (ph % (P / 2)) / (P / 2);
+    o.root.visible = !HR3D.preview;
     const high = type === 'high', target = high ? 1.17 : 0.3, colr = high ? G_API.COL.high : G_API.COL.low;
     o.y += (target - o.y) * Math.min(1, view.dt * 18);
     o.holder.position.y = o.y;
@@ -2303,7 +2326,7 @@ HR3D.render = function (g, view) {
   });
   // walls
   syncPool(wallPool, A.walls, () => makeWall(V));
-  A.walls.forEach((w, i) => { const m = wallPool[i].root, R = V.TR + (A.lanes[w.lane] - V.mid) * V.SC, f = w.a + g.rot; m.position.set(R * Math.cos(f), 0, R * Math.sin(f)); m.rotation.y = -f; });
+  A.walls.forEach((w, i) => { const m = wallPool[i].root, R = V.TR + (A.lanes[w.lane] - V.mid) * V.SC, f = w.a + g.rot; m.position.set(R * Math.cos(f), 0, R * Math.sin(f)); m.rotation.y = -f; m.visible = !HR3D.preview; });
   // belts
   syncPool(beltPool, A.belts, bt => makeBelt(bt, V));
   A.belts.forEach((bt, i) => { const o = beltPool[i]; o.root.rotation.y = -(bt.a + g.rot); o.tex.offset.x = o.tex2.offset.x = -(t * 0.45 * o.dir) / 0.11 % 1; });
@@ -2312,7 +2335,7 @@ HR3D.render = function (g, view) {
   g.holes.forEach((o, i) => {
     const h = holePool[i];
     h.root.rotation.y = -(o.a + g.rot);
-    if (o.state === 'idle') { h.root.visible = false; return; }
+    if (HR3D.preview || o.state === 'idle') { h.root.visible = false; return; }
     h.root.visible = true;
     if (o.state === 'crack') { const left = Math.max(0, o.until - t), pulse = 0.5 + 0.5 * Math.sin(t * (10 + (1.3 - left) * 16)); h.root.material = h.crack; h.crack.emissiveIntensity = 0.5 + 1.5 * pulse; }
     else {
@@ -2331,7 +2354,7 @@ HR3D.render = function (g, view) {
   // pickup orb
   if (!orb) orb = makeOrb();
   const pu = g.pickup;
-  orb.root.visible = orb.glow.visible = !!pu;
+  orb.root.visible = orb.glow.visible = !HR3D.preview && !!pu;
   if (pu) {
     const L = A.lanes, R = V.TR + ((L.length > 1 ? L[pu.lane] : L[0]) - V.mid) * V.SC, f = pu.a + g.rot, colr = pu.type === 'shield' ? G_API.COL.puShield : pu.type === 'slow' ? G_API.COL.puSlow : G_API.COL.heart;
     const life = 12 - (t - pu.born), blink = life < 2 && Math.floor(t * 10) % 2;

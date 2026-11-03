@@ -272,6 +272,8 @@ h1 .rush { color: var(--you); }
 .howto[open] summary { margin-bottom: 12px; }
 .btn-row.two { grid-template-columns: 1.4fr 1fr; }
 .btn-row.two .btn { height: 58px; }
+.char-entry { grid-template-columns: 0.8fr 1.2fr; }
+#lockerBtn { font-size: 17px; letter-spacing: 0; padding: 0 8px; line-height: 1.05; }
 .who { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 15px; color: var(--muted); }
 .who b { color: var(--ink); }
 .link-btn { border: 0; background: none; padding: 6px 2px; color: var(--you); font: inherit; font-weight: 700; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
@@ -422,6 +424,59 @@ h1 .rush { color: var(--you); }
 .skin .ss.price { color: var(--you); font-weight: 700; }
 .skin:focus-visible { outline: 3px solid var(--you); outline-offset: 2px; }
 .locker-msg { min-height: 1.4em; }
+/* My Character: the live runner sits in the top of the screen. In HD that area is a hole onto the real renderer. */
+body.char-open #lockerScreen {
+  flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 0; padding: 0; overflow: hidden; background: #141628;
+}
+body.char-open .char-stage, body.char-open .char-sheet { width: 100%; }
+body.hd3d.char-open #lockerScreen {
+  background: linear-gradient(180deg, rgba(20,22,40,0) 0%, rgba(20,22,40,0) 30%, rgba(20,22,40,0.78) 40%, #141628 48%);
+}
+body.hd3d.char-open .hud,
+body.hd3d.char-open #controls,
+body.hd3d.char-open #cv { visibility: hidden; }
+.char-stage { position: relative; flex: 0 0 auto; height: 38vh; min-height: 210px; max-height: 420px; }
+#charPreview { position: absolute; inset: 0; width: 100%; height: 100%; display: none; }
+body.char-open:not(.hd3d) #charPreview { display: block; }
+.char-topbar {
+  position: absolute; z-index: 2; top: max(8px, env(safe-area-inset-top, 0px)); left: 8px; right: 8px;
+  display: flex; align-items: center; gap: 8px;
+}
+.char-back, .char-fab {
+  width: 56px; height: 56px; flex: none; border-radius: 16px; border: 2px solid var(--line);
+  background: rgba(20, 22, 40, 0.86); color: var(--ink); cursor: pointer; display: grid; place-items: center; padding: 0;
+}
+.char-back svg, .char-fab svg { width: 28px; height: 28px; display: block; }
+.char-back:focus-visible, .char-fab:focus-visible { outline: 3px solid var(--you); outline-offset: 3px; }
+.char-title {
+  flex: 1; min-width: 0; margin: 0; text-align: center; font-family: var(--font-display); font-weight: 400;
+  font-size: 18px; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.85);
+}
+.char-meta { display: flex; align-items: center; gap: 6px; flex: none; background: rgba(20, 22, 40, 0.86); border-radius: 999px; padding: 4px 8px 4px 4px; }
+.char-fab { position: absolute; z-index: 2; bottom: 52px; }
+.char-fab.spin { left: 12px; }
+.char-fab.surprise { right: 12px; }
+.char-fab[aria-pressed="true"] { border-color: var(--you); color: var(--you); }
+.char-name {
+  position: absolute; z-index: 2; left: 50%; bottom: 8px; transform: translateX(-50%); margin: 0;
+  max-width: calc(100% - 148px); font-family: var(--font-display); font-size: 26px; line-height: 1;
+  background: rgba(14, 15, 34, 0.8); border-radius: 999px; padding: 6px 14px; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.char-sheet {
+  flex: 1; min-height: 0; overflow: auto; background: var(--panel); border-radius: 22px 22px 0 0;
+  padding: 14px 12px max(14px, env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; gap: 10px;
+}
+.char-lead { margin: 0; font-size: 16px; line-height: 1.4; }
+#lockerDone { height: 60px; min-height: 60px; }
+@media (max-height: 520px) {
+  .char-stage { height: 32vh; min-height: 148px; }
+  .char-name { font-size: 20px; bottom: 4px; }
+  .char-fab { bottom: 40px; }
+}
+@media (prefers-reduced-motion: reduce) { .char-fab, .char-back { transition: none; } }
 .modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; background: var(--bg); padding: 4px; border-radius: 14px; }
 .mode {
   border: 0; border-radius: 10px; padding: 10px 4px; background: transparent; color: var(--muted);
@@ -514,9 +569,9 @@ h1 .rush { color: var(--you); }
         <div class="picker-label" id="levelLabel">Levels</div>
         <div class="levels" id="levels"></div>
       </div>
-      <div class="btn-row two">
+      <div class="btn-row two char-entry">
         <button class="btn" id="startBtn" type="button">Run</button>
-        <button class="btn ghost" id="lockerBtn" type="button">Locker</button>
+        <button class="btn ghost" id="lockerBtn" type="button">My Character</button>
       </div>
       <button class="btn friends" id="roomBtn" type="button">Play with friends online</button>
       <button class="btn ghost" id="boardBtn" type="button">Leaderboard</button>
@@ -600,19 +655,30 @@ h1 .rush { color: var(--you); }
     </div>
   </div>
 
-  <div class="overlay" id="lockerScreen" hidden>
-    <div class="card">
-      <div class="locker-head">
-        <h2 class="result">Locker</h2>
-        <div class="coins" aria-label="Coins"><svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg><b id="coinsLocker">0</b></div>
+  <div class="overlay" id="lockerScreen" hidden role="dialog" aria-modal="true" aria-labelledby="charTitle">
+    <div class="char-stage" id="charStage">
+      <canvas id="charPreview" width="360" height="280" aria-hidden="true"></canvas>
+      <div class="char-topbar">
+        <button class="char-back" id="charBack" type="button" aria-label="Back">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4 L7 12 L15 20" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <h2 class="char-title" id="charTitle">My Character</h2>
+        <div class="char-meta">
+          <span class="lvl-badge" id="charLvl">Lv 1</span>
+          <div class="coins" aria-label="Coins"><svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg><b id="coinsLocker">0</b></div>
+        </div>
       </div>
-      <p class="sub">Earn coins in rounds and challenges, then pick a new look for your runner.</p>
-      <div class="picker">
-        <div class="picker-label" id="lockerShapeLabel">Shape</div>
-        <div class="shape-row" data-shapes role="group" aria-labelledby="lockerShapeLabel"></div>
-      </div>
-      <div class="skins" id="skinGrid"></div>
-      <p class="note locker-msg" id="lockerMsg" role="status" aria-live="polite"></p>
+      <button class="char-fab spin" id="charSpin" type="button" aria-label="Spin" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="char-fab surprise" id="charSurprise" type="button" aria-label="Surprise me">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="8.2" cy="8.2" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="15.8" cy="15.8" r="1.4" fill="currentColor"/></svg>
+      </button>
+      <p class="char-name" id="charName">Jellybean</p>
+    </div>
+    <div class="char-sheet" id="charSheet">
+      <p class="char-lead" id="charLead">Spin your runner, or tap Surprise me. Only looks you have unlocked. It saves right away.</p>
+      <div id="charSheetBody"></div>
       <button class="btn" id="lockerDone" type="button">Done</button>
     </div>
   </div>
@@ -4584,59 +4650,94 @@ h1 .rush { color: var(--you); }
     res.done.forEach(function (d) { add('Challenge done: ' + d.text + '. +' + d.reward + ' coins', 'won'); });
     ul.hidden = !ul.children.length;
   }
-  var pendingBuy = null;
-  function renderLocker() {
-    renderShapes();
-    var grid = $('skinGrid'), lvl = levelInfo(PROFILE.xp).lvl;
-    $('coinsLocker').textContent = PROFILE.coins;
-    grid.textContent = '';
-    SKINS.forEach(function (sk) {
-      var owned = PROFILE.owned.indexOf(sk.id) >= 0, worn = PROFILE.skin === sk.id, pLock = !owned && sk.perfect && (PROFILE.perfect || 0) < sk.perfect, locked = !owned && (lvl < sk.lvl || pLock);
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'skin' + (locked ? ' locked' : '') + (pendingBuy === sk.id ? ' pending' : '');
-      b.setAttribute('aria-pressed', worn ? 'true' : 'false');
-      var cnv = document.createElement('canvas');
-      var nm = document.createElement('span'); nm.className = 'sn'; nm.textContent = sk.name;
-      var st = document.createElement('span'); st.className = 'ss';
-      if (worn) st.textContent = 'Wearing';
-      else if (owned) st.textContent = 'Tap to wear';
-      else if (pLock) st.textContent = (PROFILE.perfect || 0) + ' of ' + sk.perfect + ' perfect rounds';
-      else if (locked) st.textContent = 'Unlocks at level ' + sk.lvl;
-      else if (!sk.price) st.textContent = 'Free: tap to wear';
-      else { st.textContent = sk.price + ' coins'; st.className = 'ss price'; }
-      b.appendChild(cnv); b.appendChild(nm); b.appendChild(st);
-      b.addEventListener('click', function () { tapSkin(sk); });
-      grid.appendChild(b);
-      drawSkinPreview(cnv, sk);
-    });
-  }
-  function tapSkin(sk) {
-    var msg = $('lockerMsg'), owned = PROFILE.owned.indexOf(sk.id) >= 0, lvl = levelInfo(PROFILE.xp).lvl;
-    if (!owned) {
-      if (lvl < sk.lvl) { pendingBuy = null; msg.textContent = 'Reach level ' + sk.lvl + ' to unlock ' + sk.name + '.'; renderLocker(); return; }
-      if (sk.perfect && (PROFILE.perfect || 0) < sk.perfect) { pendingBuy = null; msg.textContent = 'Finish ' + sk.perfect + ' rounds without getting hit to unlock ' + sk.name + '. You have ' + (PROFILE.perfect || 0) + '.'; renderLocker(); return; }
-      if (!sk.price) pendingBuy = sk.id;
-      if (PROFILE.coins < sk.price) { pendingBuy = null; msg.textContent = 'You need ' + (sk.price - PROFILE.coins) + ' more coins for ' + sk.name + '.'; renderLocker(); return; }
-      if (pendingBuy !== sk.id) { pendingBuy = sk.id; msg.textContent = 'Tap ' + sk.name + ' again to buy it for ' + sk.price + ' coins.'; renderLocker(); return; }
-      PROFILE.coins -= sk.price; PROFILE.owned.push(sk.id);
-      audioOn(); sfx.close();
-      msg.textContent = 'Unlocked ' + sk.name + '. You are wearing it now.';
-    } else {
-      msg.textContent = 'Wearing ' + sk.name + '.';
+  /* My Character. The preview is the real HD renderer when that tier is on, and the 2D front view otherwise. */
+  var charSpin = 0, charSpinOn = false;
+  function charHd() { return gfx === 'hd' && window.HR3D && HR3D.ok; }
+  function syncCharMode() {
+    var on = !$('lockerScreen').hidden;
+    document.body.classList.toggle('char-open', on);
+    if (window.HR3D) {
+      HR3D.preview = !!(on && charHd());
+      HR3D.reduce = reduceMotion;
+      if (!on) { HR3D.previewSpin = 0; }
+      else HR3D.previewSpin = charSpin;
     }
-    pendingBuy = null;
-    PROFILE.skin = sk.id;
-    saveProfile(); renderLocker(); renderProfile();
-    if (!running) previewRound();
   }
-  $('lockerBtn').addEventListener('click', function () {
-    pendingBuy = null; $('lockerMsg').textContent = '';
-    $('startScreen').hidden = true; $('lockerScreen').hidden = false; renderLocker();
-  });
-  $('lockerDone').addEventListener('click', function () {
-    pendingBuy = null; $('lockerScreen').hidden = true; $('startScreen').hidden = false; renderProfile();
-  });
+  function paintCharPreview() {
+    if ($('lockerScreen').hidden || charHd()) return;
+    var cnv = $('charPreview'), w = cnv.clientWidth, h = cnv.clientHeight;
+    if (w < 2 || h < 2) return;
+    var dpr = Math.min(2, window.devicePixelRatio || 1), pw = Math.round(w * dpr), ph = Math.round(h * dpr);
+    if (cnv.width !== pw || cnv.height !== ph) { cnv.width = pw; cnv.height = ph; }
+    var g = cnv.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, w, h);
+    var bg = g.createRadialGradient(w / 2, h * 0.62, 10, w / 2, h * 0.5, Math.max(w, h) * 0.72);
+    bg.addColorStop(0, '#34386e'); bg.addColorStop(1, '#121428');
+    g.fillStyle = bg; g.fillRect(0, 0, w, h);
+    var L = lookForDraw(), bh = Math.min(h * 0.62, w * 0.62), bw = bh * 0.78;
+    var sc = Math.max(0.22, Math.abs(Math.cos(charSpin)));
+    var bob = reduceMotion ? 0 : Math.sin(performance.now() / 280) * 5;
+    g.fillStyle = 'rgba(0,0,0,0.28)';
+    g.beginPath(); g.ellipse(w / 2, h * 0.78, bw * 0.42 * sc, bh * 0.08, 0, 0, TAU); g.fill();
+    g.save();
+    g.translate(w / 2, h * 0.48 + bob);
+    g.scale(sc, 1);
+    paintFront(g, L, -bw / 2, -bh / 2, bw, bh, 'run');
+    g.restore();
+  }
+  function renderCharHead() {
+    var L = lookForDraw(), body = lookItem('body', L.body);
+    $('charName').textContent = body ? body.name : 'Jellybean';
+    $('charLvl').textContent = 'Lv ' + levelInfo(PROFILE.xp).lvl;
+    $('coinsLocker').textContent = PROFILE.coins;
+    $('charSpin').setAttribute('aria-pressed', charSpinOn ? 'true' : 'false');
+  }
+  function renderChar() { syncCharMode(); renderCharHead(); paintCharPreview(); }
+  /* Surprise me picks one unlocked item per slot. Scarf only lands on a body that has a neck. */
+  function surpriseLook() {
+    if (!LOOK) return;
+    var L = LOOK.look;
+    LOOK_SLOTS.forEach(function (sl) {
+      var pool = LOOK_CAT[sl].filter(function (it) {
+        if (it.hidden && !lookHas(sl, it.id)) return false;
+        if (!lookHas(sl, it.id)) return false;
+        if (sl === 'extra' && it.neck) { var b = lookItem('body', L.body); if (!b || !b.neck) return false; }
+        return true;
+      });
+      if (pool.length) L[sl] = pool[Math.floor(Math.random() * pool.length)].id;
+    });
+    var body = lookItem('body', L.body), ex = lookItem('extra', L.extra);
+    if (ex && ex.neck && !(body && body.neck)) L.extra = 'none';
+    LOOK_SLOTS.forEach(function (sl) {
+      var it = lookItem(sl, L[sl]);
+      if (it && LOOK.seen.indexOf(it.key) < 0) LOOK.seen.push(it.key);
+    });
+    saveLook(true);
+    if (!running) previewRound();
+    renderChar();
+  }
+  function spinChar() {
+    if (reduceMotion) { charSpinOn = false; charSpin += Math.PI / 2; }
+    else charSpinOn = !charSpinOn;
+    if (window.HR3D) HR3D.previewSpin = charSpin;
+    renderChar();
+  }
+  function openChar() {
+    $('startScreen').hidden = true; $('endScreen').hidden = true; $('lockerScreen').hidden = false;
+    if (!running) previewRound();
+    renderChar();
+    setTimeout(function () { try { $('charBack').focus({ preventScroll: true }); } catch (e) {} }, 40);
+  }
+  function closeChar() {
+    charSpinOn = false; $('lockerScreen').hidden = true; syncCharMode();
+    $('startScreen').hidden = false; renderProfile();
+  }
+  $('lockerBtn').addEventListener('click', openChar);
+  $('charBack').addEventListener('click', closeChar);
+  $('lockerDone').addEventListener('click', closeChar);
+  $('charSpin').addEventListener('click', spinChar);
+  $('charSurprise').addEventListener('click', surpriseLook);
 
   /* ---------- players, leaderboard, sharing ---------- */
   var shareText = '';
@@ -5428,7 +5529,7 @@ h1 .rush { color: var(--you); }
   function renderShapes() {
     shapeBtns.forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-shape') === PROFILE.shape ? 'true' : 'false'); });
     var nm = (SHAPES.filter(function (x) { return x.id === PROFILE.shape; })[0] || SHAPES[0]).name;
-    $('roomShapeLabel').textContent = 'Your shape · ' + nm; $('lockerShapeLabel').textContent = 'Shape · ' + nm;
+    $('roomShapeLabel').textContent = 'Your shape · ' + nm;
   }
 
   /* ---------- feedback ---------- */
@@ -5501,7 +5602,8 @@ h1 .rush { color: var(--you); }
 
   document.addEventListener('keydown', function (e) {
     var k = e.code;
-    if (!$('lockerScreen').hidden || !$('nameScreen').hidden || !$('boardScreen').hidden || !$('fbScreen').hidden || !$('roomScreen').hidden) return;
+    if (!$('lockerScreen').hidden) { if (e.key === 'Escape') { e.preventDefault(); closeChar(); } return; }
+    if (!$('nameScreen').hidden || !$('boardScreen').hidden || !$('fbScreen').hidden || !$('roomScreen').hidden) return;
     if (!$('startScreen').hidden || !$('endScreen').hidden) {
       if ((k === 'Enter' || k === 'Space') && document.activeElement && document.activeElement.tagName !== 'BUTTON' && document.activeElement.tagName !== 'INPUT' && !(G && G.mode === 'room')) { e.preventDefault(); startRound(); }
       return;
@@ -5564,7 +5666,9 @@ h1 .rush { color: var(--you); }
       if (running && G.mode === 'room' && G.t >= 0 && ts - lastNet > 200 && (!G.players[0].out || G.hostBots)) { lastNet = ts; netSend(); }
       stepParts(dt);
       if (G.shake > 0) { G.shake *= Math.pow(0.002, dt); if (G.shake < 0.3) G.shake = 0; }
+      if (charSpinOn) { charSpin += dt * 0.85; if (window.HR3D) HR3D.previewSpin = charSpin; }
       voTick(); draw(); hud();
+      if (!$('lockerScreen').hidden) paintCharPreview();
       if (CLIP) clipFrame();
       if (G.over && !G.shown && G.t >= G.endAt) { G.shown = true; showEnd(); }
     }
