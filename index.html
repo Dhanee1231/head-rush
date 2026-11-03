@@ -704,10 +704,10 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
         <div class="emotes" data-emotes role="group" aria-label="Send an emote"></div>
       </div>
       <div class="stats">
-        <div class="stat"><span id="stLabel1">Place</span><b id="stPlace">1st</b></div>
-        <div class="stat"><span>Survived</span><b id="stTime">1:30</b></div>
-        <div class="stat"><span>Close shaves</span><b id="stClose">0</b></div>
-        <div class="stat"><span>Coins</span><b id="stCoins">0</b></div>
+        <div class="stat" id="st1"><span id="stLabel1">Place</span><b id="stPlace">1st</b></div>
+        <div class="stat" id="st2"><span id="stLabel2">Survived</span><b id="stTime">1:30</b></div>
+        <div class="stat" id="st3"><span id="stLabel3">Close shaves</span><b id="stClose">0</b></div>
+        <div class="stat" id="st4"><span id="stLabel4">Coins</span><b id="stCoins">0</b></div>
       </div>
       <p class="tip" id="tipLine" hidden></p>
       <button class="btn friends" id="tryMedium" type="button" hidden>Ready? Try Medium</button>
@@ -3773,6 +3773,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     saveProfile();
     $('retryBtn').hidden = true; $('perfectBadge').hidden = true; $('matchBox').hidden = true; $('tryMedium').hidden = true;
     $('skyHome').hidden = true;
+    restoreEndLabels();
     $('endEyebrow').textContent = 'Tutorial · Neon Rooftop';
     $('endTitle').textContent = 'You’ve got it!'; $('endTitle').classList.add('win');
     $('endSub').textContent = 'Jump the orange bars, duck the blue ones. Bars speed up every 10 seconds, and more join in.';
@@ -4311,6 +4312,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     $('tipLine').hidden = true; $('tryMedium').hidden = true; $('matchBox').hidden = true;
     $('retryBtn').hidden = true; $('replayBtn').hidden = true; $('clipBtn').hidden = true;
     $('skyHome').hidden = true;
+    restoreEndLabels();
     $('perfectBadge').hidden = !perfect;
     $('endTitle').classList.add('win');
     $('endTitle').textContent = win.name + ' wins!';
@@ -5222,6 +5224,16 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     }
   }
 
+  /* Sky Tower relabels the result grid. Put the usual words back before any other end card. */
+  function restoreEndLabels() {
+    $('stLabel2').textContent = 'Survived';
+    $('stLabel3').textContent = 'Close shaves';
+    $('stLabel4').textContent = 'Coins';
+    $('st2').hidden = false;
+    $('st3').hidden = false;
+    $('st4').hidden = false;
+    $('endXp').hidden = false;
+  }
   /* ---------- end screen ---------- */
   var HIT_TEXT = {
     low: 'An orange bar got you. Orange means jump.',
@@ -5234,6 +5246,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     if (G.tut) { showTutEnd(); return; }
     if (G.hotseat) { hotSeatTurnDone(); return; }
     $('skyHome').hidden = true;
+    restoreEndLabels();
     $('hotPodium').hidden = true;
     $('tipLine').hidden = true; $('tryMedium').hidden = true;
     $('endTitle').classList.remove('pop'); $('endLvl').classList.remove('burst'); $('endConfetti').textContent = '';
@@ -6946,8 +6959,16 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     $('fbOpenEnd').hidden = true; $('switchBtn').hidden = true; $('installBtn').hidden = true;
     $('skyHome').hidden = false;
     $('stLabel1').textContent = 'Floors'; $('stPlace').textContent = Math.max(0, SK.h).toFixed(1);
-    $('stTime').textContent = SK.hits + (SK.hits === 1 ? ' hit' : ' hits');
-    $('stClose').textContent = clockTenth(SK.t); $('stCoins').textContent = '0';
+    $('st2').hidden = false; $('st3').hidden = false; $('st4').hidden = true;
+    $('stLabel2').textContent = 'Hits'; $('stTime').textContent = String(SK.hits);
+    $('stLabel3').textContent = 'Time'; $('stClose').textContent = clockTenth(Math.max(0, SK.t));
+    var skyLi = levelInfo(PROFILE.xp);
+    $('endLvl').textContent = 'Lv ' + skyLi.lvl;
+    $('endXp').textContent = '+0 XP';
+    $('endXp').hidden = false;
+    $('endXpFill').style.width = (100 * skyLi.into / skyLi.need) + '%';
+    $('endChal').textContent = '';
+    $('endChal').hidden = true;
     $('bestLine').textContent = 'Orange bar: jump. Blue bar: duck. A spring pad lifts you, and speeds you up.';
     $('againBtn').textContent = 'Climb again';
     $('syncLine').textContent = '';
@@ -6977,6 +6998,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     $('retryBtn').hidden = true;
     $('installBtn').hidden = true;
     $('againBtn').textContent = 'Run again';
+    restoreEndLabels();
     $('endScreen').hidden = true;
     $('startScreen').hidden = false;
     var back = gfxHold;
@@ -7173,6 +7195,23 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       gfx = gfxMem;
       pickGfx(gfxMem);
       try { if (gfxKept == null) localStorage.removeItem('headrush.gfx'); else localStorage.setItem('headrush.gfx', gfxKept); } catch (e) {}
+      var xpWas = PROFILE.xp;
+      PROFILE.xp = 250;
+      SKY = true;
+      skyReset();
+      SK.t = 69.5; SK.h = 8.2; SK.hits = 8; SK.over = true; SK.flood = 8.2;
+      skyShowEnd();
+      eq('sky-floors', $('stLabel1').textContent, 'Floors');
+      eq('sky-hits-label', $('stLabel2').textContent, 'Hits');
+      eq('sky-hits', $('stTime').textContent, '8');
+      eq('sky-time-label', $('stLabel3').textContent, 'Time');
+      eq('sky-time', $('stClose').textContent, '1:09.5');
+      eq('sky-coins', $('st4').hidden, true);
+      eq('sky-lvl', $('endLvl').textContent, 'Lv 3');
+      eq('sky-xp', $('endXp').textContent, '+0 XP');
+      PROFILE.xp = xpWas;
+      $('endScreen').hidden = true;
+      SKY = false;
     } catch (err) { fails.push('threw ' + (err && err.stack || err)); }
     return { ok: fails.length === 0, fails: fails };
   }
