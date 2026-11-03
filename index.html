@@ -951,7 +951,7 @@ h1 .rush { color: var(--you); }
   function lookKey(id) { return 'headrush.look.v1.' + id; }
   function skinColorId(skin) { return skin === 'sunny' || !skin ? 'sunny' : 'lg-' + skin; }
   function lookDefaults(p) { var c = skinColorId(skinById(p && p.skin).id); return { body: 'bean', color: c, eyes: 'classic', hat: 'none', hatColor: 'auto', extra: 'none' }; }
-  function blankLookSave(p) { return { v: 1, look: lookDefaults(p), unl: [], seen: [], cnt: { dailyDone: 0, closeTotal: 0 } }; }
+  function blankLookSave(p) { return { v: 1, look: lookDefaults(p), unl: [], seen: [], pending: [], cnt: { dailyDone: 0, closeTotal: 0, anyWins: 0 } }; }
   function strList(a) { var out = []; (Array.isArray(a) ? a : []).forEach(function (x) { if (typeof x === 'string' && x.length < 40 && out.indexOf(x) < 0) out.push(x); }); return out; }
   /* Right shape or null. Missing or mistyped fields get defaults; unknown string ids are kept as they are. */
   function fixLookSave(s, p) {
@@ -960,7 +960,8 @@ h1 .rush { color: var(--you); }
     Object.keys(d).forEach(function (k) { if (typeof l[k] !== 'string' || !l[k] || l[k].length > 40) l[k] = d[k]; });
     s.unl = strList(s.unl); s.seen = strList(s.seen);
     var c = s.cnt && typeof s.cnt === 'object' && !Array.isArray(s.cnt) ? s.cnt : {};
-    ['dailyDone', 'closeTotal'].forEach(function (k) { c[k] = typeof c[k] === 'number' && c[k] >= 0 && isFinite(c[k]) ? Math.floor(c[k]) : 0; });
+    ['dailyDone', 'closeTotal', 'anyWins'].forEach(function (k) { c[k] = typeof c[k] === 'number' && c[k] >= 0 && isFinite(c[k]) ? Math.floor(c[k]) : 0; });
+    s.pending = strList(s.pending);
     s.cnt = c;
     return s;
   }
@@ -970,7 +971,7 @@ h1 .rush { color: var(--you); }
     { id: 'beanie', give: ['hat.beanie'], k: 'lvl', n: 2 }, { id: 'lashes', give: ['eyes.lashes'], k: 'lvl', n: 3 },
     { id: 'bunny', give: ['hat.bunny'], k: 'lvl', n: 4 }, { id: 'leaf', give: ['color.leaf'], k: 'rounds', n: 10 },
     { id: 'googly', give: ['eyes.googly'], k: 'lvl', n: 5 }, { id: 'cupcake', give: ['body.cupcake'], k: 'dailyDone', n: 3 },
-    { id: 'vanilla', give: ['color.vanilla'], k: 'wins', n: 1 }, { id: 'glasses', give: ['extra.glasses'], k: 'perfect', n: 3 },
+    { id: 'vanilla', give: ['color.vanilla'], k: 'anyWin', n: 1 }, { id: 'glasses', give: ['extra.glasses'], k: 'perfect', n: 3 },
     { id: 'bowtie', give: ['extra.bowtie'], k: 'closeTotal', n: 50 }, { id: 'sleepy', give: ['eyes.sleepy'], k: 'streak', n: 3 },
     { id: 'tophat', give: ['hat.tophat'], k: 'wins', n: 5 }, { id: 'chef', give: ['hat.chef'], k: 'rounds', n: 25 },
     { id: 'lilac', give: ['color.lilac'], k: 'dailyDone', n: 10 }, { id: 'scarf', give: ['extra.scarf'], k: 'combo', n: 15 },
@@ -986,6 +987,8 @@ h1 .rush { color: var(--you); }
     if (k === 'lvl') { var xp = p.xp || 0; return levelInfo(typeof xp === 'number' && isFinite(xp) ? xp : 0).lvl; }
     if (k === 'rounds') return p.rounds || 0;
     if (k === 'wins') return p.wins || 0;
+    /* any win: party wins live on the profile; solo clears and room wins accumulate in cnt.anyWins */
+    if (k === 'anyWin') return (p.wins || 0) + (c.anyWins || 0);
     if (k === 'perfect') return p.perfect || 0;
     if (k === 'combo') return p.bestCombo || 0;
     if (k === 'streak') return p.streak && p.streak.n || 0;
@@ -1016,6 +1019,9 @@ h1 .rush { color: var(--you); }
     ((p && p.owned) || []).concat([sk.id]).forEach(function (id) { var k = skinById(id); if (k.id === id) have = have.concat(skinItems(k)); });
     if (shape !== 'round' && lookItem('body', s.look.body)) have.push('body.' + s.look.body);
     have.forEach(function (key) { var it = LOOK_ITEM[key]; if (it && !it.free && s.unl.indexOf(key) < 0) s.unl.push(key); });
+    var soloWon = 0;
+    if (p && p.solo && typeof p.solo === 'object') Object.keys(p.solo).forEach(function (k) { if (p.solo[k] > 0) soloWon++; });
+    s.cnt.anyWins = soloWon;
     lookEarn(s, p);
     return s;
   }
@@ -1330,8 +1336,19 @@ h1 .rush { color: var(--you); }
       c.p = Math.min(def.target, c.p + def.add(r));
       if (c.p >= def.target) { c.done = true; PROFILE.coins += def.reward; done.push(def); }
     });
+    /* Counting only: close shaves, finished daily challenges, and non-party wins. Nothing here changes the round. */
+    var unlocked = [];
+    if (LOOK) {
+      if (r.close) LOOK.cnt.closeTotal += r.close;
+      if (done.length) LOOK.cnt.dailyDone += done.length;
+      if ((r.mode === 'room' && r.win) || (r.mode === 'solo' && r.stars > 0)) LOOK.cnt.anyWins++;
+      unlocked = lookEarn(LOOK, PROFILE);
+      if (!LOOK.pending) LOOK.pending = [];
+      unlocked.forEach(function (k) { if (LOOK.pending.indexOf(k) < 0) LOOK.pending.push(k); });
+      saveLook();
+    }
     saveProfile();
-    return { xp: xp, done: done, before: before, after: levelInfo(PROFILE.xp).lvl };
+    return { xp: xp, done: done, before: before, after: levelInfo(PROFILE.xp).lvl, unlocked: unlocked };
   }
 
   /* ---------- modes: Party (7 bots), Solo (18 star levels), Survival (endless) ---------- */
@@ -5395,6 +5412,21 @@ h1 .rush { color: var(--you); }
     joinRoom(code, false);
     return true;
   }
+  try {
+    if (/[?&]savetest=1(?:&|$)/.test(location.search)) {
+      window.__hr = {
+        applyRound: applyRound,
+        profile: function () { return PROFILE; },
+        look: function () { return LOOK; },
+        lookBroken: function () { return lookBroken; },
+        saveLook: saveLook,
+        lookForDraw: lookForDraw,
+        lookHas: lookHas,
+        catalog: function () { return LOOK_CAT; },
+        rules: function () { return LOOK_RULES; }
+      };
+    }
+  } catch (e) {}
   renderProfile();
   $('howto').open = !(PROFILE.rounds > 0 || loadBest('neon').rounds > 0);
   pickMode(mode);
