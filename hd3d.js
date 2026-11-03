@@ -1361,7 +1361,9 @@ function makeBodyMesh(id) {
 function bodyGeometry(id, wear) {
   const hat = wear && wear.hat && wear.hat !== 'none' ? wear.hat : '';
   const extra = wear && wear.extra && wear.extra !== 'none' ? wear.extra : '';
-  const baked = !!(lo() && wear && (hat || extra));
+  /* Hats and extras are part of the body on every tier. A separate mesh per kind
+     put a full lobby about 30% over today's draw count, which is past the budget. */
+  const baked = !!(wear && (hat || extra));
   const key = id + (lo() ? ':lo' : ':hi') + (baked ? '|' + hat + '|' + (wear.hatHex || wear.hatColor || '') + '|' + extra : '');
   if (BODYGEO[key]) return BODYGEO[key];
   if (!baked) {
@@ -1376,7 +1378,8 @@ function bodyGeometry(id, wear) {
   const info = shapeInfo(shape), bag = new GeoBag();
   bag.add(bodyGeometry(id, null), null, TWHITE, null, true);
   if (hat) bag.add(hatGeometry(hat), 1, RECOLOR[hat] ? hatTint(wear) : TWHITE, placeM(0, info.hat, 0), true);
-  if (hat === 'beanie') bag.add(hatGeometry('prop'), 1, TWHITE, placeM(0, info.hat + 0.18, 0), true);
+  /* Low bakes the propeller. High spins one shared propeller mesh, and only when someone wears a beanie. */
+  if (hat === 'beanie' && lo()) bag.add(hatGeometry('prop'), 1, TWHITE, placeM(0, info.hat + 0.18, 0), true);
   if (extra) bag.add(hatGeometry('x-' + extra), 1, TWHITE, extraMatrix(shape, extra, info), true);
   return (BODYGEO[key] = bag.done());
 }
@@ -1506,14 +1509,9 @@ function wearEnd() {
   });
 }
 function pushWear(rn, now) {
-  if (lo() || !rn.wear) return;
-  const L = rn.wear, info = rn.info, hat = L.hat && L.hat !== 'none' ? L.hat : '', extra = L.extra && L.extra !== 'none' ? L.extra : '';
-  if (hat) {
-    tmpM.multiplyMatrices(rn.body.matrixWorld, placeM(0, info.hat, 0));
-    wearPush(hat, tmpM, RECOLOR[hat] ? rn.hatCol : WHITEC);
-    if (hat === 'beanie') { tmpM.multiplyMatrices(rn.body.matrixWorld, placeM(0, info.hat + 0.18, 0, 0, now * 8, 0)); wearPush('prop', tmpM, WHITEC); }
-  }
-  if (extra) { tmpM.multiplyMatrices(rn.body.matrixWorld, extraMatrix(rn.shape, extra, info)); wearPush('x-' + extra, tmpM, WHITEC); }
+  if (lo() || !rn.wear || rn.wear.hat !== 'beanie') return;
+  tmpM.multiplyMatrices(rn.body.matrixWorld, placeM(0, rn.info.hat + 0.18, 0, 0, now * 8, 0));
+  wearPush('prop', tmpM, WHITEC);
 }
 /* Same candy push the jellybean has always used. Near-white colours (Snow, Ghost) are the exception:
    a tiny tint becomes full HSL saturation, and the usual push turns them lilac. */
@@ -1577,9 +1575,9 @@ function makeLook(p) {
   const info = shapeInfo(shape);
   const hat = L && L.hat && L.hat !== 'none';
   const extra = L && L.extra && L.extra !== 'none';
-  /* Low bakes the hat and extra into the body so the lobby stays at today's draw count. */
+  /* The hat and extra are baked into the body so a mixed lobby stays near today's draw count. */
   const geo = bodyGeometry(id, L);
-  const detail = !!(lo() && (hat || extra)) || !(id === 'bean' || id.indexOf('c-') === 0);
+  const detail = !!((hat || extra) || !(id === 'bean' || id.indexOf('c-') === 0));
   const mat = bodyMaterial(p.color, detail);
   const mesh = new THREE.Mesh(geo, mat);
   const rn = runnerBits(p, shape, info, mesh, mat, info.face);

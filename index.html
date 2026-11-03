@@ -2833,6 +2833,23 @@ h1 .rush { color: var(--you); }
         skill: i ? Math.random() * 0.04 : 0, react: 0.14 + Math.random() * 0.16
       });
     }
+    /* Draw-call check only. A normal game never sets this. Bots keep their own looks from M5. */
+    if (/[?&]mixlook=1(?:&|$)/.test(location.search)) {
+      var mixLooks = [
+        { body: 'bean', color: 'sunny', eyes: 'classic', hat: 'party', hatColor: 'grape', extra: 'glasses', hex: '#ffd23f', hatHex: '#c58cff' },
+        { body: 'strawberry', color: 'berry', eyes: 'sparkle', hat: 'bunny', extra: 'bowtie', hex: '#ff4d6d', hatHex: '#ff4d6d' },
+        { body: 'pear', color: 'lime', eyes: 'dot', hat: 'chef', extra: 'spots', hex: '#a8d672', hatHex: '#a8d672' },
+        { body: 'lettuce', color: 'mint', eyes: 'lashes', hat: 'flower', extra: 'scarf', hex: '#7be0ad', hatHex: '#7be0ad' },
+        { body: 'cupcake', color: 'bubblegum', eyes: 'googly', hat: 'crown', extra: 'none', hex: '#ff7eb6', hatHex: '#ff7eb6' },
+        { body: 'robot', color: 'teal', eyes: 'sleepy', hat: 'tophat', extra: 'glasses', hex: '#5fd1c8', hatHex: '#5fd1c8' },
+        { body: 'bean', color: 'grape', eyes: 'classic', hat: 'beanie', extra: 'visor', hex: '#c58cff', hatHex: '#ff4d6d' },
+        { body: 'strawberry', color: 'rose', eyes: 'sparkle', hat: 'halo', extra: 'none', hex: '#ffb3c8', hatHex: '#ffb3c8' }
+      ];
+      players.forEach(function (p, i) {
+        var L = mixLooks[i % mixLooks.length];
+        p.look = L; p.color = L.hex; p.shape = 'round'; p.skin = null;
+      });
+    }
     if (room) {
       var meIdx = 0;
       room.roster.forEach(function (r, k) { if (r.me) meIdx = k; });
