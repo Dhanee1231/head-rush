@@ -85,9 +85,12 @@ const HOOK = `
 `;
 
 function inject(html) {
-  const needle = '  requestAnimationFrame(frame);';
-  if (!html.includes(needle)) throw new Error('hook point missing');
-  return html.replace(needle, HOOK + '\n' + needle);
+  /* The two-space call also sits inside indented frame() lines, including Sky Tower's
+     early return. Only the call that closes the IIFE runs at load, which is where __sim must exist. */
+  const needle = '\n  requestAnimationFrame(frame);\n})();';
+  const hits = html.split(needle).length - 1;
+  if (hits !== 1) throw new Error('hook point count ' + hits);
+  return html.replace(needle, '\n' + HOOK + needle);
 }
 
 function mime(p) {
@@ -182,6 +185,9 @@ if (mode === 'capture') {
     console.error('VS GOLDEN\n' + vs.slice(0, 12).join('\n'));
     process.exit(1);
   }
-  console.log('PASS replay 18/18 twice, HUD samples match f292a66');
+  const n = Object.values(a.runs).reduce((s, r) => s + r.length, 0);
+  const expect = Object.values(golden.runs).reduce((s, r) => s + r.length, 0);
+  if (n !== expect) { console.error('sample count ' + n + ' vs ' + expect); process.exit(1); }
+  console.log('PASS replay ' + n + '/' + n + ' HUD samples match f292a66, twice');
   console.log('consts', JSON.stringify(a.consts));
 }
