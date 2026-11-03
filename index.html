@@ -3122,6 +3122,28 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     } catch (e) {}
     return '';
   }
+  /* Launch free set only, so a bot never wears something a player still has to earn. */
+  function freeLookIds(slot) {
+    var out = [];
+    LOOK_CAT[slot].forEach(function (it) { if (it.free && !it.hidden && String(it.id).indexOf('lg-') !== 0) out.push(it.id); });
+    return out;
+  }
+  function lookSeed(text) {
+    var h = 2166136261;
+    text = String(text);
+    for (var i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  }
+  /* Same bot on every phone. A fresh mulberry32, not GR, so bar timing stays put. */
+  function botLook(seed, bi) {
+    seed = seed >>> 0; bi = bi | 0;
+    function pick(slot, n) {
+      var list = freeLookIds(slot);
+      var rnd = mulberry32((seed + Math.imul(bi + 1, 0x9E3779B1) + n * 0x85EBCA6B) >>> 0)();
+      return list[Math.floor(rnd * list.length)];
+    }
+    return lookForDraw({ body: pick('body', 1), color: pick('color', 2), eyes: pick('eyes', 3), hat: pick('hat', 4), hatColor: 'auto', extra: pick('extra', 5) });
+  }
   function newRound(id, md, li, room, opt) {
     RBUF = []; REPLAY = null;
     md = md || 'party';
@@ -3140,7 +3162,14 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
         skill: i ? Math.random() * 0.04 : 0, react: 0.14 + Math.random() * 0.16
       });
     }
-    /* Draw-call check only. A normal game never sets this. Bots keep their own looks from M5. */
+    if (!room && md === 'party') {
+      var pseed = lookSeed(String(PROFILE.rounds || 0) + ':' + (A.id || id));
+      for (var b = 1; b < players.length; b++) {
+        var bl = botLook(pseed, b - 1);
+        players[b].look = bl; players[b].color = bl.hex; players[b].skin = null;
+      }
+    }
+    /* Draw-call check only. A normal game never sets this. It runs before a room replaces these looks. */
     if (/[?&]mixlook=1(?:&|$)/.test(location.search)) {
       var mixLooks = [
         { body: 'bean', color: 'sunny', eyes: 'classic', hat: 'party', hatColor: 'grape', extra: 'glasses', hex: '#ffd23f', hatHex: '#c58cff' },
@@ -3165,7 +3194,11 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
         var r = k === 0 ? room.roster[meIdx] : others[k - 1], slot = room.roster.indexOf(r);
         p.slot = slot; p.angle = a0 + slot * TAU / count; p.netId = r.id;
         if (k > 0) {
-          if (r.bot) { p.bot = true; p.name = r.name; p.color = ROOM_COLORS[r.c] ? ROOM_COLORS[r.c].hex : BOT_COLORS[r.bi % BOT_COLORS.length]; p.skin = null; }
+          if (r.bot) {
+            p.bot = true; p.name = r.name; p.skin = null; p.shape = 'round';
+            p.look = botLook(room.seed, r.bi || 0);
+            p.color = ROOM_COLORS[r.c] ? ROOM_COLORS[r.c].hex : p.look.hex;
+          }
           else {
             var sk = skinById(r.skin), code = (typeof r.lk === 'string' && r.lk) ? r.lk : presenceLk(r.id), parsed = lookFromCode(code);
             p.name = r.name; p.skin = sk; p.shape = r.sh || 'round';
@@ -3176,7 +3209,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
         }
         var slotHex = ROOM_COLORS[r.c] ? ROOM_COLORS[r.c].hex : '';
         if (k === 0 && slotHex) p.color = slotHex;
-        if (slotHex && p.look && (k === 0 || !r.bot)) tintLook(p, slotHex);
+        if (slotHex && p.look) tintLook(p, slotHex);
       });
     }
     G = {
@@ -6019,6 +6052,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
         saveLook: saveLook,
         lookForDraw: lookForDraw, lookThumb: lookThumb, showCharCheer: showCharCheer,
         lookCode: function () { return LOOK ? lookCode(LOOK.look) : ''; }, lookFromCode: lookFromCode,
+        botLook: botLook, lookSeed: lookSeed,
         players: function () {
           if (!G) return null;
           return G.players.map(function (p) {
