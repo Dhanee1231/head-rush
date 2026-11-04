@@ -309,7 +309,7 @@ h1 .rush { color: var(--you); }
 .concept { margin: 0; padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--line); font-size: 14px; line-height: 1.45; color: var(--muted); }
 .concept b { color: var(--ink); }
 .concept .link-btn { padding: 14px 4px; }
-.alpha-badge { display: inline-block; padding: 2px 8px; margin-right: 6px; border-radius: 999px; background: var(--you); color: var(--bg); letter-spacing: .12em; }
+.alpha-badge { display: inline-block; padding: 2px 8px; margin-right: 6px; border-radius: 999px; background: var(--you); color: var(--bg); letter-spacing: .12em; text-transform: none; }
 .legal-row { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
 .link-btn.danger { color: var(--heart); }
 .stars { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
@@ -612,7 +612,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
         <div class="coins" aria-label="Coins"><svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg><b id="coinsNum">0</b></div>
       </div>
       <div class="who"><span>Playing as <b id="whoName">Player</b></span><button class="link-btn" id="switchPlayer" type="button">Switch player</button></div>
-      <div class="eyebrow"><span class="alpha-badge">Alpha</span> Early test build</div>
+      <div class="eyebrow"><span class="alpha-badge" id="alphaBadge">Alpha</span> Early test build</div>
       <h1>Head<br><span class="rush">Rush</span></h1>
       <p class="concept"><b>Alpha test:</b> things may change, break or be reset. Graphics, sounds and levels keep improving toward the real game. <button class="link-btn" id="fbOpenMenu" type="button">Tell us what to improve</button></p>
       <section class="today" id="todayCard" aria-labelledby="todayLabel">
@@ -6020,6 +6020,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
 
   /* ---------- Party Rooms: live multiplayer over Supabase Realtime ---------- */
   var ROOM = null, sbClient = null, sbLoading = null, GAME_VERSION = 12, buddyOn = false;
+  $('alphaBadge').textContent = 'Alpha · v' + GAME_VERSION;
   try { buddyOn = localStorage.getItem('headrush.buddy') === '1'; } catch (e) {}
   var ROOM_COLORS = [
     { name: 'Sunny', hex: '#ffd23f' }, { name: 'Coral', hex: '#ff6b6b' }, { name: 'Mint', hex: '#5ee0a0' }, { name: 'Violet', hex: '#b48cff' },
