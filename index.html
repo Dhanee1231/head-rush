@@ -3504,7 +3504,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     if (CLIP && CLIP.rec && CLIP.rec.state === 'recording') { CLIP.done = true; try { CLIP.rec.stop(); } catch (e) {} }
     var R = REPLAY; REPLAY = null;
     applySnap(R.fin, R.byId);
-    $('replayTag').hidden = true; $('endScreen').hidden = false;
+    $('replayTag').hidden = true; showEndScreen();
   }
   document.addEventListener('pointerdown', function () { if (REPLAY && !CLIP) endReplay(); }, true);
   /* 5-second clip: the replay is drawn into a small canvas (3D view plus overlay) and recorded with MediaRecorder. */
@@ -3810,7 +3810,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     $('syncLine').textContent = '';
     logRound({ mode: 'tutorial', arena: 'neon', diff: 'easy', secs: Math.round(g.t * 10) / 10, place: null, win: true, hits: 0, close: g.close || 0, stars: 0, match: null, daily: null });
     running = false;
-    $('endScreen').hidden = false;
+    showEndScreen();
   }
   function closeShave(p, color) { G.close++; var cm = comboMult(G.run || 0); G.closePts = (G.closePts || 0) + 5 * cm; toast('Close shave! +' + 5 * cm); sfx.close(); buzz(15); burstAt(p, color, 6, 0.6); if (Math.random() < 0.35) say(['close1', 'close2', 'close3'], 0); }
 
@@ -4371,7 +4371,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     logRound({ mode: 'hotseat', arena: HOT.arena, diff: HOT.diff, secs: Math.round(win.time * 10) / 10, place: 1, win: true, hits: win.hits, close: win.close || 0, stars: 0, match: null, daily: null });
     var sl = $('syncLine'); sl.textContent = 'Saving to the online leaderboard…';
     syncPlayer().then(function (ok) { sl.textContent = ok ? 'Saved to the online leaderboard.' : 'Saved on this phone. It will upload next time.'; });
-    $('endScreen').hidden = false;
+    showEndScreen();
     showCharCheer();
     setTimeout(function () { try { $('againBtn').focus({ preventScroll: true }); } catch (e) {} }, 50);
   }
@@ -5262,6 +5262,19 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     hole: 'The floor gave way. Jump over glowing gaps.',
     hammer: 'A hammer got you. Match its color: orange jump, blue duck.'
   };
+  /* Players are still tapping Jump/Duck when a round ends. For the first half second the results screen ignores taps,
+     including one that lands in that time and lifts after it. Capture phase, so this covers every button on the card. */
+  var END_GUARD_MS = 500, endGuardUntil = 0, endTapIgnored = false;
+  function showEndScreen() {
+    $('endScreen').hidden = false;
+    endGuardUntil = performance.now() + END_GUARD_MS; endTapIgnored = false;
+  }
+  $('endScreen').addEventListener('pointerdown', function () { endTapIgnored = performance.now() < endGuardUntil; }, true);
+  $('endScreen').addEventListener('click', function (e) {
+    if (!endTapIgnored && performance.now() >= endGuardUntil) return;
+    endTapIgnored = false;
+    e.preventDefault(); e.stopPropagation();
+  }, true);
   function showEnd() {
     if (G.tut) { showTutEnd(); return; }
     if (G.hotseat) { hotSeatTurnDone(); return; }
@@ -5425,7 +5438,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       }, function () {});
     });
     if (md !== 'room') running = false;
-    $('endScreen').hidden = false;
+    showEndScreen();
     showCharCheer();
     setTimeout(function () { try { if ($('charCheer').hidden) $('againBtn').focus({ preventScroll: true }); else $('charCheerGo').focus({ preventScroll: true }); } catch (e) {} }, 50);
   }
@@ -6993,7 +7006,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     $('bestLine').textContent = 'Orange bar: jump. Blue bar: duck. A spring pad lifts you, and speeds you up.';
     $('againBtn').textContent = 'Climb again';
     $('syncLine').textContent = '';
-    $('endScreen').hidden = false;
+    showEndScreen();
     setTimeout(function () { try { $('againBtn').focus({ preventScroll: true }); } catch (e) {} }, 50);
   }
   /* Home leaves Sky Tower for good: the menu comes back, and a reload no longer opens the tower. */
