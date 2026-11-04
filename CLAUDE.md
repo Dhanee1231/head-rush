@@ -3,7 +3,7 @@
 Spinning-arena party runner for phones: jump the orange bars, duck the blue ones, last runner standing wins. Live at https://head-rush.vercel.app, played by families, including kids.
 
 ## This repo is the live site
-- **Pushing to `main` deploys straight to the live site.** Vercel serves the repo's files as the website, so anything added here gets published unless it's in `.vercelignore`. Never push; D decides what goes live.
+- **Pushing to `main` does not deploy.** The Vercel project has no Git link, so the live site only changes on an explicit production deploy. Vercel serves the repo's files as the website, so anything added here gets published on the next deploy unless it's in `.vercelignore`. Never push or deploy; D decides what goes live.
 - The repo is public. Never commit secrets. The Supabase anon key in `index.html` is designed to be public; the service-role key must never appear anywhere.
 - A Unity build is planned as a separate project (`HEAD_RUSH_BUILD_BRIEF.md`). Never put Unity files here.
 
