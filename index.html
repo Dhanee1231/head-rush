@@ -128,8 +128,8 @@ body.v3d .toast { box-shadow: 0 4px 16px rgba(0, 0, 0, .45); }
   position: absolute; left: 4px; bottom: 4px; padding: 2px 6px; border-radius: 6px; background: var(--panel);
   font-size: 12px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; pointer-events: none;
 }
-.setting { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; }
-.setting input { width: 18px; height: 18px; margin: 0; accent-color: var(--you); }
+.setting { display: flex; align-items: center; gap: 8px; min-height: 48px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.setting input { width: 24px; height: 24px; flex: none; margin: 0; accent-color: var(--you); }
 .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .controls.three { grid-template-columns: 1fr 0.8fr 1fr; }
 .ctl {
@@ -270,7 +270,7 @@ h1 .rush { color: var(--you); }
 .perfect-badge svg { width: 18px; height: 18px; }
 #bestLine:empty { display: none; }
 .howto summary {
-  cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center;
+  cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; min-height: 48px;
   font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
 }
 .howto summary::-webkit-details-marker { display: none; }
@@ -280,6 +280,20 @@ h1 .rush { color: var(--you); }
 .btn-row.two { grid-template-columns: 1.4fr 1fr; }
 .btn-row.two .btn { height: 58px; }
 .char-entry { grid-template-columns: 0.8fr 1.2fr; }
+/* Menu: Run and My Character stay pinned to the bottom while the rest of the menu scrolls behind them.
+   The row is last in the card, and the overlay and card drop their bottom padding so it sits flush with the screen edge. */
+#startScreen { padding-bottom: 0; scroll-padding-bottom: 90px; }
+#startScreen > .card { padding-bottom: 0; border-bottom: 0; border-radius: 24px 24px 0 0; }
+.char-entry {
+  position: sticky; bottom: 0; z-index: 2; margin-inline: -18px;
+  padding: 10px 18px max(10px, env(safe-area-inset-bottom, 0px));
+  background: var(--panel); border-top: 1px solid var(--line);
+}
+@media (max-height: 600px) {
+  .char-entry { padding-top: 6px; padding-bottom: max(6px, env(safe-area-inset-bottom, 0px)); }
+  .btn-row.char-entry .btn { height: 48px; }
+  .btn-row.char-entry #startBtn { font-size: 22px; }
+}
 #lockerBtn { font-size: 17px; letter-spacing: 0; padding: 0 8px; line-height: 1.05; }
 .who { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; font-size: 15px; color: var(--muted); }
 .who b { color: var(--ink); }
@@ -357,12 +371,12 @@ h1 .rush { color: var(--you); }
 .mface { flex: none; position: relative; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #191a33; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.18); }
 .mface::before, .mface::after { content: ''; position: absolute; top: 34%; width: 16%; height: 26%; border-radius: 50%; background: #191a33; }
 .mface::before { left: 25%; } .mface::after { right: 25%; }
-.next-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; }
+.next-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; }
 .next-row span { font-family: var(--font-display); font-size: 20px; }
-.btn.small { height: 44px; font-size: 18px; padding: 0 18px; border-radius: 12px; }
-.emotes { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
-.emo { aspect-ratio: 1; min-height: 44px; border-radius: 12px; border: 2px solid var(--line); background: var(--panel); padding: 5px; cursor: pointer; transition: transform .12s, opacity .2s; }
-.emo img { width: 100%; height: 100%; display: block; pointer-events: none; }
+.btn.small { height: 48px; font-size: 18px; padding: 0 18px; border-radius: 12px; }
+.emotes { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
+.emo { height: 48px; border-radius: 12px; border: 2px solid var(--line); background: var(--panel); padding: 5px; cursor: pointer; transition: transform .12s, opacity .2s; }
+.emo img { width: 100%; height: 100%; display: block; object-fit: contain; pointer-events: none; }
 .emo:active { transform: scale(.9); }
 .emo.cool { opacity: .4; }
 .emo:focus-visible { outline: 3px solid var(--you); outline-offset: 2px; }
@@ -389,21 +403,21 @@ h1 .rush { color: var(--you); }
 .confetti-layer i { position: absolute; top: -16px; width: 8px; height: 13px; border-radius: 2px; animation: fall linear forwards; }
 @keyframes fall { to { transform: translateY(1100px) rotate(760deg); } }
 @media (prefers-reduced-motion: reduce) { .confetti-layer { display: none; } .emo-pop { animation-duration: 2s; } }
-.colors-row { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; }
+.colors-row { display: grid; grid-template-columns: repeat(4, 52px); justify-content: space-between; gap: 10px 6px; }
 .colorn { aspect-ratio: 1; max-width: 100%; border-radius: 50%; border: 3px solid transparent; cursor: pointer; padding: 0; box-shadow: inset 0 -4px 0 rgba(0,0,0,0.18); font: 700 13px var(--font-ui); color: #191a33; }
 .colorn[aria-pressed="true"] { border-color: var(--ink); outline: 2px solid var(--you); outline-offset: 2px; }
 .colorn:disabled { opacity: .28; cursor: default; }
 .colorn:focus-visible { outline: 3px solid var(--you); outline-offset: 2px; }
 .shape-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
-.shapen { height: 46px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.shapen { height: 48px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .shapen svg { width: 24px; height: 24px; fill: currentColor; }
 .shapen[aria-pressed="true"] { border-color: var(--you); color: var(--you); background: var(--panel); }
 .shapen:focus-visible { outline: 3px solid var(--you); outline-offset: 2px; }
 .dot { width: 18px; height: 18px; border-radius: 50%; justify-self: center; }
 .btn.friends { background: var(--panel); color: var(--you); border: 2px solid var(--you); }
 .btn:disabled { opacity: .5; cursor: default; }
-.bots-row { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; }
-.botn { height: 40px; border-radius: 10px; border: 2px solid var(--line); background: var(--bg); color: var(--ink); font-family: var(--font-display); font-size: 18px; cursor: pointer; }
+.bots-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.botn { height: 48px; border-radius: 10px; border: 2px solid var(--line); background: var(--bg); color: var(--ink); font-family: var(--font-display); font-size: 18px; cursor: pointer; }
 .botn[aria-pressed="true"] { border-color: var(--you); background: var(--panel); color: var(--you); }
 .botn:disabled { opacity: .3; cursor: default; }
 .botn:focus-visible { outline: 3px solid var(--you); outline-offset: 2px; }
@@ -537,7 +551,9 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
 .mode[data-mode="hotseat"] { grid-column: 1 / -1; min-height: 48px; font-size: 22px; padding: 12px 8px; }
 .modes[aria-label="Game mode"] > .mode:not([data-mode="hotseat"]),
 .modes[aria-label="Difficulty"] > .mode,
-.modes[aria-label="Graphics"] > .mode {
+.modes[aria-label="Graphics"] > .mode,
+.modes[aria-label="Room difficulty"] > .mode,
+.tabs > .mode {
   box-sizing: border-box; min-height: 48px; padding: 8px 6px; line-height: 1.1;
   display: flex; align-items: center; justify-content: center;
 }
@@ -651,10 +667,6 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
         <div class="picker-label" id="levelLabel">Levels</div>
         <div class="levels" id="levels"></div>
       </div>
-      <div class="btn-row two char-entry">
-        <button class="btn" id="startBtn" type="button">Run</button>
-        <button class="btn ghost" id="lockerBtn" type="button">My Character</button>
-      </div>
       <button class="btn friends" id="roomBtn" type="button">Play with friends online</button>
       <button class="btn ghost" id="boardBtn" type="button">Leaderboard</button>
       <section class="daily">
@@ -692,6 +704,10 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       <label class="setting" for="fpsToggle"><input type="checkbox" id="fpsToggle"> Show frame rate</label>
       <div class="legal-row"><a class="link-btn" href="privacy.html" target="_blank" rel="noopener">Privacy</a><button class="link-btn" id="replayTut" type="button">Replay tutorial</button><button class="link-btn danger" id="deleteData" type="button">Delete my data</button></div>
       <p class="note" id="deleteMsg" role="status" aria-live="polite"></p>
+      <div class="btn-row two char-entry">
+        <button class="btn" id="startBtn" type="button">Run</button>
+        <button class="btn ghost" id="lockerBtn" type="button">My Character</button>
+      </div>
     </div>
   </div>
 
