@@ -12,6 +12,100 @@
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="apple-touch-icon" href="icons/apple-180.png">
 <meta name="apple-mobile-web-app-title" content="Head Rush">
+<script>
+/* Crash reporter. Runs before any other script so it sees the game's first failure. Sends one POST to the game's own Supabase (log_crash).
+   It must never break the game: everything is in try/catch, no retries, nothing on screen. VERSION must equal GAME_VERSION, and the URL and
+   key must equal SB_URL and SB_KEY in the game script; tests/crashreport.mjs fails if they drift. */
+(function () {
+  'use strict';
+  var VERSION = 12, MAX_REPORTS = 5;
+  var CRASH_URL = 'https://yxmdlqmmzozghquqlnss.supabase.co/rest/v1/rpc/log_crash';
+  var CRASH_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl4bWRscW1tem96Z2hxdXFsbnNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI5MzcyMTUsImV4cCI6MjEwODUxMzIxNX0.lLbUrD2-n-Xt45RYRM7TiiCKkWNYU6wNmOebGlUcSx8';
+  var sent = 0, seen = {}, busy = false;
+  function ignore() {}
+  /* The path of one of the game's own files, or null for anything else (extensions, other sites, no file at all). */
+  function ownPath(file) {
+    if (!file) return null;
+    var u = new URL(String(file));
+    return u.origin === location.origin ? u.pathname : null;
+  }
+  /* Every name and ID saved on this phone, read straight from the saved text so unreadable .bad copies count too. */
+  function savedWords() {
+    var words = [];
+    function add(w) { w = String(w).trim(); if (w) { words.push(w); words.push(encodeURIComponent(w)); } }
+    for (var i = 0; i < localStorage.length; i++) {
+      var key = localStorage.key(i);
+      if (!key || key.indexOf('headrush.players.v1') !== 0) continue;
+      var raw = localStorage.getItem(key) || '', re = /"(?:name|id|cloudId|secret)"\s*:\s*"((?:[^"\\]|\\.)*)"/g, m;
+      while ((m = re.exec(raw))) { try { add(JSON.parse('"' + m[1] + '"')); } catch (e) { add(m[1]); } }
+    }
+    return words.sort(function (a, b) { return b.length - a.length; }).map(function (w) { return w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); });
+  }
+  function clean(text, words, limit) {
+    var out = String(text)
+      /* Browsers quote the bad text in JSON errors, and it could be anything: saves, scores, typing. */
+      .replace(/"[^]*" is not valid JSON/g, '"..." is not valid JSON')
+      /* Query strings can hold a room code. */
+      .replace(/([a-z][a-z0-9+.-]*:\/\/[^\s)?#]*)[?#][^\s)]*?(:\d+(?::\d+)?)?(?=[\s)]|$)/gim, '$1$2');
+    if (words.length) out = out.replace(new RegExp(words.join('|'), 'gi'), '***');
+    return out.slice(0, limit);
+  }
+  /* A short label such as "Chrome 140 Android", never the full user agent. */
+  function browserLabel() {
+    var ua = navigator.userAgent, list = [['Edge', /Edg(?:e|A|iOS)?\/(\d+)/], ['Samsung', /SamsungBrowser\/(\d+)/], ['Opera', /OPR\/(\d+)/], ['Firefox', /(?:Firefox|FxiOS)\/(\d+)/], ['Chrome', /(?:Chrome|CriOS)\/(\d+)/], ['Safari', /Version\/(\d+).*Safari/]];
+    var name = 'Other', i, m;
+    for (i = 0; i < list.length; i++) { m = ua.match(list[i][1]); if (m) { name = list[i][0] + ' ' + m[1]; break; } }
+    var os = /Android/.test(ua) ? 'Android' : /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? 'iOS' : /Windows/.test(ua) ? 'Windows' : /Macintosh/.test(ua) ? 'Mac' : /CrOS/.test(ua) ? 'ChromeOS' : /Linux/.test(ua) ? 'Linux' : 'Other';
+    return name + ' ' + os;
+  }
+  function send(message, source, stack) {
+    /* busy: anything that fires while a report is being built or sent came from the reporter, so it is not reported. */
+    if (busy) return;
+    busy = true;
+    try {
+      if (sent < MAX_REPORTS && navigator.onLine !== false) {
+        /* If the saved names can't be read, the report is dropped here rather than sent unscrubbed. */
+        var words = savedWords(), msg = clean(message, words, 500);
+        if (!Object.prototype.hasOwnProperty.call(seen, msg)) {
+          seen[msg] = true; sent++;
+          var p = fetch(CRASH_URL, {
+            method: 'POST',
+            headers: { apikey: CRASH_KEY, Authorization: 'Bearer ' + CRASH_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ p_message: msg, p_source: source, p_stack: clean(stack, words, 3000), p_version: VERSION, p_browser: browserLabel() })
+          });
+          if (p && p.catch) p.catch(ignore);
+        }
+      }
+    } catch (e) {}
+    busy = false;
+  }
+  function stackOf(err) { return err && typeof err.stack === 'string' ? err.stack : ''; }
+  try {
+    window.addEventListener('error', function (ev) {
+      try {
+        var message = String(ev.message || ''), stack = stackOf(ev.error);
+        if (!message || /^(?:uncaught )?script error\.?$/i.test(message.trim()) || /-extension:\/\//i.test(stack)) return;
+        var path = ownPath(ev.filename);
+        if (path) send(message, path + ':' + (ev.lineno || 0), stack);
+      } catch (e) {}
+    });
+    window.addEventListener('unhandledrejection', function (ev) {
+      try {
+        /* A rejection names no file, so its top stack frame decides. With no stack, it can't be shown to be the game's. */
+        var err = ev.reason, stack = stackOf(err);
+        var top = stack.slice(0, 8000).match(/^\s*(?:at\s+)?(?:.*?[@(\s])?([a-z][a-z0-9+.-]*:\/\/[^\s)]+?):(\d+)(?::\d+)?\)?\s*$/im);
+        if (!top || /-extension:\/\//i.test(stack)) return;
+        var path = ownPath(top[1]);
+        if (path) send((err.name || 'Error') + ': ' + err.message, path + ':' + top[2], stack);
+      } catch (e) {}
+    });
+    /* ?crashtest=1 throws one test error shortly after load, in its own timer, so play carries on. */
+    if (/[?&]crashtest=1(?:&|$)/.test(location.search)) {
+      window.addEventListener('load', function () { setTimeout(function () { throw new Error('Head Rush crash test'); }, 1000); });
+    }
+  } catch (e) {}
+})();
+</script>
 <script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","three/addons/":"./vendor/addons/"}}</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}</style>
 </head>

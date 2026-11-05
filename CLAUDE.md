@@ -39,6 +39,7 @@ All suites pass, the change is committed on your task branch, and your summary s
 - **Readability never breaks:** low bars are always orange (`#ff8a2a`) and high bars always blue (`#3fa9ff`), in every arena.
 - **Fairness:** the reaction-gap rule in the brief (section 2) must hold. Bars never arrive closer than the difficulty's gap.
 - **Kids and privacy:** nickname only. No email, phone, location, photos or contacts. No ads, no tracking, and no new third-party services or network calls. If stored data changes, `privacy.html` must change too.
+  The `log_crash` call to the game's existing Supabase is the one approved exception, for crash reports only.
 - **Touch targets are at least 48px tall.**
 - **Original names, art and audio only.** Nothing from the game that inspired it.
 
