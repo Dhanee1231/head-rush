@@ -169,6 +169,12 @@ Endless; best time per arena and difficulty (Medium is the "real" record shown o
 - Coins = seconds ÷ 2 + close points + bonuses (+15); XP = 1.5 × seconds + 3 × close.
 - Resets at midnight Eastern. Yesterday's winner gets a crown on the menu.
 
+### Tour (added on the web after this brief was first written)
+All six arenas back to back in arena order, **20 s each**, on **one set of 3 hearts**; hearts and combo carry over. Each stage is a one-runner Party round (no bots, power-ups on) whose starting bar speed is × (1 + 0.08 × stage index), with a blue bar joining at 4 s and, from the fourth arena on, an orange bar at 11 s (both still obey the reaction-gap rule). Clear all six for "Tour complete"; no hits at all is a "Flawless Tour" and counts as a perfect round. Coins = 15 × arenas cleared + 40 for finishing + close points + bonuses; XP = seconds + 10 × arenas + 3 × close. Best result per difficulty is kept on the phone only; a Tour is not sent to the round log. Reference: `startTour()`, `tourArm()`, `showTourEnd()`.
+
+### Twists (Party and Survival, optional)
+Picked on the menu; Classic is the default and plays exactly as before. **One Heart** (everyone starts on 1 heart) · **Turbo** (bars 20% faster) · **Crowded** (a second bar joins at 5 s) · **Blink** (bars blink like Midnight Carnival's in any arena) · **Moon Jump** (0.8 s jumps in any arena). They are applied to the round after it is set up, like the Daily Challenge twists. Reference: `TWISTS`, `applyTwist()`.
+
 ### Party Rooms (online)
 See section 7.
 

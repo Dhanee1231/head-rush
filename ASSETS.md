@@ -11,6 +11,8 @@ Everything the HD renderer (`hd3d.js`) shows is generated at runtime in code; th
 | Runner bodies, arms, mittens, sneakers, faces | three.js primitives and lathe geometry; faces drawn on canvas (`faceTextures()`) |
 | Crystals, basalt spires, rooftop props | Procedural geometry (`crystalGeo()`, `crag()`, `mergeBoxes()`) |
 | Flames, reflections, glows, light pools | Canvas gradients |
+| Living skies (Neon searchlights and sky traffic, Lava eruptions, Frost aurora shimmer and shooting stars, Gear window rays, Orbit shooting stars and twinkles, Carnival fireworks) | Canvas gradients, one small shader and instanced quads in `hd3d.js` (`SKYSHOW`, `makeBeam()`, `makeStreaks()`), High tiers only, own seeded RNG |
+| Round feel (speed-up wave, last-heart edge pulse, combo sparkles, winner's spotlight, hub glow) | Primitives and the grade pass in `hd3d.js` (`feelStep()`); reads the game state only |
 | Environment lighting | three.js `RoomEnvironment` (MIT, vendored with three.js) |
 
 All art is original. Nothing is taken from Fuzion Frenzy or any other game, and no paid or third-party art assets are used.

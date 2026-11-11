@@ -200,11 +200,11 @@ function exactColor(hex, exposure) {
   }));
 }
 const GradeShader = {
-  uniforms: { tDiffuse: { value: null }, toneMappingExposure: { value: 1 }, uVig: { value: 0.45 }, uTint: { value: new THREE.Color(0, 0, 0) }, uRes: { value: new THREE.Vector2(1, 1) } },
+  uniforms: { tDiffuse: { value: null }, toneMappingExposure: { value: 1 }, uVig: { value: 0.45 }, uDanger: { value: 0 }, uTint: { value: new THREE.Color(0, 0, 0) }, uRes: { value: new THREE.Vector2(1, 1) } },
   vertexShader: `precision highp float; uniform mat4 modelViewMatrix; uniform mat4 projectionMatrix; attribute vec3 position; attribute vec2 uv; varying vec2 vUv;
     void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 ); }`,
   fragmentShader: `precision highp float;
-    uniform sampler2D tDiffuse; uniform float uVig; uniform vec3 uTint; uniform vec2 uRes; varying vec2 vUv;
+    uniform sampler2D tDiffuse; uniform float uVig; uniform float uDanger; uniform vec3 uTint; uniform vec2 uRes; varying vec2 vUv;
     #include <tonemapping_pars_fragment>
     #include <colorspace_pars_fragment>
     void main() {
@@ -215,6 +215,7 @@ const GradeShader = {
       c.rgb += uTint * pow( 1.0 - l, 6.0 );
       vec2 d = ( vUv - 0.5 ) * vec2( uRes.x / uRes.y, 1.0 ) * 1.6;
       c.rgb *= 1.0 - uVig * smoothstep( 0.45, 1.25, dot( d, d ) );
+      c.rgb = mix( c.rgb, vec3( 0.86, 0.06, 0.16 ), uDanger * smoothstep( 0.3, 1.05, d.y * d.y + 0.35 * d.x * d.x ) ); /* top and bottom edges only: bars crossing the sides keep their colours */
       c.rgb += ( fract( sin( dot( gl_FragCoord.xy, vec2( 12.9898, 78.233 ) ) ) * 43758.5453 ) - 0.5 ) / 255.0;
       gl_FragColor = c;
     }`
@@ -1091,6 +1092,8 @@ function setArena(g) {
     if (pack.embers) root.add(pack.embers);
     if (pack.snow) root.add(pack.snow);
     if (pack.bulbs) root.add(pack.bulbs);
+    const show = !lo() && SKYSHOW[A.remixOf || A.id];
+    if (show) { pack.show = show(); root.add(pack.show.group); }
   }
   curArena = pack;
   scene.add(pack.root);
@@ -2221,6 +2224,209 @@ function syncPool(pool, list, make, keyFn) {
   }
 }
 
+/* ---------- living skies and round feel (High tiers only) ----------
+   Far-away motion behind each arena, plus a few reactions to the round (speed-up wave, last-heart pulse, combo sparkle,
+   winner's spotlight). All of it only reads the game state: nothing here feeds back into the rules.
+   Sky lights stay dim, far and off the bar colours, so obstacles and runners remain the brightest things on screen. */
+const REDUCE_MQ = (() => { try { return window.matchMedia('(prefers-reduced-motion: reduce)'); } catch (e) { return null; } })();
+function calm() { return !!(HR3D.reduce || (REDUCE_MQ && REDUCE_MQ.matches)); }
+/* its own random stream, so the sky never draws from Math.random (seeded rounds stay seeded) */
+let sseed = 0x51f15e7;
+const srnd = () => { sseed = (sseed * 1664525 + 1013904223) >>> 0; return sseed / 4294967296; };
+const SKY_Z = -52;
+let beamT, streakHT;
+function beamTex() {
+  return beamT || (beamT = canvasTex(64, 256, (x, w, h) => {
+    const g = x.createLinearGradient(0, h, 0, 0); g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(0.35, 'rgba(255,255,255,0.4)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g; x.fillRect(0, 0, w, h);
+    const g2 = x.createLinearGradient(0, 0, w, 0); g2.addColorStop(0, 'rgba(0,0,0,1)'); g2.addColorStop(0.5, 'rgba(0,0,0,0)'); g2.addColorStop(1, 'rgba(0,0,0,1)');
+    x.globalCompositeOperation = 'destination-out'; x.fillStyle = g2; x.fillRect(0, 0, w, h);
+  }));
+}
+function streakTexH() {
+  return streakHT || (streakHT = canvasTex(128, 16, (x, w, h) => {
+    const g = x.createLinearGradient(0, 0, w, 0); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.85, 'rgba(255,255,255,0.8)'); g.addColorStop(1, 'rgba(255,255,255,1)');
+    x.fillStyle = g; x.fillRect(0, 0, w, h);
+    const g2 = x.createLinearGradient(0, 0, 0, h); g2.addColorStop(0, 'rgba(0,0,0,1)'); g2.addColorStop(0.5, 'rgba(0,0,0,0)'); g2.addColorStop(1, 'rgba(0,0,0,1)');
+    x.globalCompositeOperation = 'destination-out'; x.fillStyle = g2; x.fillRect(0, 0, w, h);
+  }));
+}
+/* a soft shaft of light standing on its base: searchlights, window rays, the winner's spotlight */
+function makeBeam(color, k, w, h) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), new THREE.MeshBasicMaterial({ map: beamTex(), color: new THREE.Color(color).multiplyScalar(k), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, side: THREE.DoubleSide }));
+  m.scale.set(w, h, 1); m.renderOrder = -4; m.frustumCulled = false; m.userData.k = k; m.userData.col = new THREE.Color(color);
+  return m;
+}
+/* thin moving lights (sky traffic, shooting stars, rockets): one additive InstancedMesh, head at the origin, tail behind */
+function makeStreaks(cap) {
+  const m = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).translate(-0.5, 0, 0), new THREE.MeshBasicMaterial({ map: streakTexH(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, side: THREE.DoubleSide }), cap);
+  m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.frustumCulled = false; m.count = 0; m.renderOrder = -3;
+  for (let i = 0; i < cap; i++) m.setColorAt(i, tmpC.setRGB(0, 0, 0));
+  m.userData.ps = []; return m;
+}
+function streak(m, o) { const ps = m.userData.ps; if (ps.length < m.instanceMatrix.count) ps.push(Object.assign({ age: 0, life: 1, vx: 0, vy: 0, len: 1, w: 0.08, z: SKY_Z, wrap: 0 }, o)); }
+function stepStreaks(m, dt) {
+  const ps = m.userData.ps; let n = 0;
+  for (let i = 0; i < ps.length; i++) {
+    const p = ps[i]; p.age += dt; p.x += p.vx * dt; p.y += p.vy * dt;
+    let a = 1;
+    if (p.wrap) { if (p.x > p.wrap) p.x -= p.wrap * 2; else if (p.x < -p.wrap) p.x += p.wrap * 2; a = Math.min(1, (p.wrap - Math.abs(p.x)) / 2); }
+    else { if (p.age >= p.life) { if (p.done) p.done(p); ps.splice(i--, 1); continue; } const k = p.age / p.life; a = Math.min(1, k * 8) * Math.min(1, (1 - k) * 4); }
+    tmpQ.setFromAxisAngle(Z_AXIS, Math.atan2(p.vy, p.vx));
+    tmpM.compose(tmpV.set(p.x, p.y, p.z), tmpQ, tmpS.set(p.len, p.w, 1)); m.setMatrixAt(n, tmpM); m.setColorAt(n, tmpC.copy(p.col).multiplyScalar(Math.max(0, a))); n++;
+  }
+  m.count = n; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
+}
+function shootingStar(st, col) {
+  const d = srnd() < 0.5 ? -1 : 1;
+  streak(st, { x: -d * (2 + srnd() * 9), y: -5.5 + srnd() * 2.5, vx: d * (9 + srnd() * 5), vy: -(1.5 + srnd() * 2), len: 2.2 + srnd() * 1.6, w: 0.07, life: 0.55 + srnd() * 0.3, col });
+}
+const AuroraShader = {
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 ); }',
+  fragmentShader: `uniform float uT; uniform float uK; varying vec2 vUv;
+    void main() {
+      float x = vUv.x, v = vUv.y;
+      float sway = sin( x * 6.0 + uT * 0.21 ) * 0.08 + sin( x * 17.0 - uT * 0.13 ) * 0.03;
+      float band = smoothstep( 0.15, 0.95, 0.5 + 0.5 * sin( x * 9.0 + uT * 0.3 + sin( x * 4.0 - uT * 0.17 ) * 1.7 ) );
+      float rays = 0.55 + 0.45 * sin( x * 120.0 + uT * 0.9 + sin( x * 31.0 + uT * 0.2 ) * 3.0 );
+      float y = v + sway;
+      float env = smoothstep( 0.02, 0.22, y ) * pow( max( 0.0, 1.0 - y ), 1.6 );
+      float edge = smoothstep( 0.0, 0.18, x ) * smoothstep( 1.0, 0.82, x );
+      vec3 col = mix( vec3( 0.12, 1.0, 0.62 ), vec3( 0.5, 0.32, 1.0 ), smoothstep( 0.1, 0.8, y ) );
+      gl_FragColor = vec4( col * band * rays * env * edge * uK, 1.0 );
+    }`
+};
+const SKYSHOW = {
+  neon() {
+    const g = new THREE.Group(), st = makeStreaks(24); g.add(st);
+    const beams = [[-9, 0x3fd0ff, 0.6], [-3.5, 0xff4fa3, 2.4], [3, 0xb48cff, 4.1], [8.5, 0x3fd0ff, 5.3]].map(b => { const m = makeBeam(b[1], 0.2, 2.2, 17); m.position.set(b[0], -11, SKY_Z - 2); m.userData.ph = b[2]; g.add(m); return m; });
+    /* hover traffic: two sky lanes between the towers, warm headlights one way, red tail lights the other */
+    const warm = new THREE.Color(0xffe2b0).multiplyScalar(0.7), red = new THREE.Color(0xff5a7a).multiplyScalar(0.6);
+    for (let i = 0; i < 9; i++) streak(st, { x: -14 + srnd() * 28, y: -8.3 + srnd() * 0.25, vx: 2.6 + srnd() * 1.6, len: 1.1 + srnd() * 0.6, w: 0.09, col: warm, wrap: 14 });
+    for (let i = 0; i < 7; i++) streak(st, { x: -14 + srnd() * 28, y: -6.5 + srnd() * 0.25, vx: -(2.0 + srnd() * 1.4), len: 0.9 + srnd() * 0.5, w: 0.08, col: red, wrap: 14 });
+    return { group: g, update(t, dt, still) { beams.forEach(m => { m.rotation.z = still ? Math.sin(m.userData.ph) * 0.3 : Math.sin(t * 0.21 + m.userData.ph) * 0.42; }); stepStreaks(st, still ? 0 : dt); } };
+  },
+  lava() {
+    const g = new THREE.Group(), pf = makePuffs(140, softTex()); pf.renderOrder = -3; g.add(pf);
+    let next = 1.5; const hot = new THREE.Color(1, 0.42, 0.08), glow = new THREE.Color(0.42, 0.09, 0.015);
+    return { group: g, update(t, dt, still) {
+      if (still) return;
+      next -= dt;
+      if (next <= 0) {
+        next = 2.2 + srnd() * 3.5;
+        const x = -12 + srnd() * 24, y = -10.6 + srnd() * 1.2, n = 12 + Math.floor(srnd() * 8);
+        puff(pf, { x, y: y + 0.5, z: SKY_Z, life: 1.1, size: 4.5, grow: 0.5, col: glow });
+        for (let k = 0; k < n; k++) puff(pf, { x, y, z: SKY_Z, vx: (srnd() - 0.5) * 2.6, vy: 3.2 + srnd() * 3.4, g: 3.4, life: 1.5 + srnd() * 0.9, size: 0.3 + srnd() * 0.2, grow: -0.5, col: hot });
+      }
+      stepPuffs(pf, dt);
+    } };
+  },
+  frost() {
+    const g = new THREE.Group(), st = makeStreaks(6); g.add(st);
+    const mat = new THREE.ShaderMaterial({ uniforms: { uT: { value: 0 }, uK: { value: 0.3 } }, vertexShader: AuroraShader.vertexShader, fragmentShader: AuroraShader.fragmentShader, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+    const au = new THREE.Mesh(new THREE.PlaneGeometry(36, 8.5), mat); au.position.set(0, -5.2, SKY_Z - 4); au.renderOrder = -4; au.frustumCulled = false; g.add(au);
+    let next = 3; const ice = new THREE.Color(0.75, 0.9, 1);
+    return { group: g, update(t, dt, still) {
+      mat.uniforms.uT.value = still ? 0 : t;
+      if (still) return;
+      next -= dt; if (next <= 0) { next = 4 + srnd() * 6; shootingStar(st, ice); }
+      stepStreaks(st, dt);
+    } };
+  },
+  gear() {
+    /* warm shafts falling from the clock window through the dusty hall */
+    const g = new THREE.Group();
+    const rays = [[-0.5, 1.6, 0.2], [-0.24, 1.2, 1.7], [0.04, 1.9, 3.1], [0.3, 1.3, 4.4], [0.54, 1.5, 5.6]].map(r => { const m = makeBeam(0xffb060, 0.075, r[1], 15); m.position.set(0, 2.5, SKY_Z + 6); m.rotation.z = Math.PI + r[0]; m.userData.a = r[0]; m.userData.ph = r[2]; g.add(m); return m; });
+    return { group: g, update(t, dt, still) { rays.forEach(m => { const f = still ? 1 : 0.75 + 0.25 * Math.sin(t * 0.5 + m.userData.ph); m.material.color.copy(m.userData.col).multiplyScalar(m.userData.k * f); if (!still) m.rotation.z = Math.PI + m.userData.a + Math.sin(t * 0.12 + m.userData.ph) * 0.03; }); } };
+  },
+  orbit() {
+    const g = new THREE.Group(), st = makeStreaks(8), pf = makePuffs(40, softTex()); pf.renderOrder = -3; g.add(st); g.add(pf);
+    let next = 2, tw = 0; const white = new THREE.Color(0.85, 0.9, 1), star = new THREE.Color(0.55, 0.6, 0.8);
+    return { group: g, update(t, dt, still) {
+      if (still) return;
+      next -= dt; if (next <= 0) { next = 2.5 + srnd() * 4; shootingStar(st, white); }
+      tw -= dt; if (tw <= 0) { tw = 0.12; puff(pf, { x: -15 + srnd() * 30, y: -12 + srnd() * 10, z: SKY_Z, life: 0.9 + srnd() * 0.8, size: 0.3 + srnd() * 0.3, grow: 0.2, col: star }); }
+      stepStreaks(st, dt); stepPuffs(pf, dt);
+    } };
+  },
+  carnival() {
+    /* fireworks over the fairground: a rocket trail, then a burst that droops and fades */
+    const g = new THREE.Group(), st = makeStreaks(6), pf = makePuffs(200, softTex()); pf.renderOrder = -3; g.add(st); g.add(pf);
+    const cols = [0xffd890, 0xff7ad0, 0x7dffc8, 0xb48cff, 0xfff4d8].map(c => new THREE.Color(c));
+    let next = 1;
+    const burst = (p) => {
+      const c = cols[Math.floor(srnd() * cols.length)], n = 24 + Math.floor(srnd() * 10), sp = 3.2 + srnd() * 1.6;
+      puff(pf, { x: p.x, y: p.y, z: SKY_Z, life: 0.35, size: 4.5, grow: 0.6, col: c.clone().multiplyScalar(0.4) });
+      for (let k = 0; k < n; k++) { const a = k / n * TAU + srnd() * 0.3, s = sp * (0.75 + srnd() * 0.35); puff(pf, { x: p.x, y: p.y, z: SKY_Z, vx: Math.cos(a) * s, vy: Math.sin(a) * s, g: 1.5, drag: 1.3, life: 1.1 + srnd() * 0.6, size: 0.42, grow: -0.6, col: c }); }
+    };
+    return { group: g, update(t, dt, still) {
+      if (still) return;
+      next -= dt;
+      if (next <= 0) { next = 1.6 + srnd() * 2.6; const rise = 0.7 + srnd() * 0.3, y1 = -8.5 + srnd() * 4.5; streak(st, { x: -12 + srnd() * 24, y: y1 - 9 * rise, vx: (srnd() - 0.5) * 0.6, vy: 9, len: 1.2, w: 0.07, life: rise, col: cols[4].clone().multiplyScalar(0.5), done: burst }); }
+      stepStreaks(st, dt); stepPuffs(pf, dt);
+    } };
+  }
+};
+
+/* round feel: reads the game state once a frame */
+const FEEL = { lastT: null, level: 0, hearts: 3, maxHearts: 3, flash: 0, wave: 0, sparkAcc: 0, win: 0 };
+let waveMesh, hubBeam, winBeam;
+function comboMultOf(run) { return run >= 30 ? 5 : run >= 20 ? 4 : run >= 12 ? 3 : run >= 6 ? 2 : 1; }
+function initFeel() {
+  waveMesh = new THREE.Mesh(new THREE.RingGeometry(0.968, 1, 128).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff1c9).multiplyScalar(1.6), transparent: true, depthWrite: false, opacity: 0, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+  waveMesh.position.y = 0.022; waveMesh.renderOrder = 2; waveMesh.visible = false; scene.add(waveMesh);
+  const cone = (rTop, rBot, h) => new THREE.CylinderGeometry(rTop, rBot, h, 32, 1, true).translate(0, h / 2, 0);
+  const fadeUp = canvasTex(8, 128, (x, w, h) => { const g = x.createLinearGradient(0, h, 0, 0); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.5, 'rgba(255,255,255,0.35)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, w, h); });
+  hubBeam = new THREE.Mesh(cone(0.4, 0.3, 1.9), new THREE.MeshBasicMaterial({ map: fadeUp, color: 0xffe2a0, transparent: true, depthWrite: false, opacity: 0.045, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }));
+  hubBeam.position.y = 1.74; hubBeam.renderOrder = 3; scene.add(hubBeam);
+  const fadeDown = canvasTex(8, 128, (x, w, h) => { const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.6, 'rgba(255,255,255,0.45)'); g.addColorStop(1, 'rgba(255,255,255,1)'); x.fillStyle = g; x.fillRect(0, 0, w, h); });
+  winBeam = new THREE.Mesh(cone(0.35, 0.95, 9), new THREE.MeshBasicMaterial({ map: fadeDown, color: 0xffe9a8, transparent: true, depthWrite: false, opacity: 0, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }));
+  winBeam.renderOrder = 3; winBeam.visible = false; scene.add(winBeam);
+}
+const SPARKLE = [new THREE.Color(0xffd23f), new THREE.Color(0xfff6d0)];
+function feelStep(g, V, now, dt) {
+  if (!waveMesh) initFeel();
+  const you = g.players[0], t = g.t, still = calm(), on = quality.level >= 2 && !HR3D.preview;
+  if (FEEL.lastT === null || t < FEEL.lastT - 0.5) { FEEL.level = g.level || 0; FEEL.hearts = FEEL.maxHearts = you.hearts; FEEL.flash = 0; FEEL.wave = 0; FEEL.win = 0; }
+  FEEL.lastT = t;
+  /* speed-up: a wave rolls out from the hub when the bars get faster or another one joins */
+  if ((g.level || 0) > FEEL.level) { FEEL.level = g.level; if (on && t > 0 && !g.over) { FEEL.wave = 1; if (!still) punch(0.02); } }
+  if (FEEL.wave > 0) {
+    FEEL.wave = Math.max(0, FEEL.wave - dt / 0.75);
+    const k = 1 - FEEL.wave, e = 1 - Math.pow(1 - k, 2.2);
+    waveMesh.visible = on && FEEL.wave > 0; waveMesh.scale.setScalar(0.8 + e * (V.edge - 0.6)); waveMesh.material.opacity = Math.pow(1 - k, 1.2) * 0.8;
+  } else waveMesh.visible = false;
+  hubBeam.visible = on;
+  hubBeam.material.opacity = 0.045 + 0.3 * FEEL.wave + (still ? 0 : 0.02 * Math.sin(now * 2.4));
+  /* hit flash and last-heart pulse: a red edge on the picture. The bars' own colours near the runner are untouched. */
+  if (you.hearts < FEEL.hearts && t > 0) FEEL.flash = 1;
+  FEEL.hearts = you.hearts; FEEL.maxHearts = Math.max(FEEL.maxHearts, you.hearts);
+  FEEL.flash *= Math.pow(0.003, dt);
+  let danger = FEEL.flash * (still ? 0.3 : 0.6);
+  if (on && you.hearts === 1 && FEEL.maxHearts > 1 && !you.out && !g.over && t > 0) {
+    const ph = (now * 1.15) % 1, beat = still ? 0.5 : Math.max(Math.exp(-ph * 9), 0.7 * Math.exp(-Math.abs(ph - 0.22) * 14));
+    danger = Math.max(danger, 0.1 + 0.2 * beat);
+  }
+  gradePass.uniforms.uDanger.value = on ? danger : 0;
+  if (!on) { winBeam.visible = false; return; }
+  const R = V.TR + (G_API.runnerR(you) - V.mid) * V.SC, f = you.angle + g.rot, x = R * Math.cos(f), z = R * Math.sin(f);
+  /* combo: gold sparkles climb off your runner, more of them at each multiplier */
+  const m = comboMultOf(g.run || 0);
+  if (m > 1 && !you.out && !g.over && t > 0 && !still) {
+    FEEL.sparkAcc += dt * (m - 1) * 5;
+    while (FEEL.sparkAcc > 1) {
+      FEEL.sparkAcc -= 1;
+      const a = srnd() * TAU, rr = 0.38 + srnd() * 0.3;
+      puff(fxPuffs, { x: x + Math.cos(a) * rr, y: 0.15 + srnd() * 0.6, z: z + Math.sin(a) * rr, vy: 0.9 + srnd() * 0.9, life: 0.45 + srnd() * 0.3, size: 0.09 + 0.015 * m, grow: -0.6, col: SPARKLE[srnd() < 0.5 ? 0 : 1] });
+    }
+  } else FEEL.sparkAcc = 0;
+  /* a win: a spotlight finds your runner */
+  const won = g.over && (g.result === 'win' || g.result === 'clear') && !you.out;
+  FEEL.win += ((won ? 1 : 0) - FEEL.win) * Math.min(1, dt * 4);
+  winBeam.visible = FEEL.win > 0.01;
+  if (winBeam.visible) { winBeam.position.set(x, 0.02, z); winBeam.material.opacity = 0.2 * FEEL.win; }
+}
+
 HR3D.attach = function (api) { G_API = api; };
 HR3D.setQuality = function (lv) { setQuality(lv); try { localStorage.setItem('headrush.hdq', String(lv)); } catch (e) {} };
 HR3D.quality = () => quality.level;
@@ -2292,6 +2498,8 @@ HR3D.render = function (g, view) {
   const t = g.t, A = g.arena;
   curArena.core.floor.rotation.y = -g.rot;
   if (curArena.sc.update) curArena.sc.update(now);
+  const fdt = Math.min(0.05, view.dt || 0.016);
+  if (curArena.show) { curArena.show.group.visible = quality.level >= 2; if (quality.level >= 2) curArena.show.update(now, fdt, calm()); }
   // runners
   syncPool(runnerPool, g.players, p => makeRunner(p), p => sigOf(p));
   partsBegin();
@@ -2314,6 +2522,7 @@ HR3D.render = function (g, view) {
   youRing.userData.pool.material.opacity = 0.8 + 0.2 * Math.sin(now * 4);
   const you = g.players[0];
   youRing.visible = !HR3D.preview && !you.out;
+  feelStep(g, V, now, fdt);
   if (!you.out) { const R = V.TR + (G_API.runnerR(you) - V.mid) * V.SC, f = you.angle + g.rot; youRing.position.set(R * Math.cos(f), 0.02, R * Math.sin(f)); }
   // slow-mo tint via exposure (set before the bars: their cores are compensated for the current exposure)
   renderer.toneMappingExposure = (curArena.sc.exposure || 1) * 0.9 * (g.t < g.slowUntil ? 0.85 : 1);
