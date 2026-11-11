@@ -18,7 +18,7 @@
    key must equal SB_URL and SB_KEY in the game script; tests/crashreport.mjs fails if they drift. */
 (function () {
   'use strict';
-  var VERSION = 12, MAX_REPORTS = 5;
+  var VERSION = 13, MAX_REPORTS = 5;
   var CRASH_URL = 'https://yxmdlqmmzozghquqlnss.supabase.co/rest/v1/rpc/log_crash';
   var CRASH_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl4bWRscW1tem96Z2hxdXFsbnNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI5MzcyMTUsImV4cCI6MjEwODUxMzIxNX0.lLbUrD2-n-Xt45RYRM7TiiCKkWNYU6wNmOebGlUcSx8';
   var sent = 0, seen = {}, busy = false;
@@ -362,6 +362,26 @@ h1 .rush { color: var(--you); }
 @media (prefers-reduced-motion: reduce) { .ctl.teach { animation: none; box-shadow: 0 0 0 4px rgba(255,210,63,.7); } }
 .perfect-badge { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px 5px 8px; border-radius: 999px; background: linear-gradient(135deg, #ffe07a, #f2b632); color: #191a33; font-family: var(--font-display); font-size: 17px; letter-spacing: .03em; box-shadow: 0 0 0 2px rgba(255,210,63,.35), 0 4px 14px rgba(242,182,50,.35); }
 .perfect-badge svg { width: 18px; height: 18px; }
+/* Survival medals: earned from best times the game already keeps. */
+.medal-box { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0; font-size: 14px; font-weight: 700; line-height: 1.3; color: var(--muted); }
+.medal-box b { color: var(--ink); }
+.medals { display: inline-flex; gap: 6px; flex: none; }
+.medal { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; border: 2px dashed var(--line); color: transparent; font-size: 13px; line-height: 1; }
+.medal.on { border: 2px solid rgba(255,255,255,.6); color: #191a33; box-shadow: inset 0 -3px 0 rgba(0,0,0,.18), 0 2px 6px rgba(0,0,0,.35); }
+.medal.bronze.on, .am i.bronze { background: linear-gradient(135deg, #f0b27a, #b9692e); }
+.medal.silver.on, .am i.silver { background: linear-gradient(135deg, #f7f9fd, #9aa5bd); }
+.medal.gold.on, .am i.gold { background: linear-gradient(135deg, #ffe07a, #f2b632); }
+.medal.diamond.on, .am i.diamond { background: linear-gradient(135deg, #f1fdff, #9fe3f5 55%, #cdbcff); }
+.medal.fresh { animation: medalPop .7s cubic-bezier(.2, 1.6, .4, 1) .35s both; }
+@keyframes medalPop { 0% { transform: scale(.2) rotate(-40deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
+.am { display: flex; gap: 3px; }
+.am[hidden] { display: none; }
+.am i { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.alive.hot { animation: chasePulse .45s ease-in-out infinite alternate; }
+.alive.hot, .alive.hot b, .alive.gold, .alive.gold b { color: var(--you); }
+@keyframes chasePulse { from { transform: none; } to { transform: scale(1.08); } }
+.alive { transform-origin: right center; }
+@media (prefers-reduced-motion: reduce) { .medal.fresh, .alive.hot { animation: none; } }
 #bestLine:empty { display: none; }
 .howto summary {
   cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; min-height: 48px;
@@ -552,7 +572,7 @@ h1 .rush { color: var(--you); }
 body.char-open #lockerScreen {
   flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 0; padding: 0; overflow: hidden; background: #141628;
 }
-body.char-open .char-stage, body.char-open .char-sheet { width: 100%; }
+body.char-open .char-stage, body.char-open .char-sheet { width: 100%; box-sizing: border-box; }
 body.hd3d.char-open #lockerScreen {
   background: linear-gradient(180deg, rgba(20,22,40,0) 0%, rgba(20,22,40,0) 30%, rgba(20,22,40,0.78) 40%, #141628 48%);
 }
@@ -593,7 +613,10 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
   padding: 14px 12px max(14px, env(safe-area-inset-bottom, 0px));
   display: flex; flex-direction: column; gap: 10px;
 }
-.char-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.char-tabs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
+.trail-sw { width: 72px; height: 60px; margin-bottom: 8px; border-radius: 12px; background: #11122a; position: relative; overflow: hidden; }
+.trail-sw i { position: absolute; border-radius: 50%; }
+.trail-sw.none::after { content: ''; position: absolute; left: 14px; right: 14px; top: 29px; height: 2px; background: var(--line); transform: rotate(-30deg); }
 .char-tab {
   min-height: 64px; border: 0; border-radius: 14px; background: var(--bg); color: var(--muted);
   font-family: var(--font-display); font-size: 15px; line-height: 1.05; letter-spacing: 0; cursor: pointer; padding: 4px 2px;
@@ -699,7 +722,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.4-4.5-9.6-9.1C.8 8.4 3 4.6 6.6 4.6c2 0 3.5 1.1 4.4 2.5.9-1.4 2.4-2.5 4.4-2.5 3.6 0 5.8 3.8 4.2 7.3C19.4 16.5 12 21 12 21z"/></svg>
     </div>
     <div class="timer" id="timer">1:30</div>
-    <div class="alive"><span id="hudPre"></span><b id="aliveNum">8</b><span id="hudPost"> left</span></div>
+    <div class="alive" id="aliveBox"><span id="hudPre"></span><b id="aliveNum">8</b><span id="hudPost"> left</span></div>
   </div>
 
   <div class="stage" id="stage">
@@ -796,6 +819,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       </ul>
       </details>
       <p class="note" id="startBest">Hold your phone upright and turn the sound on for the full bonk.</p>
+      <div class="medal-box" id="menuMedals" hidden><span class="medals" id="menuMedalRow" aria-hidden="true"></span><span id="menuMedalText"></span></div>
       <div class="picker">
         <div class="picker-label">Graphics</div>
         <div class="modes" role="group" aria-label="Graphics">
@@ -829,6 +853,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       <div class="eyebrow" id="endEyebrow">Round over</div>
       <h2 class="result" id="endTitle">You won!</h2>
       <div class="perfect-badge" id="perfectBadge" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9z" fill="#191a33"/></svg>Perfect round</div>
+      <div class="medal-box" id="medalBox" hidden><span class="medals" id="endMedals" aria-hidden="true"></span><span id="medalText"></span></div>
       <p class="sub" id="endSub">Last runner standing.</p>
       <ol class="hot-podium" id="hotPodium" hidden></ol>
       <div class="match-box" id="matchBox" hidden>
@@ -859,6 +884,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
         <button class="btn ghost" id="skyHome" type="button" hidden>Home</button>
         <button class="btn ghost" id="retryBtn" type="button" hidden>Replay level</button>
         <button class="btn ghost" id="replayBtn" type="button" hidden>Watch knockout replay</button>
+        <button class="btn friends" id="beatBtn" type="button" hidden>Challenge a friend</button>
         <button class="btn ghost" id="shareBtn" type="button">Share my result</button>
         <button class="btn ghost" id="clipBtn" type="button" hidden>Share a 5-second clip</button>
         <button class="btn friends" id="installBtn" type="button" hidden>Add Head Rush to your home screen</button>
@@ -899,6 +925,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
         <button class="char-tab" type="button" role="tab" id="charTab-eyes" data-slot="eyes" aria-controls="charGrid">Eyes</button>
         <button class="char-tab" type="button" role="tab" id="charTab-hat" data-slot="hat" aria-controls="charGrid">Hat</button>
         <button class="char-tab" type="button" role="tab" id="charTab-extra" data-slot="extra" aria-controls="charGrid">Extras</button>
+        <button class="char-tab" type="button" role="tab" id="charTab-trail" data-slot="trail" aria-controls="charGrid">Trail</button>
       </div>
       <div class="char-grid" id="charGrid" role="tabpanel" aria-labelledby="charTab-body"></div>
       <div class="char-lock" id="charLock" hidden>
@@ -1259,14 +1286,21 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     extra: [
       { id: 'none', name: 'None', free: 1 }, { id: 'glasses', name: 'Round Glasses' }, { id: 'bowtie', name: 'Bow Tie' },
       { id: 'scarf', name: 'Scarf', neck: 1 }, { id: 'visor', name: 'Visor', acc: 'visor', free: 1 }, { id: 'spots', name: 'Spots', acc: 'spots', free: 1 }
+    ],
+    /* A trail of sparks behind your runner and a pop when you land. Colours stay far from the orange and blue bars. */
+    trail: [
+      { id: 'none', name: 'No trail', free: 1, cols: [] }, { id: 'sparkle', name: 'Sparkles', free: 1, cols: ['#fff6d0', '#ffd23f'] },
+      { id: 'fizz', name: 'Berry Fizz', cols: ['#ff7eb6', '#ffd1e6'] }, { id: 'mint', name: 'Mint Breeze', cols: ['#7be0ad', '#e6fff3'] },
+      { id: 'comet', name: 'Comet', cols: ['#ffe07a', '#ffffff', '#f2b632'], big: 1 }, { id: 'candy', name: 'Candy Swirl', cols: ['#ff7eb6', '#c58cff', '#7be0ad', '#fff6d0'] },
+      { id: 'stardust', name: 'Stardust', cols: ['#d9b8ff', '#fff6d0', '#e9e3ff'], big: 1 }, { id: 'diamond', name: 'Diamond Dust', cols: ['#f1fdff', '#d4f6ff', '#cdbcff'], big: 1 }
     ]
   };
-  var LOOK_SLOTS = ['body', 'color', 'eyes', 'hat', 'extra'], LOOK_ITEM = {};
+  var LOOK_SLOTS = ['body', 'color', 'eyes', 'hat', 'extra', 'trail'], LOOK_ITEM = {};
   LOOK_SLOTS.forEach(function (sl) { LOOK_CAT[sl].forEach(function (it) { it.slot = sl; it.key = sl + '.' + it.id; if (it.skin) it.hex = skinById(it.skin).color; LOOK_ITEM[it.key] = it; }); });
   function lookItem(slot, id) { return LOOK_ITEM[slot + '.' + id] || null; }
   function lookKey(id) { return 'headrush.look.v1.' + id; }
   function skinColorId(skin) { return skin === 'sunny' || !skin ? 'sunny' : 'lg-' + skin; }
-  function lookDefaults(p) { var c = skinColorId(skinById(p && p.skin).id); return { body: 'bean', color: c, eyes: 'classic', hat: 'none', hatColor: 'auto', extra: 'none' }; }
+  function lookDefaults(p) { var c = skinColorId(skinById(p && p.skin).id); return { body: 'bean', color: c, eyes: 'classic', hat: 'none', hatColor: 'auto', extra: 'none', trail: 'none' }; }
   function blankLookSave(p) { return { v: 1, look: lookDefaults(p), unl: [], seen: [], pending: [], cnt: { dailyDone: 0, closeTotal: 0, anyWins: 0 } }; }
   function strList(a) { var out = []; (Array.isArray(a) ? a : []).forEach(function (x) { if (typeof x === 'string' && x.length < 40 && out.indexOf(x) < 0) out.push(x); }); return out; }
   /* Right shape or null. Missing or mistyped fields get defaults; unknown string ids are kept as they are. */
@@ -1296,8 +1330,19 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     /* today's skins keep today's level gates, now free; Devil and Gold colours stay with players who already own them */
     { id: 'sk-frost', give: ['color.lg-frost', 'hat.antenna'], k: 'lvl', n: 2 }, { id: 'sk-devil', give: ['hat.horns'], k: 'lvl', n: 2 },
     { id: 'sk-royal', give: ['color.lg-royal', 'hat.oldcrown'], k: 'lvl', n: 3 }, { id: 'sk-ghost', give: ['color.lg-ghost', 'hat.halo'], k: 'lvl', n: 5 },
-    { id: 'sk-champ', give: ['color.lg-champ', 'hat.star'], k: 'lvl', n: 8 }, { id: 'sk-gold', give: ['hat.halo'], k: 'perfect', n: 10 }
+    { id: 'sk-champ', give: ['color.lg-champ', 'hat.star'], k: 'lvl', n: 8 }, { id: 'sk-gold', give: ['hat.halo'], k: 'perfect', n: 10 },
+    /* trails: coins earned in total (coins are never spent) and Survival medals */
+    { id: 'tr-fizz', give: ['trail.fizz'], k: 'coins', n: 400 }, { id: 'tr-mint', give: ['trail.mint'], k: 'medals', n: 3 },
+    { id: 'tr-comet', give: ['trail.comet'], k: 'coins', n: 1500 }, { id: 'tr-candy', give: ['trail.candy'], k: 'medals', n: 8 },
+    { id: 'tr-stardust', give: ['trail.stardust'], k: 'coins', n: 4000 }, { id: 'tr-diamond', give: ['trail.diamond'], k: 'medals', n: 16 }
   ];
+  /* Survival medal times (Bronze, Silver, Gold, Diamond). Here because unlocks are counted when the game loads. */
+  var MEDAL_AT = [20, 45, 75, 105];
+  function medalTotal(p) {
+    var n = 0, sv = p && p.surv && typeof p.surv === 'object' ? p.surv : {};
+    Object.keys(sv).forEach(function (k) { var v = sv[k]; if (typeof v === 'number') MEDAL_AT.forEach(function (at) { if (v >= at) n++; }); });
+    return n;
+  }
   function lookCounter(k, p, s) {
     p = p || {}; s = s || {}; var c = s.cnt || {};
     if (k === 'lvl') { var xp = p.xp || 0; return levelInfo(typeof xp === 'number' && isFinite(xp) ? xp : 0).lvl; }
@@ -1308,6 +1353,8 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     if (k === 'perfect') return p.perfect || 0;
     if (k === 'combo') return p.bestCombo || 0;
     if (k === 'streak') return p.streak && p.streak.n || 0;
+    if (k === 'coins') return Math.floor(p.coins || 0);
+    if (k === 'medals') return medalTotal(p);
     return c[k] || 0;
   }
   /* Adds every earned item that is not in unl yet; returns the newly added item keys (each one only ever once). */
@@ -2834,7 +2881,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     for (var i = 0; i < g.parts.length; i++) {
       var q = g.parts[i], r = Math.sqrt(q.x * q.x + q.y * q.y), ang = Math.atan2(q.y, q.x) + rot;
       var R = r < e0w ? r * (V3.e0 / e0w) : V3.e0 + (r - e0w) * SC3;
-      var age = q.max - q.life, y = 0.45 + age * 1.1 - age * age * 0.8;
+      var age = q.max - q.life, y = q.tr ? 0.16 + age * 0.45 : 0.45 + age * 1.1 - age * age * 0.8;
       var s = P3([R * Math.cos(ang), y, R * Math.sin(ang)]), sz = Math.max(1.5, q.s * 6 * s.k);
       X.globalAlpha = Math.max(0, q.life / q.max); X.fillStyle = q.color;
       X.setTransform(DPR, 0, 0, DPR, DPR * s.x, DPR * s.y); X.rotate(q.rot); X.fillRect(-sz / 2, -sz / 2, sz, sz);
@@ -3287,6 +3334,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     heartEls.forEach(function (el, i) { el.classList.toggle('lost', i >= h); });
   }
   function setAlive() {
+    $('aliveBox').classList.remove('hot', 'gold');
     if (G.hotseat && HOT) { $('hudPre').textContent = 'Turn '; aliveEl.textContent = HOT.turn + 1; $('hudPost').textContent = ' of ' + HOT.kids.length; }
     else if (G.tour && TOUR) { $('hudPre').textContent = 'Stage '; aliveEl.textContent = TOUR.stage + 1; $('hudPost').textContent = ' of ' + ORDER.length; }
     else if (G.mode === 'party' || G.mode === 'room') { $('hudPre').textContent = ''; aliveEl.textContent = G.players.filter(function (p) { return !p.out; }).length; $('hudPost').textContent = ' left'; }
@@ -3314,9 +3362,9 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
   var G = null, running = false;
   var GR = Math.random;
   var DIFFS = {
-    easy: { name: 'Easy', speed: 0.8, ramp: 0.55, bars: [3, 6], survAdds: [30, 60, 100, 140], cap: 2.1, gapT: 0.7, botMiss: 0.05, reward: 0.75, note: 'Slower bars that speed up gently, and fewer extra bars. 0.75× coins and XP.' },
-    medium: { name: 'Medium', speed: 1.05, ramp: 1.2, bars: [2, 4, 6], survAdds: [20, 40, 70, 100, 140], cap: 2.6, gapT: 0.44, botMiss: 0, reward: 1, note: 'The standard game.' },
-    hard: { name: 'Hard', speed: 1.2, ramp: 1.5, bars: [1, 3, 5, 7], survAdds: [10, 25, 45, 70, 100], cap: 3.0, gapT: 0.38, botMiss: -0.015, reward: 1.5, note: 'Faster bars, quicker speed-ups, extra bars sooner and sharper bots. 1.5× coins and XP.' }
+    easy: { name: 'Easy', speed: 0.8, ramp: 0.55, bars: [2, 5], splitLv: 4, survAdds: [20, 50, 90, 130], cap: 2.1, gapT: 0.7, botMiss: 0.05, reward: 0.75, note: 'Slower bars that speed up gently, and fewer extra bars. 0.75× coins and XP.' },
+    medium: { name: 'Medium', speed: 1.05, ramp: 1.2, bars: [1, 3, 7], splitLv: 5, survAdds: [10, 30, 70, 100], cap: 2.6, gapT: 0.44, botMiss: 0, reward: 1, note: 'The standard game.' },
+    hard: { name: 'Hard', speed: 1.2, ramp: 1.5, bars: [1, 2, 6], splitLv: 5, survAdds: [10, 20, 70, 100], cap: 3.0, gapT: 0.38, botMiss: -0.015, reward: 1.5, note: 'Faster bars, quicker speed-ups, extra bars sooner and sharper bots. 1.5× coins and XP.' }
   };
   var difficulty = 'medium';
   try { var savedDiff = localStorage.getItem('headrush.diff'); if (DIFFS[savedDiff]) difficulty = savedDiff; } catch (e) {}
@@ -4271,7 +4319,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     function near(name, a, b) { if (Math.abs(a - b) > 1e-6) fails.push(name + ': ' + a + ' !~ ' + b); }
     voiceOn = false; running = false;
     try {
-      eq('ver', GAME_VERSION, 12);
+      eq('ver', GAME_VERSION, 13);
       eq('neonPads', ARENAS.neon.pads.length, 0);
       eq('notDaily', DAILY_ORDER.indexOf('neonbounce'), -1);
       eq('notOrder', ORDER.indexOf('neonbounce'), -1);
@@ -4563,6 +4611,8 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     you.hearts = TOUR.hearts;
     G.run = TOUR.run; G.bestRun = TOUR.bestRun;
     G.omega *= 1 + 0.08 * TOUR.stage; G.omega0 = G.omega;
+    /* A stage is 20 seconds with its own bar schedule below, so it does not also take Party's extra bars (Hard keeps the one at 10 s). */
+    G.D = Object.assign({}, G.D, { bars: TOUR.diff === 'hard' ? [1] : [] });
     G.extra = [{ at: 4, type: 'high' }];
     if (TOUR.stage >= 3) G.extra.push({ at: 11, type: 'low' });
     updateHearts();
@@ -4663,6 +4713,146 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     }
     return finishBeforeTour(kind, delay);
   };
+  /* ---------- Survival medals and the live record chase ----------
+     Both read best times the game already keeps (PROFILE.surv and today's Daily best), so nothing new is stored.
+     They watch the round from outside: no bar, speed or timing is touched. Medal times sit between the
+     30-second milestones, so something to reach comes up about every 15 seconds. */
+  var MEDALS = [
+    { id: 'bronze', name: 'Bronze', at: MEDAL_AT[0], coins: 20, hex: '#e8a468' },
+    { id: 'silver', name: 'Silver', at: MEDAL_AT[1], coins: 40, hex: '#e3e9f5' },
+    { id: 'gold', name: 'Gold', at: MEDAL_AT[2], coins: 80, hex: '#ffd23f' },
+    { id: 'diamond', name: 'Diamond', at: MEDAL_AT[3], coins: 150, hex: '#c9f3ff' }
+  ];
+  var CHASE_MIN = 10, CHASE_NEAR = 10;
+  /* ---------- Beat-my-run links ----------
+     Every Survival round (not the Daily) starts from a seed, so the same seed gives the same bars.
+     The link carries only the seed, arena, difficulty, twist and time: no name and nothing about the player.
+     Opening one sets up that round on the menu; nothing is sent anywhere. */
+  var CHALLENGE = null, RUN_LINK = null;
+  function seededRound(seed, fn) {
+    var saved = Math.random; Math.random = mulberry32(seed >>> 0);
+    try { fn(); } finally { Math.random = saved; }
+  }
+  function beatLink(r) {
+    var base = /^https:$/.test(location.protocol) && /\.vercel\.app$/.test(location.hostname) ? location.origin + '/' : SITE_URL + '/';
+    return base + '?beat=' + [(r.seed >>> 0).toString(36), r.arena, r.diff, r.twist || 'none', Math.floor(r.secs * 10)].join('-');
+  }
+  function parseBeat(v) {
+    var m = /^([0-9a-z]{1,7})-([a-z]{2,12})-(easy|medium|hard)-([a-z]{2,8})-(\d{1,5})$/.exec(v || '');
+    if (!m || ORDER.indexOf(m[2]) < 0 || !TWISTS[m[4]]) return null;
+    var seed = parseInt(m[1], 36), secs = parseInt(m[5], 10) / 10;
+    if (!(seed >= 0 && seed < 4294967296) || !(secs > 0 && secs < 3600)) return null;
+    return { seed: seed, arena: m[2], diff: m[3], twist: m[4], secs: secs };
+  }
+  function challengeLive() {
+    var c = CHALLENGE;
+    return !!c && mode === 'survival' && arenaId === c.arena && difficulty === c.diff && twist === c.twist;
+  }
+  function useChallenge() {
+    if (!CHALLENGE || !currentPlayer()) return false;
+    var c = CHALLENGE; CHALLENGE = null;
+    pickMode('survival'); pickDiff(c.diff); pickTwist(c.twist); pickArena(c.arena);
+    CHALLENGE = c; menuRefresh();
+    hideAllOverlays(); $('startScreen').hidden = false;
+    try { $('startBtn').scrollIntoView({ block: 'center' }); } catch (e) {}
+    return true;
+  }
+  function shareRun() {
+    var r = RUN_LINK, msg = $('shareMsg'), box = $('shareText');
+    if (!r) return;
+    var link = beatLink(r), text = 'I lasted ' + clockUp(r.secs) + ' in ' + ARENAS[r.arena].name + ' on Head Rush. Same bars for you. Can you beat it?';
+    function fallback() { box.textContent = text + ' ' + link; box.hidden = false; msg.textContent = 'Copy this and send it to a friend:'; }
+    function copy() { try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text + ' ' + link).then(function () { msg.textContent = 'Challenge link copied. Paste it in your group chat.'; }, fallback); else fallback(); } catch (e) { fallback(); } }
+    try {
+      if (navigator.share) navigator.share({ title: 'Head Rush', text: text, url: link }).then(function () { msg.textContent = 'Challenge sent!'; }, function (e) { if (!e || e.name !== 'AbortError') copy(); });
+      else copy();
+    } catch (e) { copy(); }
+  }
+  function medalCount(secs) { var n = 0; while (n < MEDALS.length && secs >= MEDALS[n].at) n++; return n; }
+  function medalsIn(d) { var n = 0; ORDER.forEach(function (id) { n += medalCount(PROFILE.surv[survKey(id, d)] || 0); }); return n; }
+  /* Trails: sparks behind your runner and a pop when you land. Particles only: nothing in the round reads them. */
+  function trailItem() {
+    if (!G || G.hotseat || G.tut || !LOOK || !LOOK.look) return null;
+    var it = lookItem('trail', LOOK.look.trail);
+    return it && it.cols.length && lookHas('trail', it.id) ? it : null;
+  }
+  function trailPart(x, y, vx, vy, it, life) {
+    var col = it.cols[Math.floor(Math.random() * it.cols.length)];
+    G.parts.push({ x: x, y: y, vx: vx, vy: vy, life: life, max: life, color: col, s: (it.big ? 0.024 : 0.018) + Math.random() * 0.008, rot: Math.random() * TAU, vr: (Math.random() - 0.5) * 8, tr: 1 });
+  }
+  function trailTick(dt) {
+    var it = trailItem();
+    if (!it) return;
+    var you = G.players[0], t = G.t;
+    if (G.trT == null) { G.trT = t; G.trAir = you.air; G.trAcc = 0; }
+    var landed = G.trAir > G.trT && G.trAir <= t;
+    G.trT = t; G.trAir = you.air;
+    if (t < 0 || you.out || G.over) return;
+    var rr = runnerR(you), x = Math.cos(you.angle) * rr, y = Math.sin(you.angle) * rr, mine = 0;
+    for (var i = 0; i < G.parts.length; i++) if (G.parts[i].tr) mine++;
+    G.trAcc += dt * (reduceMotion ? 10 : 24);
+    while (G.trAcc >= 1) {
+      G.trAcc -= 1;
+      if (mine++ < 44) trailPart(x + (Math.random() - 0.5) * 0.025, y + (Math.random() - 0.5) * 0.025, (Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.05, it, 0.7 + Math.random() * 0.4);
+    }
+    if (landed) for (var k = 0; k < 14; k++) { var a = k / 14 * TAU; trailPart(x, y, Math.cos(a) * 0.26, Math.sin(a) * 0.26, it, 0.4 + Math.random() * 0.15); }
+  }
+  function medalRow(box, n, from) {
+    box.textContent = '';
+    MEDALS.forEach(function (m, i) {
+      var el = document.createElement('span');
+      el.className = 'medal ' + m.id + (i < n ? ' on' : '') + (from != null && i >= from && i < n ? ' fresh' : '');
+      el.textContent = '★';
+      box.appendChild(el);
+    });
+  }
+  /* best = the record that decides which medal is next; run = the time to measure the gap from. */
+  function medalNudge(best, run) {
+    var next = MEDALS[medalCount(best)];
+    if (!next) return 'All four medals here.';
+    var gap = next.at - run;
+    return gap <= 15 && run > 0 ? 'Only ' + (gap < 10 ? gap.toFixed(1) : Math.ceil(gap)) + ' s to ' + next.name + '.' : next.name + ' medal at ' + clockUp(next.at) + '.';
+  }
+  function chaseArm() {
+    if (!G || G.mode !== 'survival' || G.tut || G.hotseat) return;
+    var own = G.daily ? (ensureDly().best || 0) : (PROFILE.surv[survKey(G.arena.id, G.diff)] || 0), fr = G.challenge;
+    G.chase = { best: fr ? fr.secs : own, friend: !!fr, daily: !!G.daily, medals: G.daily ? null : medalCount(own), beaten: false, flashAt: -9, flashText: '', flashHex: COL.you, label: '' };
+  }
+  function chaseSfx(step) {
+    if (!sfxLive()) return;
+    var f = 523.25 * Math.pow(2, step / 12 * 2), notes = step >= 4 ? [1, 1.26, 1.5, 2, 2.52] : [1, 1.5, 2];
+    notes.forEach(function (k, i) { osc('triangle', f * k, f * k, 0.16, 0.07, i * 0.075); osc('sine', f * k * 2, f * k * 2, 0.12, 0.03, i * 0.075); });
+  }
+  function chasePop(m) {
+    var c = G.chase, you = G.players[0];
+    c.flashAt = G.t; c.flashText = m ? m.name.toUpperCase() + ' MEDAL!' : c.friend ? 'YOU BEAT IT!' : 'NEW RECORD!'; c.flashHex = m ? m.hex : COL.you;
+    toast(m ? m.name + ' medal!' : c.friend ? 'You beat your friend’s ' + clockUp(c.best) + '!' : c.daily ? 'New best today!' : 'You beat ' + clockUp(c.best) + '!');
+    chaseSfx(m ? MEDALS.indexOf(m) : 4);
+    buzz(m ? [25, 40, 25] : [30, 40, 30, 40, 80]);
+    if (!you.out) burstAt(you, c.flashHex, m ? 16 : 28, 1.1);
+    G.cheer = (G.cheer || 0) + 1; G.cheerHex = c.flashHex;
+  }
+  function chaseTick() {
+    var c = G && G.chase;
+    if (!c || G.over) return;
+    var t = Math.max(0, G.t);
+    if (c.medals != null) while (c.medals < MEDALS.length && t >= MEDALS[c.medals].at) chasePop(MEDALS[c.medals++]);
+    if (!c.beaten && t > c.best) { c.beaten = true; if (c.best >= CHASE_MIN || c.friend) chasePop(null); }
+    var rec = !c.beaten && (c.best >= CHASE_MIN || c.friend), tg = rec ? { name: c.friend ? 'Friend' : c.daily ? 'Today' : 'Best', at: c.best } : (c.medals != null && c.medals < MEDALS.length ? MEDALS[c.medals] : null);
+    var pre, num, post = '', hot = false;
+    if (tg) {
+      var left = tg.at - t;
+      if (left <= CHASE_NEAR) { pre = (rec ? (c.friend ? 'Beat it in ' : 'Record in ') : tg.name + ' in '); num = String(Math.max(1, Math.ceil(left))); post = ' s'; hot = true; }
+      else { pre = tg.name + ' '; num = clockUp(tg.at); }
+    } else if (c.best >= CHASE_MIN) { pre = 'New best '; num = '+' + clockUp(t - c.best); }
+    else { pre = 'Best '; num = clockUp(t); }
+    var label = pre + num + post;
+    if (label === c.label) return;
+    c.label = label;
+    $('hudPre').textContent = pre; aliveEl.textContent = num; $('hudPost').textContent = post;
+    $('aliveBox').classList.toggle('hot', hot);
+    $('aliveBox').classList.toggle('gold', !hot && c.beaten && c.best >= CHASE_MIN);
+  }
   function hotShot() {
     return G.bars.map(function (b) { return b.id + ':' + b.type + ':' + b.angle.toFixed(5) + ':' + (b.ph || 0).toFixed(5); }).join('|') + '#' + G.omega.toFixed(5);
   }
@@ -4811,7 +5001,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
           if (lv % 3 !== 0) toast('Faster!');
         }
         if (g.mode !== 'solo') {
-          if (g.diff !== 'easy' && !A.reverse && !A.hammers.length && lv >= 4 && (g.splits || 0) < Math.min(2, 1 + Math.floor((lv - 4) / 4)) && addSplit()) g.splits = (g.splits || 0) + 1;
+          if (g.diff !== 'easy' && !A.reverse && !A.hammers.length && lv >= g.D.splitLv && (g.splits || 0) < Math.min(2, 1 + Math.floor((lv - g.D.splitLv) / 4)) && addSplit()) g.splits = (g.splits || 0) + 1;
           if (g.diff === 'hard' && (A.id === 'carnival' || A.id === 'orbit') && lv >= 5 && (g.switches || 0) < Math.min(2, 1 + Math.floor((lv - 5) / 4)) && makeSwitch()) g.switches = (g.switches || 0) + 1;
         }
       }
@@ -5487,6 +5677,15 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
         ctx.globalAlpha = 1;
       }
       if (g.t < g.calmUntil) textOut('BREATHER', cx, cy - S * 0.27, COL.muted, Math.round(S * 0.065));
+      var cf = g.chase ? g.t - g.chase.flashAt : -1;
+      if (cf >= 0 && cf < 1.8) {
+        var cSize = Math.round(S * (0.13 + 0.03 * Math.max(0, 0.3 - cf) / 0.3));
+        ctx.font = cSize + 'px ' + DISPLAY;
+        if (ctx.measureText(g.chase.flashText).width > W * 0.9) cSize = Math.floor(cSize * W * 0.9 / ctx.measureText(g.chase.flashText).width);
+        ctx.globalAlpha = Math.min(1, (1.8 - cf) * 2);
+        textOut(g.chase.flashText, cx, cy - S * 0.6, g.chase.flashHex, cSize);
+        ctx.globalAlpha = 1;
+      }
     }
     var youDrop = g.players[0];
     if (running && youDrop && !youDrop.out && youDrop.boostTill > g.t && g.t < youDrop.air) {
@@ -5520,6 +5719,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
 
   /* Sky Tower relabels the result grid. Put the usual words back before any other end card. */
   function restoreEndLabels() {
+    $('medalBox').hidden = true; $('beatBtn').hidden = true;
     $('stLabel2').textContent = 'Survived';
     $('stLabel3').textContent = 'Close shaves';
     $('stLabel4').textContent = 'Coins';
@@ -5651,8 +5851,22 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       $('stLabel1').textContent = 'Best'; $('stPlace').textContent = clockUp(Math.max(best, survived));
       $('againBtn').textContent = 'Run again';
       $('bestLine').textContent = isBest ? (best > 0 ? 'New record!' : '') : (best - survived).toFixed(1) + ' s off your record of ' + clockUp(best) + '.'; $('bestLine').className = 'note nudge';
+      var hadM = medalCount(best), nowM = medalCount(Math.max(best, survived)), medalPay = 0;
+      for (var mi = hadM; mi < nowM; mi++) medalPay += MEDALS[mi].coins;
+      coins += medalPay;
+      if (g.challenge) {
+        var fsec = g.challenge.secs;
+        sub = survived > fsec ? 'You beat your friend’s ' + clockUp(fsec) + '!' : (fsec - survived).toFixed(1) + ' s short of your friend’s ' + clockUp(fsec) + '. Same bars again?';
+        title.classList.toggle('win', survived > fsec);
+      }
+      medalRow($('endMedals'), nowM, hadM);
+      $('medalText').textContent = (nowM > hadM ? MEDALS[nowM - 1].name + ' medal! +' + Math.round(medalPay * g.D.reward) + ' coins. ' : '') + medalNudge(Math.max(best, survived), survived);
+      $('medalBox').hidden = false;
     }
     $('endSub').textContent = sub;
+    RUN_LINK = md === 'survival' && !g.daily && g.seed != null && survived >= 5 ? { seed: g.seed, arena: g.arena.id, diff: g.diff, twist: g.twist || 'none', secs: survived } : null;
+    $('beatBtn').hidden = !RUN_LINK;
+    if (RUN_LINK) $('beatBtn').textContent = 'Challenge a friend to beat ' + clockUp(survived);
     if (md === 'room') setTimeout(renderMatchUI, 0); else $('matchBox').hidden = true;
     $('stTime').textContent = clockUp(survived);
     $('stClose').textContent = g.close;
@@ -5725,7 +5939,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     if (!LOOK || !LOOK.pending || !LOOK.pending.length) { box.hidden = true; return; }
     var keys = LOOK.pending.slice(), first = LOOK_ITEM[keys[0]];
     charCheerSlot = first ? first.slot : 'body';
-    var word = { body: 'body', color: 'colour', eyes: 'eyes', hat: 'hat', extra: 'extra' }[charCheerSlot] || 'look';
+    var word = { body: 'body', color: 'colour', eyes: 'eyes', hat: 'hat', extra: 'extra', trail: 'trail' }[charCheerSlot] || 'look';
     var line = first ? ('New ' + word + ': ' + first.name + '!') : 'New look!';
     if (keys.length > 1) line += ' And ' + (keys.length - 1) + ' more.';
     $('charCheerText').textContent = line;
@@ -5742,24 +5956,36 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       if (!$('endScreen').hidden) { skyReset(); $('endScreen').hidden = true; }
       return;
     }
+    var quick = quickNext; quickNext = false;
     if (mode === 'hotseat') { startHotSeat(); return; }
     if (mode === 'tour') { startTour(); return; }
     audioOn(); keepAwake();
     $('startScreen').hidden = true; $('endScreen').hidden = true;
     var id = mode === 'solo' ? LEVELS[soloIdx].arena : arenaId;
     arenaUi(id);
-    newRound(id, mode, soloIdx); running = true;
+    var ch = mode === 'survival' && challengeLive() ? CHALLENGE : null, seed = ch ? ch.seed : (Math.random() * 4294967296) >>> 0;
+    if (!ch) CHALLENGE = null;
+    if (mode === 'survival') seededRound(seed, function () { newRound(id, mode, soloIdx); });
+    else newRound(id, mode, soloIdx);
+    running = true;
+    if (mode === 'survival') { G.seed = seed; G.challenge = ch; }
     if (twistOn()) applyTwist(twist);
-    roundStartVO(id);
+    chaseArm();
+    if (quick) quickCount(); else roundStartVO(id);
   }
+  /* "Run again" from a results card gets a shorter countdown and skips the arena intro line: the player
+     has just seen this arena. Bars do not move before zero, so the round itself is the same. */
+  var quickNext = false, QUICK_T = 1.6;
+  function quickCount() { if (G && G.t < -QUICK_T) G.t = -QUICK_T; }
   function startDaily() {
-    var dc = dailyToday(), dl = ensureDly();
+    var dc = dailyToday(), dl = ensureDly(), quick = quickNext; quickNext = false;
     audioOn(); keepAwake();
     hideAllOverlays();
     arenaUi(dc.arena);
     newRound(dc.arena, 'survival', 0, null, { diff: dc.diff, daily: { key: dc.key, twist: dc.twist.id, counted: dl.tries < 3 } });
     running = true;
-    roundStartVO(dc.arena);
+    chaseArm();
+    if (quick) quickCount(); else roundStartVO(dc.arena);
     toast(dc.twist.name + '!');
   }
   $('dailyGo').addEventListener('click', startDaily);
@@ -5784,6 +6010,9 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     var nm = document.createElement('span'); nm.className = 'an'; nm.textContent = a.name;
     var ds = document.createElement('span'); ds.className = 'ad'; ds.textContent = a.desc;
     b.appendChild(sw); b.appendChild(nm); b.appendChild(ds);
+    var am = document.createElement('span'); am.className = 'am'; am.hidden = true; am.setAttribute('aria-hidden', 'true');
+    for (var mk = 0; mk < 4; mk++) am.appendChild(document.createElement('i'));
+    b.appendChild(am);
     b.addEventListener('click', function () { pickArena(id); });
     $('arenas').appendChild(b); arenaBtns.push(b);
   });
@@ -5865,13 +6094,30 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
   function menuRefresh() {
     var id = mode === 'solo' ? LEVELS[soloIdx].arena : mode === 'tour' ? ORDER[0] : arenaId, note;
     arenaUi(id);
-    $('startBtn').textContent = mode === 'solo' ? 'Play level ' + (soloIdx + 1) : mode === 'hotseat' ? 'Start cup' : mode === 'tour' ? 'Start tour' : 'Run';
+    var chOn = challengeLive();
+    $('startBtn').textContent = chOn ? 'Beat ' + clockUp(CHALLENGE.secs) : mode === 'solo' ? 'Play level ' + (soloIdx + 1) : mode === 'hotseat' ? 'Start cup' : mode === 'tour' ? 'Start tour' : 'Run';
     if (mode === 'party') note = bestText(arenaId);
     else if (mode === 'tour') note = tourBestText(difficulty);
     else if (mode === 'hotseat') note = hotPick.length < 2 ? 'Tap 2 kids to start. Up to 4 can play.' : hotPick.map(function (i) { return hotFace(i).name; }).join(', ') + '. 45 seconds each. Same bars.';
     else if (mode === 'solo') note = 'Level ' + (soloIdx + 1) + ' in ' + ARENAS[id].name + ': last ' + LEVELS[soloIdx].dur + ' seconds.';
     else { var bs = PROFILE.surv[survKey(arenaId, difficulty)]; note = bs ? DIFFS[difficulty].name + ' Survival best in ' + ARENAS[arenaId].name + ': ' + clockUp(bs) + '.' : 'No ' + DIFFS[difficulty].name + ' Survival record in ' + ARENAS[arenaId].name + ' yet.'; }
+    if (chOn) note = 'A friend lasted ' + clockUp(CHALLENGE.secs) + ' in ' + ARENAS[arenaId].name + ' on ' + DIFFS[difficulty].name + (twist !== 'none' ? ' with ' + TWISTS[twist].name : '') + '. You get the same bars. Beat it!';
     $('startBest').textContent = note || 'Hold your phone upright and turn the sound on for the full bonk.';
+    $('startBest').classList.toggle('nudge', chOn);
+    var surv = mode === 'survival';
+    $('menuMedals').hidden = !surv;
+    if (surv) {
+      var mb = PROFILE.surv[survKey(arenaId, difficulty)] || 0;
+      medalRow($('menuMedalRow'), medalCount(mb));
+      $('menuMedalText').textContent = medalNudge(mb, mb) + ' ' + medalsIn(difficulty) + ' of ' + ORDER.length * MEDALS.length + ' medals on ' + DIFFS[difficulty].name + '.';
+    }
+    arenaBtns.forEach(function (el) {
+      var dots = el.querySelector('.am'); if (!dots) return;
+      dots.hidden = !surv;
+      if (!surv) return;
+      var k = medalCount(PROFILE.surv[survKey(el.getAttribute('data-arena'), difficulty)] || 0);
+      for (var di = 0; di < dots.children.length; di++) dots.children[di].className = di < k ? MEDALS[di].id : '';
+    });
     if (!running) previewRound();
   }
   function arenaUi(id) {
@@ -5892,11 +6138,13 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     if (SKY) { skyReset(); $('endScreen').hidden = true; return; }
     if (G && G.hotseat && HOT && HOT.done) { startHotSeat(); return; }
     if (G && G.tour && TOUR && TOUR.done) { startTour(); return; }
-    if (G && G.daily) { startDaily(); return; }
+    if (G && G.daily) { quickNext = true; startDaily(); return; }
     if (G && G.tut) { pickMode('party'); pickDiff('easy'); startRound(); return; }
     if (G && G.mode === 'room') { $('endScreen').hidden = true; if (ROOM) showLobby(); else openRooms(); return; }
     if (G && !G.tut && !G.daily && PROFILE.rounds >= 3 && difficulty === 'easy' && !PROFILE.medAsked) { PROFILE.medAsked = true; saveProfile(); }
-    if (G && G.mode === 'solo' && G.result === 'clear' && G.levelIdx + 1 < LEVELS.length) soloIdx = G.levelIdx + 1;
+    var nextLevel = G && G.mode === 'solo' && G.result === 'clear' && G.levelIdx + 1 < LEVELS.length;
+    if (nextLevel) soloIdx = G.levelIdx + 1;
+    quickNext = !!G && !nextLevel;
     startRound();
   });
   $('retryBtn').addEventListener('click', startRound);
@@ -6006,6 +6254,8 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     combo: function (n) { return 'Get a combo of ' + n; },
     streak: function (n) { return 'Keep a ' + n + '-day streak'; },
     dailyDone: function (n) { return n === 1 ? 'Finish 1 Daily Challenge' : 'Finish ' + n + ' Daily Challenges'; },
+    coins: function (n) { return 'Earn ' + n.toLocaleString('en-US') + ' coins in total'; },
+    medals: function (n) { return 'Win ' + n + ' Survival medals'; },
     closeTotal: function (n) { return 'Get ' + n + ' close shaves'; }
   };
   function lookRuleFor(key) {
@@ -6041,6 +6291,19 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     else if (slot === 'extra') o.extra = id;
     else if (it) { o.hex = it.hex; if ((LOOK.look.hatColor || 'auto') === 'auto') o.hatHex = it.hex; }
     return o;
+  }
+  /* A little comet of the trail's colours for its Locker card. */
+  function trailSwatch(it) {
+    var box = document.createElement('span'); box.className = 'trail-sw' + (it.cols.length ? '' : ' none');
+    for (var i = 0; i < 9 && it.cols.length; i++) {
+      var d = document.createElement('i'), sz = (it.big ? 13 : 10) - i;
+      d.style.width = d.style.height = Math.max(3, sz) + 'px';
+      d.style.left = (52 - i * 6) + 'px'; d.style.top = (14 + i * 3.4 + (i % 2 ? 3 : -3)) + 'px';
+      d.style.background = it.cols[i % it.cols.length]; d.style.opacity = String(1 - i * 0.09);
+      d.style.boxShadow = '0 0 6px ' + it.cols[i % it.cols.length];
+      box.appendChild(d);
+    }
+    return box;
   }
   function thumbCopy(L) {
     var src = lookThumb(L), cnv = document.createElement('canvas');
@@ -6094,7 +6357,8 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
       if (isNew) label = 'New. ' + label;
       b.setAttribute('aria-label', label);
       if (isNew) { var badge = document.createElement('span'); badge.className = 'look-badge'; badge.textContent = 'NEW'; b.appendChild(badge); }
-      if (!swatch) b.appendChild(thumbCopy(cardLook(charSlot, it.id)));
+      if (charSlot === 'trail') b.appendChild(trailSwatch(it));
+      else if (!swatch) b.appendChild(thumbCopy(cardLook(charSlot, it.id)));
       else { b.style.background = it.hex; b.style.color = lookInk(it.hex); }
       var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = it.name;
       b.appendChild(nm);
@@ -6214,6 +6478,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     if (taken) { $('nameErr').textContent = name + ' is already on this phone. Tap their name above or pick another.'; return; }
     addPlayer(name); closeNameScreen(); syncPlayer();
     if (useInvite()) { pickDiff('easy'); return; }
+    if (useChallenge()) return;
     if (!PROFILE.rounds && !PROFILE.tutDone) { pickDiff('easy'); startTutorial(); }
   });
   $('switchPlayer').addEventListener('click', function () { showNameScreen(false); });
@@ -6323,7 +6588,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
   $('boardDone').addEventListener('click', function () { $('boardScreen').hidden = true; $('startScreen').hidden = false; });
 
   /* ---------- Party Rooms: live multiplayer over Supabase Realtime ---------- */
-  var ROOM = null, sbClient = null, sbLoading = null, GAME_VERSION = 12, buddyOn = false;
+  var ROOM = null, sbClient = null, sbLoading = null, GAME_VERSION = 13, buddyOn = false;
   $('alphaBadge').textContent = 'Alpha · v' + GAME_VERSION;
   try { buddyOn = localStorage.getItem('headrush.buddy') === '1'; } catch (e) {}
   var ROOM_COLORS = [
@@ -7070,6 +7335,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
   });
 
   $('shareBtn').addEventListener('click', shareResultImage);
+  $('beatBtn').addEventListener('click', shareRun);
   $('clipBtn').addEventListener('click', function () { if (CLIP_READY) sendClip(); else if (clipSupported()) startReplay(true); else clipFailed(); });
 
   /* ---------- input ---------- */
@@ -7278,7 +7544,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     $('endTitle').textContent = 'The water caught you';
     $('endTitle').classList.remove('win');
     $('endSub').textContent = 'You climbed ' + Math.max(0, SK.h).toFixed(1) + ' floors.';
-    $('hotPodium').hidden = true; $('matchBox').hidden = true; $('perfectBadge').hidden = true;
+    $('hotPodium').hidden = true; $('matchBox').hidden = true; $('perfectBadge').hidden = true; $('medalBox').hidden = true; $('beatBtn').hidden = true;
     $('tipLine').hidden = true; $('tryMedium').hidden = true; $('retryBtn').hidden = true;
     $('replayBtn').hidden = true; $('clipBtn').hidden = true; $('shareBtn').hidden = true;
     $('fbOpenEnd').hidden = true; $('switchBtn').hidden = true; $('installBtn').hidden = true;
@@ -7566,7 +7832,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     }
     if (G) {
       if (REPLAY) replayStep(dt);
-      if (running) { kitBefore(); update(dt); kitAfter(dt); recordSnap(); }
+      if (running) { kitBefore(); update(dt); kitAfter(dt); chaseTick(); trailTick(dt); recordSnap(); }
       if (view3d && running && G.t > 2 && !G.over && !slowHinted && dt > 0) {
         slowFrames = slowFrames * 0.97 + (dt > 1 / 32 ? 1 : 0) * 0.03;
         if (G.t > 8 && slowFrames > 0.6 && gfx !== 'hd') { slowHinted = true; toast('Running slow? Try Flat graphics in the menu'); }
@@ -7646,6 +7912,8 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
     var qs = new URLSearchParams(location.search), rc = (qs.get('room') || '').toUpperCase();
     SKY = qs.get('skytower') === '1';
     if (/^[A-Z]{4}$/.test(rc) && rc.split('').every(function (ch) { return CODE_CHARS.indexOf(ch) >= 0; })) INVITE = rc;
+    if (!INVITE && !SKY) CHALLENGE = parseBeat(qs.get('beat'));
+    if (qs.get('beat')) history.replaceState(null, '', location.pathname + location.search.replace(/[?&]beat=[^&]*/g, '').replace(/^&/, '?').replace(/\?$/, ''));
     if (qs.get('room') || qs.get('source')) history.replaceState(null, '', location.pathname + location.search.replace(/[?&](room|source)=[^&]*/g, '').replace(/^&/, '?').replace(/\?$/, ''));
   } catch (e) {}
   function useInvite() {
@@ -7692,7 +7960,7 @@ body.char-open:not(.hd3d) #charPreview { display: block; }
   pickMode(mode);
   pickDiff(difficulty);
   if (!currentPlayer()) { showNameScreen(false); if (INVITE) $('nameErr').textContent = 'Type your name to join room ' + INVITE + '.'; }
-  else useInvite();
+  else if (!useInvite()) useChallenge();
   if (document.fonts && document.fonts.load) document.fonts.load('40px "Lilita One"').catch(function () {});
   if (SKY) skyBoot();
   requestAnimationFrame(frame);

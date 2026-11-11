@@ -1,8 +1,9 @@
-/* Byte-compare the gameplay functions and the six arenas to f292a66. */
+/* Byte-compare the gameplay functions and the six arenas to f292a66, plus the rule changes D approved since (tests/lib/approved.mjs). */
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { withApproved, APPROVED } from './lib/approved.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const NAMES = ['update', 'hit', 'press', 'threats', 'addBar', 'speedAt', 'resolve', 'act', 'addSplit', 'makeSwitch', 'barUnits', 'crossed', 'snapNow', 'hud', 'arena', 'beltAt', 'barRelSpeed', 'minBarGap', 'widestGap', 'newRound', 'switchLane', 'spawnPickup', 'collect', 'holeOpenAt', 'hammerType', 'barVisible', 'runnerR', 'finish', 'resolveWall'];
@@ -42,7 +43,7 @@ function between(src, a, b) {
   return src.slice(i, j);
 }
 
-const base = execFileSync('git', ['show', 'f292a66:index.html'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 20e6 });
+const base = withApproved(execFileSync('git', ['show', 'f292a66:index.html'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 20e6 }));
 const now = readFileSync(join(ROOT, 'index.html'), 'utf8');
 const bad = [];
 for (const name of NAMES) {
@@ -64,4 +65,4 @@ const lines = [
 ];
 for (const line of lines) if (!now.includes(line) || !base.includes(line)) bad.push('missing ' + line);
 if (bad.length) { console.error(bad.join('\n')); process.exit(1); }
-console.log('PASS identity', NAMES.length, 'functions + 6 arenas + constants match f292a66');
+console.log('PASS identity', NAMES.length, 'functions + 6 arenas + constants match f292a66 plus', APPROVED.length, 'approved rule change');

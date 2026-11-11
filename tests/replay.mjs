@@ -1,5 +1,6 @@
 /* Seeded replay of today's 6 arenas.
-   Capture (from the f292a66 game, with only a test hook added) writes tests/golden-hud.json.
+   Capture (from the f292a66 game plus the rule changes D approved since, see tests/lib/approved.mjs,
+   with only a test hook added) writes tests/golden-hud.json.
    Check loads the working tree and requires the same HUD samples, twice. */
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
@@ -7,6 +8,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { withApproved } from './lib/approved.mjs';
 import puppeteer from '/tmp/hrtest/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -158,8 +160,8 @@ function diffRuns(a, b) {
 
 const mode = process.argv[2] || 'check';
 if (mode === 'capture') {
-  const base = execFileSync('git', ['show', 'f292a66:index.html'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 20e6 });
-  console.log('capturing f292a66…');
+  const base = withApproved(execFileSync('git', ['show', 'f292a66:index.html'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 20e6 }));
+  console.log('capturing f292a66 plus approved rule changes…');
   const out = await runPage(inject(base));
   for (const k of Object.keys(out.runs)) {
     if (!out.runs[k] || out.runs[k].length !== 3) throw new Error('short run ' + k);
@@ -188,6 +190,6 @@ if (mode === 'capture') {
   const n = Object.values(a.runs).reduce((s, r) => s + r.length, 0);
   const expect = Object.values(golden.runs).reduce((s, r) => s + r.length, 0);
   if (n !== expect) { console.error('sample count ' + n + ' vs ' + expect); process.exit(1); }
-  console.log('PASS replay ' + n + '/' + n + ' HUD samples match f292a66, twice');
+  console.log('PASS replay ' + n + '/' + n + ' HUD samples match f292a66 plus approved rule changes, twice');
   console.log('consts', JSON.stringify(a.consts));
 }

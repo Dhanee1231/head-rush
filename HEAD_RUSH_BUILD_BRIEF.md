@@ -106,8 +106,9 @@ This is what fixed the old "always late" problem. Port it exactly, and write a u
 |---|---|---|---|
 | Base speed × | 0.8 | 1.05 | 1.2 |
 | Ramp | 0.55 | 1.2 | 1.5 |
-| Party bar levels (add a bar at level…) | 3, 6 | 2, 4, 6 | 1, 3, 5, 7 |
-| Survival extra bars at (s) | 30, 60, 100, 140 | 20, 40, 70, 100, 140 | 10, 25, 45, 70, 100 |
+| Party bar levels (add a bar at level…) | 2, 5 | 1, 3, 7 | 1, 2, 6 |
+| Survival extra bars at (s) | 20, 50, 90, 130 | 10, 30, 70, 100 | 10, 20, 70, 100 |
+| Split bars from level (`splitLv`) | (none on Easy) | 5 | 5 |
 | Survival speed cap × | 2.1 | 2.6 | 3.0 |
 | Reaction gap `gapT` (s) | 0.70 | 0.44 | 0.38 |
 | Bot miss adjust | +0.05 | 0 | −0.015 |
@@ -115,7 +116,7 @@ This is what fixed the old "always late" problem. Port it exactly, and write a u
 
 ### Special bars (not in Solo)
 
-- **Split bar** (not Easy; not Orbit or Carnival): one orange half and one blue half arriving **0.4 s** apart: jump, then duck. From level 4; at most min(2, 1 + ⌊(level − 4) ÷ 4⌋) per round. Counts as one bar for the gap rule.
+- **Split bar** (not Easy; not Orbit or Carnival): one orange half and one blue half arriving **0.4 s** apart: jump, then duck. From the difficulty's `splitLv` (Medium and Hard 5); at most min(2, 1 + ⌊(level − splitLv) ÷ 4⌋) per round. (Retuned on 2026-11-10 with D's OK: the second bar now comes 10 s sooner and split bars a level later, so the first 30 s is busier and the 40 s spike is gone.) Counts as one bar for the gap rule.
 - **Switch bar** (Hard only, Carnival and Orbit): an existing bar becomes one; it flips orange↔blue about **0.8 s** before reaching you, with a flash and haptic. From level 5; at most min(2, 1 + ⌊(level − 5) ÷ 4⌋).
 
 ### Power-ups (Party, Survival, Daily; not Solo or Rooms)
@@ -175,6 +176,14 @@ All six arenas back to back in arena order, **20 s each**, on **one set of 3 hea
 ### Twists (Party and Survival, optional)
 Picked on the menu; Classic is the default and plays exactly as before. **One Heart** (everyone starts on 1 heart) · **Turbo** (bars 20% faster) · **Crowded** (a second bar joins at 5 s) · **Blink** (bars blink like Midnight Carnival's in any arena) · **Moon Jump** (0.8 s jumps in any arena). They are applied to the round after it is set up, like the Daily Challenge twists. Reference: `TWISTS`, `applyTwist()`.
 
+### Survival medals and the record chase (web, 2026-11-10)
+- **Medals** per arena and difficulty, from your best Survival time: **Bronze 20 s (+20 coins), Silver 45 s (+40), Gold 75 s (+80), Diamond 105 s (+150)**, paid once when first earned (× the difficulty's reward). Shown as four dots on each arena card in Survival, a row of medals on the menu ("12 of 24 medals on Medium") and on the results card with "Only 6 s to Gold". Nothing new is stored: medals are worked out from the best times. Reference: `MEDALS`, `medalCount()`.
+- **Record chase:** during Survival and the Daily, the top-right HUD shows the next target (your record, today's best, or the next medal). In the last 10 s it counts down ("Record in 4 s") and pulses; passing it pops "NEW RECORD!" or the medal name, a chime, sparks, and a spark fountain in HD. Reference: `chaseArm()`, `chaseTick()`.
+- **Quick retry:** "Run again" from a results card starts with a 1.6 s countdown instead of 3 s and skips the arena intro line.
+
+### Beat-my-run links (web, 2026-11-10)
+Every Survival round (not the Daily) starts from a random seed, so the same seed replays the same bars. The results card has **"Challenge a friend to beat 0:46"**, which shares `?beat=<seed base36>-<arena>-<difficulty>-<twist>-<tenths of a second>`. Opening it sets up that Survival round on the menu ("Beat 0:46"), and the HUD chases the friend's time instead of your own record. The link holds no name or player data. Changing arena, difficulty, mode or twist drops the challenge. Reference: `beatLink()`, `parseBeat()`, `useChallenge()`.
+
 ### Party Rooms (online)
 See section 7.
 
@@ -198,6 +207,7 @@ New players play Easy for their first 3 rounds; after the third, one tap suggest
 - **Locker:** looks bought with coins, some level-gated: Sunny (free), Lime Visor 60, Bubblegum 80, Frostbite 120 (Lv 2), Little Devil 150 (Lv 2), Royal 250 (Lv 3), Ghost 300 (Lv 5), Champion 500 (Lv 8), Perfect Gold (10 perfect rounds). Each is a colour plus an accessory (visor, spots, antenna, horns, crown, halo, star).
 - **Body shapes:** round, triangle, square, diamond, star (free, picked in the Locker or the room lobby).
 - **Personal bests** per arena: rounds, wins, best place, longest survival.
+- **Trails** (Locker tab "Trail"): sparks behind your runner and a pop when you land, drawn as particles only. Sparkles (free), Berry Fizz (400 coins earned in total), Mint Breeze (3 Survival medals), Comet (1,500 coins), Candy Swirl (8 medals), Stardust (4,000 coins), Diamond Dust (16 medals). Coins are never spent; the total earned unlocks them. Trail colours stay away from the bar orange and blue. Only your own trail shows; it is not sent to rooms.
 - **Results card:** title (WINNER! / 3rd of 8 / Lasted 1:12…), a one-line reason for the knockout ("A blue bar got you. Blue means duck."), place, time survived, close shaves, coins (counting up), XP bar with level-up burst, completed goals, streak, combo, "4.2 s off your record" / "New record!" nudges.
 
 ---

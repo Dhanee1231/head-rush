@@ -2369,7 +2369,7 @@ const SKYSHOW = {
 };
 
 /* round feel: reads the game state once a frame */
-const FEEL = { lastT: null, level: 0, hearts: 3, maxHearts: 3, flash: 0, wave: 0, sparkAcc: 0, win: 0 };
+const FEEL = { lastT: null, level: 0, hearts: 3, maxHearts: 3, flash: 0, wave: 0, sparkAcc: 0, win: 0, cheer: 0, cheerLeft: 0, cheerCol: null };
 let waveMesh, hubBeam, winBeam;
 function comboMultOf(run) { return run >= 30 ? 5 : run >= 20 ? 4 : run >= 12 ? 3 : run >= 6 ? 2 : 1; }
 function initFeel() {
@@ -2387,10 +2387,12 @@ const SPARKLE = [new THREE.Color(0xffd23f), new THREE.Color(0xfff6d0)];
 function feelStep(g, V, now, dt) {
   if (!waveMesh) initFeel();
   const you = g.players[0], t = g.t, still = calm(), on = quality.level >= 2 && !HR3D.preview;
-  if (FEEL.lastT === null || t < FEEL.lastT - 0.5) { FEEL.level = g.level || 0; FEEL.hearts = FEEL.maxHearts = you.hearts; FEEL.flash = 0; FEEL.wave = 0; FEEL.win = 0; }
+  if (FEEL.lastT === null || t < FEEL.lastT - 0.5) { FEEL.level = g.level || 0; FEEL.hearts = FEEL.maxHearts = you.hearts; FEEL.flash = 0; FEEL.wave = 0; FEEL.win = 0; FEEL.cheer = g.cheer || 0; FEEL.cheerLeft = 0; }
   FEEL.lastT = t;
   /* speed-up: a wave rolls out from the hub when the bars get faster or another one joins */
   if ((g.level || 0) > FEEL.level) { FEEL.level = g.level; if (on && t > 0 && !g.over) { FEEL.wave = 1; if (!still) punch(0.02); } }
+  /* a medal or a beaten record (g.cheer counts them): the same wave, plus a fountain of sparks in the medal's colour */
+  if ((g.cheer || 0) !== FEEL.cheer) { if ((g.cheer || 0) > FEEL.cheer && on && t > 0 && !g.over) { FEEL.wave = 1; FEEL.cheerLeft = still ? 0 : 0.5; FEEL.cheerCol = new THREE.Color(g.cheerHex || '#ffd23f'); } FEEL.cheer = g.cheer || 0; }
   if (FEEL.wave > 0) {
     FEEL.wave = Math.max(0, FEEL.wave - dt / 0.75);
     const k = 1 - FEEL.wave, e = 1 - Math.pow(1 - k, 2.2);
@@ -2420,6 +2422,13 @@ function feelStep(g, V, now, dt) {
       puff(fxPuffs, { x: x + Math.cos(a) * rr, y: 0.15 + srnd() * 0.6, z: z + Math.sin(a) * rr, vy: 0.9 + srnd() * 0.9, life: 0.45 + srnd() * 0.3, size: 0.09 + 0.015 * m, grow: -0.6, col: SPARKLE[srnd() < 0.5 ? 0 : 1] });
     }
   } else FEEL.sparkAcc = 0;
+  if (FEEL.cheerLeft > 0 && !you.out) {
+    FEEL.cheerLeft -= dt;
+    for (let i = 0; i < 3; i++) {
+      const a = srnd() * TAU, sp = 0.6 + srnd() * 1.1;
+      puff(fxPuffs, { x: x, y: 0.5, z: z, vx: Math.cos(a) * sp, vz: Math.sin(a) * sp, vy: 2.2 + srnd() * 1.6, g: 5, life: 0.6 + srnd() * 0.35, size: 0.12, grow: -0.5, col: srnd() < 0.3 ? SPARKLE[0] : FEEL.cheerCol });
+    }
+  }
   /* a win: a spotlight finds your runner */
   const won = g.over && (g.result === 'win' || g.result === 'clear') && !you.out;
   FEEL.win += ((won ? 1 : 0) - FEEL.win) * Math.min(1, dt * 4);
@@ -2610,7 +2619,7 @@ HR3D.render = function (g, view) {
   const e0w = V.mid - A.band / 2; let n = 0;
   for (let i = 0; i < g.parts.length && n < 220; i++) {
     const q = g.parts[i], rr = Math.hypot(q.x, q.y), ang = Math.atan2(q.y, q.x) + g.rot;
-    const R = rr < e0w ? rr * (V.e0 / e0w) : V.e0 + (rr - e0w) * V.SC, age = q.max - q.life, y = 0.45 + age * 1.1 - age * age * 0.8;
+    const R = rr < e0w ? rr * (V.e0 / e0w) : V.e0 + (rr - e0w) * V.SC, age = q.max - q.life, y = q.tr ? 0.16 + age * 0.45 : 0.45 + age * 1.1 - age * age * 0.8;
     const sz = q.s * 6 * Math.max(0.2, q.life / q.max);
     tmpQ.setFromAxisAngle(tmpV.set(0.3, 1, 0.2).normalize(), q.rot);
     tmpM.compose(tmpV.set(R * Math.cos(ang), y, R * Math.sin(ang)), tmpQ, tmpS.set(sz, sz, sz));
